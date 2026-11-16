@@ -13,7 +13,7 @@ import {
   TabValue,
   Title3,
 } from '@fluentui/react-components';
-import type { MaterialTray } from '@/api/client';
+import type { StandardMaterialOwnerCategory } from '@/api/client';
 import { getApiBaseUrl } from '@/api/http';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -47,6 +47,22 @@ import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { MATERIAL_DETAILS_CAPABILITIES } from './Materials/materialCapabilities';
 import { MaterialComponentsSection } from './Materials/components/MaterialComponentsSection';
 
+type StepMaterial = {
+  category: Exclude<StandardMaterialOwnerCategory, 'cable-type'>;
+  id: string;
+  manufacturer: string | null;
+  type: string;
+};
+
+const stepCategories: Record<string, StepMaterial['category']> = {
+  trays: 'tray',
+  supports: 'support',
+  instruments: 'instrument',
+  cableInstallationMaterials: 'cable-installation-material',
+  trayInstallationMaterials: 'tray-installation-material',
+  instrumentInstallationMaterials: 'instrument-installation-material',
+};
+
 type MaterialsListState = {
   path: string;
   page: number;
@@ -72,7 +88,7 @@ export const Materials = () => {
   const [pageSizes, setPageSizes] = useState<Record<string, number>>(returnState?.pageSizes ?? {});
   const isAdmin = Boolean(user?.isAdmin);
   const componentsEnabled = import.meta.env.VITE_CAD_DESIGN_ENABLED !== 'false';
-  const [stepTray, setStepTray] = useState<MaterialTray | null>(null);
+  const [stepMaterial, setStepMaterial] = useState<StepMaterial | null>(null);
   const [stepBusy, setStepBusy] = useState(false);
   const requestedTab = parseMaterialsTab(searchParams.get('tab'));
   const selectedTab =
@@ -83,24 +99,29 @@ export const Materials = () => {
   const refreshStepStatus = useCallback(
     async (signal?: AbortSignal) => {
       const request = ++stepStatusRequest.current;
-      if (!componentsEnabled || selectedTab !== 'trays') return;
+      const category = stepCategories[selectedTab];
+      if (!componentsEnabled || !category) return;
       setStepStatus('loading');
       if (!token) {
         setStepStatus('error');
         return;
       }
       try {
-        const response = await fetch(`${getApiBaseUrl()}/api/materials/components`, {
-          signal,
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'same-origin',
-          redirect: 'error',
-          cache: 'no-store',
-        });
+        const response = await fetch(
+          `${getApiBaseUrl()}/api/materials/components${category === 'tray' ? '' : `/materials?category=${encodeURIComponent(category)}`}`,
+          {
+            signal,
+            headers: { Authorization: `Bearer ${token}` },
+            credentials: 'same-origin',
+            redirect: 'error',
+            cache: 'no-store',
+          },
+        );
         if (!response.ok) throw new Error('STEP status unavailable');
         const data: {
           components: {
-            materialTrayId: string | null;
+            materialTrayId?: string | null;
+            materialOwnerId?: string | null;
             latestRevision: number | null;
             latestAssetId: string | null;
           }[];
@@ -108,11 +129,12 @@ export const Materials = () => {
         const revisions: Record<string, number> = {};
         for (const component of data.components) {
           if (
-            component.materialTrayId &&
+            (component.materialTrayId || component.materialOwnerId) &&
             component.latestAssetId &&
             component.latestRevision != null
           )
-            revisions[component.materialTrayId] = component.latestRevision;
+            revisions[(component.materialOwnerId ?? component.materialTrayId)!] =
+              component.latestRevision;
         }
         if (!signal?.aborted && request === stepStatusRequest.current) {
           setStepRevisions(revisions);
@@ -130,7 +152,7 @@ export const Materials = () => {
     return () => controller.abort();
   }, [refreshStepStatus]);
   const closeStepDialog = () => {
-    setStepTray(null);
+    setStepMaterial(null);
     void refreshStepStatus();
   };
 
@@ -418,11 +440,10 @@ export const Materials = () => {
             styles={cableTypesStyles}
             isAdmin={isAdmin}
             isRefreshing={catalogHook.cableInstallationMaterialsRefreshing}
-            onRefresh={() =>
-              void catalogHook.reloadCableInstallationMaterials({
-                showSpinner: false,
-              })
-            }
+            onRefresh={() => {
+              void catalogHook.reloadCableInstallationMaterials({ showSpinner: false });
+              void refreshStepStatus();
+            }}
             onCreate={catalogHook.openCreateCableInstallationMaterialDialog}
             onImportClick={() => catalogHook.fileInputRef.current?.click()}
             onExport={() => void catalogHook.handleExportCableInstallationMaterials()}
@@ -450,6 +471,13 @@ export const Materials = () => {
             }
             onEdit={catalogHook.openEditCableInstallationMaterialDialog}
             onDelete={(item) => void catalogHook.handleDeleteCableInstallationMaterial(item)}
+            onStep={
+              componentsEnabled
+                ? (item) => setStepMaterial({ ...item, category: selectedCatalog.category })
+                : undefined
+            }
+            stepRevisions={stepRevisions}
+            stepStatus={componentsEnabled ? stepStatus : undefined}
             showPagination={catalogHook.showCableInstallationMaterialPagination}
             page={catalogHook.cableInstallationMaterialPage}
             totalPages={catalogHook.totalCableInstallationMaterialPages}
@@ -543,7 +571,11 @@ export const Materials = () => {
               }
               onDelete={traysHook.handleTrayDelete}
               onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
-              onStep={componentsEnabled ? setStepTray : undefined}
+              onStep={
+                componentsEnabled
+                  ? (tray) => setStepMaterial({ ...tray, category: 'tray' })
+                  : undefined
+              }
               stepRevisions={stepRevisions}
               stepStatus={componentsEnabled ? stepStatus : undefined}
               token={token}
@@ -559,9 +591,10 @@ export const Materials = () => {
           <>
             <div className={styles.actionsRow}>
               <Button
-                onClick={() =>
-                  supportsHook.loadSupports(supportsHook.supportPage, { silent: true })
-                }
+                onClick={() => {
+                  void supportsHook.loadSupports(supportsHook.supportPage, { silent: true });
+                  void refreshStepStatus();
+                }}
                 disabled={supportsHook.isRefreshingSupports}
               >
                 {supportsHook.isRefreshingSupports ? 'Refreshing...' : 'Refresh'}
@@ -630,6 +663,13 @@ export const Materials = () => {
                 openMaterialDetails(MATERIAL_DETAILS_CAPABILITIES.support.route(support.id))
               }
               onDelete={supportsHook.handleSupportDelete}
+              onStep={
+                componentsEnabled
+                  ? (support) => setStepMaterial({ ...support, category: 'support' })
+                  : undefined
+              }
+              stepRevisions={stepRevisions}
+              stepStatus={componentsEnabled ? stepStatus : undefined}
               token={token}
               page={supportsHook.supportPage}
               totalPages={supportTotalPages}
@@ -784,7 +824,7 @@ export const Materials = () => {
         dialogActionsClassName={styles.dialogActions}
       />
       <Dialog
-        open={Boolean(stepTray && componentsEnabled)}
+        open={Boolean(stepMaterial && componentsEnabled)}
         onOpenChange={(_, data) => {
           if (!data.open && !stepBusy) closeStepDialog();
         }}
@@ -792,15 +832,20 @@ export const Materials = () => {
         <DialogSurface>
           <DialogBody>
             <DialogTitle>
-              STEP file — {stepTray?.manufacturer} {stepTray?.type}
+              STEP file — {stepMaterial?.manufacturer} {stepMaterial?.type}
             </DialogTitle>
             <DialogContent>
-              {stepTray && componentsEnabled ? (
+              {stepMaterial && componentsEnabled ? (
                 <MaterialComponentsSection
-                  key={`${stepTray.id}:${token}`}
+                  key={`${stepMaterial.category}:${stepMaterial.id}:${token}`}
                   token={token}
                   isAdmin={isAdmin}
-                  materialTrayId={stepTray.id}
+                  materialTrayId={stepMaterial.category === 'tray' ? stepMaterial.id : undefined}
+                  materialOwner={
+                    stepMaterial.category !== 'tray'
+                      ? { category: stepMaterial.category, id: stepMaterial.id }
+                      : undefined
+                  }
                   onBusyChange={setStepBusy}
                   onAssetsChange={() => {
                     void refreshStepStatus();

@@ -50,6 +50,61 @@ afterEach(async () => {
   }
 });
 describe('Materials component identity', () => {
+  it.each(['support','instrument','cable-installation-material','tray-installation-material','instrument-installation-material'])(
+    'reads optional %s STEP linkage without creating records', async category => {
+      const base = await start();
+      mocks.query.mockResolvedValueOnce({ rows: [{ id: componentId }] }).mockResolvedValueOnce({ rows: [] });
+      const response = await fetch(`${base}/components/materials/${category}/${componentId}`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ component: null });
+      expect(mocks.transaction).not.toHaveBeenCalled();
+      expect(mocks.convert).not.toHaveBeenCalled();
+      expect(mocks.query.mock.calls.every(([sql]) => /^SELECT/.test(sql))).toBe(true);
+    });
+  it.each(['cable-type','load-curve','unknown'])(
+    'rejects excluded STEP category %s before database access', async category => {
+      const base = await start();
+      for (const method of ['GET','POST']) {
+        const response = await fetch(`${base}/components/materials/${category}/${componentId}`, { method, headers: { 'x-test-admin': 'yes' } });
+        expect(response.status).toBe(400);
+      }
+      expect(mocks.query).not.toHaveBeenCalled();
+      expect(mocks.transaction).not.toHaveBeenCalled();
+    });
+  it('requires an administrator to initialize material STEP linkage', async () => {
+    const base = await start();
+    const response = await fetch(`${base}/components/materials/support/${componentId}`, { method: 'POST' });
+    expect(response.status).toBe(403);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+  it('preserves material identity while serializing concurrent initial uploads', async () => {
+    const base = await start();
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ name: 'Same identifier', manufacturer: 'Vendor' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: componentId, partNumber: 'Same identifier' }] });
+    mocks.transaction.mockImplementationOnce((work: (client: { query: typeof query }) => Promise<unknown>) => work({ query }));
+    const response = await fetch(`${base}/components/materials/support/${familyId}`, { method: 'POST', headers: { 'x-test-admin': 'yes' } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ component: { id: componentId, partNumber: 'Same identifier', materialOwnerCategory: 'support', materialOwnerId: familyId } });
+    expect(query.mock.calls[0][0]).toContain('FOR UPDATE');
+    expect(query.mock.calls[3][0]).toContain('material_support_id');
+    expect(query.mock.calls[3][1][4]).toBe(familyId);
+    expect(mocks.convert).not.toHaveBeenCalled();
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
+  it('lists material status by category without exposing attachments in the routing catalogue', async () => {
+    const base = await start();
+    mocks.query.mockResolvedValueOnce({ rows: [{ id: componentId, materialOwnerId: familyId, latestAssetId: assetId }] });
+    const response = await fetch(`${base}/components/materials?category=support`);
+    expect(await response.json()).toEqual({ components: [{ id: componentId, materialOwnerId: familyId, latestAssetId: assetId, materialOwnerCategory: 'support' }] });
+    expect(mocks.query.mock.calls[0][0]).toContain('WHERE c.material_support_id IS NOT NULL');
+    await fetch(`${base}/components`);
+    expect(mocks.query.mock.calls[1][0]).toContain('c.material_support_id IS NULL');
+    expect(mocks.query.mock.calls[1][0]).toContain('c.material_instrument_installation_material_id IS NULL');
+  });
   it('rejects fitting aliases of a straight tray and untrusted storage/mesh metadata', () => {
     expect(componentSchema.safeParse({ familyId, name: 'Elbow', partNumber: 'EL-60', componentKind: 'bend', materialTrayId: componentId }).success).toBe(false);
     expect(componentSchema.safeParse({ familyId, name: 'Elbow', partNumber: 'EL-60', componentKind: 'bend', source_object_key: 'foreign/key' }).success).toBe(false);

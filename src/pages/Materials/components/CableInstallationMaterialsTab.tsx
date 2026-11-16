@@ -1,3 +1,4 @@
+import { TrayStepStatus } from './TrayStepStatus';
 import type { ChangeEvent, RefObject } from 'react';
 import { useMemo } from 'react';
 import {
@@ -47,6 +48,9 @@ type CableInstallationMaterialsTabProps = {
   items: MaterialCableInstallationMaterial[];
   pendingId: string | null;
   onDetails: (item: MaterialCableInstallationMaterial) => void;
+  onStep?: (item: MaterialCableInstallationMaterial) => void;
+  stepRevisions?: Record<string, number>;
+  stepStatus?: 'ready' | 'loading' | 'error';
   onEdit: (item: MaterialCableInstallationMaterial) => void;
   onDelete: (item: MaterialCableInstallationMaterial) => void;
   showPagination: boolean;
@@ -88,6 +92,9 @@ export const CableInstallationMaterialsTab = ({
   items,
   pendingId,
   onDetails,
+  onStep,
+  stepRevisions,
+  stepStatus,
   onEdit,
   onDelete,
   showPagination,
@@ -232,6 +239,7 @@ export const CableInstallationMaterialsTab = ({
                   <th className={styles.tableHeadCell}>Minimum order</th>
                   <th className={styles.tableHeadCell}>Packaging</th>
                   <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>Price</th>
+                  {stepStatus ? <th className={styles.tableHeadCell}>STEP</th> : null}
                   <th className={styles.tableHeadCell}>Actions</th>
                 </tr>
               </thead>
@@ -253,11 +261,30 @@ export const CableInstallationMaterialsTab = ({
                       <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                         {item.unitPrice}
                       </td>
+                      {stepStatus ? (
+                        <td className={styles.tableCell}>
+                          <TrayStepStatus
+                            status={
+                              stepStatus === 'ready'
+                                ? stepRevisions?.[item.id] != null
+                                  ? 'attached'
+                                  : 'missing'
+                                : stepStatus
+                            }
+                            revision={stepRevisions?.[item.id]}
+                          />
+                        </td>
+                      ) : null}
                       <td className={styles.tableCell}>
                         <div className={styles.actionsCell}>
                           <Button size="small" onClick={() => onDetails(item)}>
                             Details
                           </Button>
+                          {onStep ? (
+                            <Button size="small" onClick={() => onStep(item)} disabled={isBusy}>
+                              STEP file
+                            </Button>
+                          ) : null}
                           {isAdmin ? (
                             <>
                               <Button size="small" onClick={() => onEdit(item)} disabled={isBusy}>

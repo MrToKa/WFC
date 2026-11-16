@@ -56,6 +56,53 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Materials components', () => {
+  it('keeps first-upload controls usable after conversion fails', async () => {
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (url.endsWith('/materials/support/owner-1')) return { ok: true, json: async () => ({ component: options.method === 'POST' ? straight : null }) };
+      return { ok: false, status: 422, json: async () => ({ code: 'MATERIAL_CAD_CONVERSION_FAILED' }) };
+    });
+    render(<MemoryRouter><FluentProvider theme={webLightTheme}>
+      <MaterialComponentsSection token="catalogue-token" isAdmin materialOwner={{ category: 'support', id: 'owner-1' }} />
+    </FluentProvider></MemoryRouter>);
+    const upload = await screen.findByRole('button', { name: 'Add STEP file' });
+    fireEvent.change(screen.getByLabelText('Component STEP file'), { target: { files: [new File(['STEP'], 'part.step')] } });
+    fireEvent.click(upload);
+    expect(await screen.findByRole('alert')).toHaveTextContent('MATERIAL_CAD_CONVERSION_FAILED');
+    expect(upload).toBeEnabled();
+    expect(screen.getByLabelText('Component STEP file')).toBeEnabled();
+  });
+  it.each(['support', 'instrument', 'cable-installation-material', 'tray-installation-material', 'instrument-installation-material'] as const)(
+    'allows an optional first STEP for %s without creating catalogue data on read', async category => {
+      let component: (Omit<typeof straight, 'materialTrayId'> & { materialTrayId: string | null }) | null = null;
+      let uploaded = false;
+      fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+        if (url.endsWith(`/materials/${category}/owner-1`)) {
+          if (options.method === 'POST') component = { ...straight, materialTrayId: null };
+          return { ok: true, json: async () => ({ component }) };
+        }
+        if (url.endsWith('/cad-assets')) {
+          if (options.method === 'POST') uploaded = true;
+          return { ok: true, json: async () => ({ assets: uploaded ? [{ id: 'asset-1', revision: 1, originalFilename: 'part.step', active: true, sourceBytes: 100 }] : [] }) };
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      });
+      render(<MemoryRouter><FluentProvider theme={webLightTheme}>
+        <MaterialComponentsSection token="catalogue-token" isAdmin materialOwner={{ category, id: 'owner-1' }} />
+      </FluentProvider></MemoryRouter>);
+      const upload = await screen.findByRole('button', { name: 'Add STEP file' });
+      expect(upload).toBeDisabled();
+      expect(fetchMock.mock.calls.every(([, init]) => !init.method)).toBe(true);
+      expect(screen.queryByRole('form', { name: 'Create catalogue component' })).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Component STEP file'), { target: { files: [new File(['invalid'], 'part.txt')] } });
+      fireEvent.click(upload);
+      expect(await screen.findByRole('alert')).toHaveTextContent('Select a non-empty STEP file');
+      expect(screen.getByLabelText('Component STEP file')).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Component STEP file'), { target: { files: [new File(['STEP'], 'part.step')] } });
+      fireEvent.click(upload);
+      expect(await screen.findByText(/Revision 1 \(current\)/)).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/straight-1/cad-assets'), expect.objectContaining({ method: 'POST', body: expect.any(FormData) }));
+    },
+  );
   it('confirms removal, preserves revision history, and restores the same asset', async () => {
     let active = true;
     const onAssetsChange = vi.fn();

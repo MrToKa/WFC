@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { materialCadOwners, materialCadOwnerColumns } from './owners.js';
 
 /** Additive global Materials catalogue in the existing application database.
  * Existing trays remain the owner of curves/images/prices; only straight components
@@ -52,8 +53,32 @@ export async function initializeMaterialTrayCadSchema(pool: Pool): Promise<void>
         FOREIGN KEY (family_id,manufacturer) REFERENCES material_product_families(id,manufacturer) ON UPDATE CASCADE,
         CHECK (material_tray_id IS NULL OR component_kind='straight')
       );
-      CREATE UNIQUE INDEX IF NOT EXISTS material_component_manufacturer_sku
-        ON material_components(lower(trim(manufacturer)),lower(trim(part_number)));
+      ${Object.values(materialCadOwners).map((owner, index) => `
+        ALTER TABLE material_components ADD COLUMN IF NOT EXISTS ${owner.column} UUID UNIQUE;
+        DO $owner_fk$ DECLARE old_fk RECORD; BEGIN
+          FOR old_fk IN SELECT conname FROM pg_constraint
+            WHERE conrelid='material_components'::regclass AND contype='f'
+              AND conkey=ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid='material_components'::regclass AND attname='${owner.column}')]::smallint[]
+              AND confdeltype<>'c'
+          LOOP EXECUTE format('ALTER TABLE material_components DROP CONSTRAINT %I',old_fk.conname); END LOOP;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='material_components'::regclass AND contype='f'
+            AND conkey=ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid='material_components'::regclass AND attname='${owner.column}')]::smallint[]) THEN
+            ALTER TABLE material_components ADD CONSTRAINT material_cad_owner_${index}_fk
+              FOREIGN KEY (${owner.column}) REFERENCES ${owner.table}(id) ON DELETE CASCADE;
+          END IF;
+        END; $owner_fk$;`).join('\n')}
+      DO $owners$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='material_components'::regclass AND conname='material_component_one_owner') THEN
+          ALTER TABLE material_components ADD CONSTRAINT material_component_one_owner
+            CHECK (num_nonnulls(material_tray_id,${materialCadOwnerColumns.join(',')}) <= 1);
+        END IF;
+      END; $owners$;
+      -- Attachments belong to their source material, whose identifier need not be
+      -- globally unique across categories. Tray/fitting SKU identity is unchanged.
+      DROP INDEX IF EXISTS material_component_manufacturer_sku;
+      CREATE UNIQUE INDEX material_component_manufacturer_sku
+        ON material_components(lower(trim(manufacturer)),lower(trim(part_number)))
+        WHERE ${materialCadOwnerColumns.map(column => `${column} IS NULL`).join(' AND ')};
       CREATE TABLE IF NOT EXISTS material_component_cad_assets (
         id UUID PRIMARY KEY,
         component_id UUID NOT NULL REFERENCES material_components(id) ON DELETE RESTRICT,
@@ -72,6 +97,22 @@ export async function initializeMaterialTrayCadSchema(pool: Pool): Promise<void>
       CREATE UNIQUE INDEX IF NOT EXISTS material_component_active_cad
         ON material_component_cad_assets(component_id) WHERE active;
       CREATE INDEX IF NOT EXISTS material_components_by_family ON material_components(family_id);
+
+      -- An attempted first upload may create an empty attachment component.
+      -- Source deletion can remove those records, while the asset FK retains any
+      -- component that has ever published a STEP revision (including retired ones).
+      CREATE OR REPLACE FUNCTION material_cleanup_attachment_family() RETURNS TRIGGER
+      LANGUAGE plpgsql AS $cleanup$ BEGIN
+        IF num_nonnulls(${materialCadOwnerColumns.map(column => `OLD.${column}`).join(',')}) > 0 THEN
+          DELETE FROM material_product_families f WHERE f.id=OLD.family_id
+            AND f.name LIKE 'Material STEP: %'
+            AND NOT EXISTS (SELECT 1 FROM material_components c WHERE c.family_id=f.id);
+        END IF;
+        RETURN OLD;
+      END; $cleanup$;
+      DROP TRIGGER IF EXISTS material_cleanup_attachment_family ON material_components;
+      CREATE TRIGGER material_cleanup_attachment_family AFTER DELETE ON material_components
+        FOR EACH ROW EXECUTE FUNCTION material_cleanup_attachment_family();
 
       -- tray_type is the existing tray catalogue identifier. The migration does not
       -- guess fitting SKUs or assign any fitting the straight product identity.

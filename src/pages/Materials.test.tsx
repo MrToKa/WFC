@@ -38,6 +38,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       standardMaterials: [],
     }),
     fetchMaterialChangeLog: vi.fn().mockResolvedValue({ changeLog: [] }),
+    fetchTemplateFiles: vi.fn().mockResolvedValue({ files: [] }),
     fetchMaterialTrays: vi.fn().mockResolvedValue({ trays: [], pagination }),
     fetchMaterialSupports: vi.fn().mockResolvedValue({ supports: [], pagination }),
     fetchAllMaterialTrays: apiMocks.trays,
@@ -51,7 +52,8 @@ vi.mock('@/api/client', async (importOriginal) => {
   };
 });
 
-vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: null, token: null }) }));
+const auth = vi.hoisted(() => ({ token: null as string | null }));
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: null, token: auth.token }) }));
 const showToast = vi.hoisted(() => vi.fn());
 vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ showToast }) }));
 
@@ -103,6 +105,7 @@ const catalogItems = Array.from({ length: 24 }, (_, index) => {
 >;
 
 beforeEach(() => {
+  auth.token = null;
   showToast.mockClear();
   for (const [key, mock] of Object.entries(apiMocks)) {
     mock.mockReset().mockResolvedValue({ [key]: [] });
@@ -131,35 +134,38 @@ const Navigation = () => {
 };
 
 describe('Materials category navigation', () => {
-  it.each([false, true, undefined])('gates Components and its direct URL when enabled=%s', async (enabled) => {
-    vi.stubEnv('VITE_CAD_DESIGN_ENABLED', enabled === undefined ? undefined : String(enabled));
-    try {
-      await act(async () => {
-        render(
-          <FluentProvider theme={webLightTheme}>
-            <MemoryRouter initialEntries={['/materials?tab=components']}>
-              <Materials />
-            </MemoryRouter>
-          </FluentProvider>,
-        );
-      });
-      if (enabled !== false) {
-        expect(screen.getByRole('tab', { name: 'Components' })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
-        expect(screen.getByRole('tabpanel', { name: 'Components' })).toBeInTheDocument();
-      } else {
-        expect(screen.queryByRole('tab', { name: 'Components' })).not.toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: 'Cable types' })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
+  it.each([false, true, undefined])(
+    'gates Components and its direct URL when enabled=%s',
+    async (enabled) => {
+      vi.stubEnv('VITE_CAD_DESIGN_ENABLED', enabled === undefined ? undefined : String(enabled));
+      try {
+        await act(async () => {
+          render(
+            <FluentProvider theme={webLightTheme}>
+              <MemoryRouter initialEntries={['/materials?tab=components']}>
+                <Materials />
+              </MemoryRouter>
+            </FluentProvider>,
+          );
+        });
+        if (enabled !== false) {
+          expect(screen.getByRole('tab', { name: 'Components' })).toHaveAttribute(
+            'aria-selected',
+            'true',
+          );
+          expect(screen.getByRole('tabpanel', { name: 'Components' })).toBeInTheDocument();
+        } else {
+          expect(screen.queryByRole('tab', { name: 'Components' })).not.toBeInTheDocument();
+          expect(screen.getByRole('tab', { name: 'Cable types' })).toHaveAttribute(
+            'aria-selected',
+            'true',
+          );
+        }
+      } finally {
+        vi.unstubAllEnvs();
       }
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
+    },
+  );
   it('keeps the selected tab in sync with navigation and preserves other query parameters', async () => {
     render(
       <FluentProvider theme={webLightTheme}>
@@ -376,4 +382,89 @@ describe('Returning from material details', () => {
     },
     60000,
   );
+});
+
+describe('optional material STEP actions', () => {
+  it.each(catalogs)('offers STEP files for $label except cable types', async (catalog) => {
+    vi.stubEnv('VITE_CAD_DESIGN_ENABLED', 'true');
+    apiMocks[catalog.key].mockResolvedValue({ [catalog.key]: [catalogItems[0]] });
+    try {
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <MemoryRouter initialEntries={['/materials?tab=' + catalog.key]}>
+            <Materials />
+          </MemoryRouter>
+        </FluentProvider>,
+      );
+      await screen.findByText(catalogItems[0].type);
+      if (catalog.key === 'cableTypes') {
+        expect(screen.queryByRole('button', { name: 'STEP file' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: 'STEP' })).not.toBeInTheDocument();
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'STEP file' }));
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /STEP file/ })).toHaveTextContent(
+          catalogItems[0].type,
+        );
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  it('omits STEP actions for load curves', async () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <MemoryRouter initialEntries={['/materials?tab=loadCurves']}>
+          <Materials />
+        </MemoryRouter>
+      </FluentProvider>,
+    );
+    await screen.findByText(/No load curves found/);
+    expect(screen.queryByRole('button', { name: 'STEP file' })).not.toBeInTheDocument();
+  });
+});
+
+describe('material STEP list status', () => {
+  it.each([
+    ['supports', 'support'],
+    ['cableInstallationMaterials', 'cable-installation-material'],
+    ['trayInstallationMaterials', 'tray-installation-material'],
+    ['instruments', 'instrument'],
+    ['instrumentInstallationMaterials', 'instrument-installation-material'],
+  ] as const)('reads %s attachment status by material owner ID', async (tab, category) => {
+    auth.token = 'reader-token';
+    apiMocks[tab].mockResolvedValue({ [tab]: [catalogItems[0], catalogItems[1]] });
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        components: [
+          {
+            materialTrayId: null,
+            materialOwnerId: catalogItems[0].id,
+            materialOwnerCategory: category,
+            latestAssetId: 'asset',
+            latestRevision: 2,
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal('fetch', request);
+    try {
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <MemoryRouter initialEntries={['/materials?tab=' + tab]}>
+            <Materials />
+          </MemoryRouter>
+        </FluentProvider>,
+      );
+      expect(await screen.findByText('STEP attached')).toHaveAttribute('title', 'STEP revision 2');
+      expect(screen.getByText('No STEP')).toBeInTheDocument();
+      expect(request).toHaveBeenCalledWith(
+        expect.stringContaining('/components/materials?category=' + category),
+        expect.any(Object),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

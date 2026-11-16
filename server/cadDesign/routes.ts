@@ -1,3 +1,4 @@
+import { ordinaryComponentCondition } from '../materialCad/owners.js';
 import { randomUUID } from 'node:crypto';
 import { csvCell } from './stepFileValidation.js';
 import { cadPocPortSeeds } from './pocPortSeed.js';
@@ -114,7 +115,7 @@ cadDesignRouter.post('/catalog', requireProjectEdit, safe(async (req: CadRequest
          FROM material_component_cad_assets a
          JOIN material_components c ON c.id=a.component_id
          JOIN material_product_families f ON f.id=c.family_id
-        WHERE a.id=$1 AND a.active FOR SHARE OF a`,
+        WHERE a.id=$1 AND a.active AND ${ordinaryComponentCondition} FOR SHARE OF a`,
       [assetId],
     );
     if (!asset.rows[0]) {
@@ -132,7 +133,7 @@ cadDesignRouter.post('/catalog', requireProjectEdit, safe(async (req: CadRequest
          FROM material_component_cad_assets a
          JOIN material_components c ON c.id=a.component_id
          JOIN material_product_families f ON f.id=c.family_id
-        WHERE a.id=$3 AND a.active
+        WHERE a.id=$3 AND a.active AND ${ordinaryComponentCondition}
        ON CONFLICT (project_id,material_component_cad_asset_id)
          WHERE material_component_cad_asset_id IS NOT NULL DO NOTHING RETURNING id`,
       [id, projectId, assetId, req.userId ?? null],

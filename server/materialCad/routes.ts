@@ -9,6 +9,7 @@ import { materialAuditPool as pool, withMaterialTransaction } from '../services/
 import { getObjectStream, getProjectBucket, uploadObject, deleteObject } from '../services/objectStorageService.js';
 import { convertStepToMesh } from '../cadDesign/converter.js';
 import { hasStepEnvelope, MAX_STEP_BYTES } from '../cadDesign/stepFileValidation.js';
+import { materialCadOwners, materialCadOwnerCategories, materialCadOwnerColumns, ordinaryComponentCondition } from './owners.js';
 
 export const materialComponentsRouter = Router();
 export const materialTrayCadRouter = Router();
@@ -35,14 +36,65 @@ const safe = (fn: (req: Request, res: Response) => Promise<void>) =>
 materialComponentsRouter.use((_req, res, next) => { res.setHeader('Cache-Control', 'private, no-store'); next(); });
 
 const componentSelect = `SELECT c.id,c.family_id AS "familyId",f.name AS "familyName",f.manufacturer,
+  COALESCE(${materialCadOwnerColumns.map(column => `c.${column}`).join(',')}) AS "materialOwnerId",
   c.part_number AS "partNumber",c.component_kind AS "componentKind",c.name,
   c.material_tray_id AS "materialTrayId",c.width_mm AS "widthMm",c.height_mm AS "heightMm",c.length_mm AS "lengthMm",
   a.id AS "latestAssetId",a.revision AS "latestRevision"
   FROM material_components c JOIN material_product_families f ON f.id=c.family_id
   LEFT JOIN material_component_cad_assets a ON a.component_id=c.id AND a.active`;
 
+const ownerCategory = z.enum(materialCadOwnerCategories);
+const ownerParams = z.object({ category: ownerCategory, materialId: uuid });
+materialComponentsRouter.get('/materials', safe(async (req, res) => {
+  const parsed = z.object({ category: ownerCategory }).strict().safeParse(req.query);
+  if (!parsed.success) { bad(res, 'INVALID_MATERIAL_CAD_CATEGORY'); return; }
+  const { category } = parsed.data;
+  const owner = materialCadOwners[category];
+  const result = await pool.query(`${componentSelect} WHERE c.${owner.column} IS NOT NULL`);
+  res.json({ components: result.rows.map(row => ({ ...row, materialOwnerCategory: category })) });
+}));
+materialComponentsRouter.get('/materials/:category/:materialId', safe(async (req, res) => {
+  const parsed = ownerParams.safeParse(req.params);
+  if (!parsed.success) { bad(res, 'INVALID_MATERIAL_CAD_OWNER'); return; }
+  const { category, materialId } = parsed.data;
+  const owner = materialCadOwners[category];
+  const source = await pool.query(`SELECT id FROM ${owner.table} WHERE id=$1`, [materialId]);
+  if (!source.rows[0]) { bad(res, 'MATERIAL_CAD_OWNER_NOT_FOUND', 404); return; }
+  const result = await pool.query(`${componentSelect} WHERE c.${owner.column}=$1`, [materialId]);
+  res.json({ component: result.rows[0] ? { ...result.rows[0], materialOwnerCategory: category, materialOwnerId: materialId } : null });
+}));
+materialComponentsRouter.post('/materials/:category/:materialId', requireAdmin, safe(async (req, res) => {
+  const parsed = ownerParams.safeParse(req.params);
+  if (!parsed.success) { bad(res, 'INVALID_MATERIAL_CAD_OWNER'); return; }
+  const { category, materialId } = parsed.data;
+  const owner = materialCadOwners[category];
+  const result = await withMaterialTransaction(async client => {
+    // Lock the source row to serialize first uploads and to prevent a concurrent
+    // delete from leaving an attachment without its source material.
+    const source = await client.query<{ name: string; manufacturer: string | null }>(
+      `SELECT ${owner.name} AS name,manufacturer FROM ${owner.table} WHERE id=$1 FOR UPDATE`, [materialId]);
+    if (!source.rows[0]) return null;
+    const existing = await client.query(`${componentSelect} WHERE c.${owner.column}=$1`, [materialId]);
+    if (existing.rows[0]) return existing.rows[0];
+    const id = randomUUID(), familyId = randomUUID();
+    const manufacturer = source.rows[0].manufacturer?.trim() || 'Unspecified';
+    const name = source.rows[0].name;
+    await client.query('INSERT INTO material_product_families(id,manufacturer,name) VALUES ($1,$2,$3)',
+      [familyId, manufacturer, `Material STEP: ${category}: ${materialId}`]);
+    await client.query(`INSERT INTO material_components(id,family_id,manufacturer,part_number,component_kind,name,${owner.column})
+      VALUES ($1,$2,$3,$4,'other',$4,$5)`, [id,familyId,manufacturer,name,materialId]);
+    const created = await client.query(`${componentSelect} WHERE c.id=$1`, [id]);
+    return created.rows[0];
+  });
+  if (!result) { bad(res, 'MATERIAL_CAD_OWNER_NOT_FOUND', 404); return; }
+  res.json({ component: { ...result, materialOwnerCategory: category, materialOwnerId: materialId } });
+}));
+
 materialComponentsRouter.get('/families', safe(async (_req, res) => {
-  const rows = await pool.query('SELECT id,manufacturer,name FROM material_product_families ORDER BY manufacturer,name,id');
+  const rows = await pool.query(`SELECT id,manufacturer,name FROM material_product_families f
+    WHERE NOT EXISTS (SELECT 1 FROM material_components c WHERE c.family_id=f.id AND NOT (${ordinaryComponentCondition}))
+      OR EXISTS (SELECT 1 FROM material_components c WHERE c.family_id=f.id AND ${ordinaryComponentCondition})
+    ORDER BY manufacturer,name,id`);
   res.json({ families: rows.rows });
 }));
 materialComponentsRouter.post('/families', requireAdmin, safe(async (req, res) => {
@@ -56,7 +108,7 @@ materialComponentsRouter.get('/', safe(async (req, res) => {
   const parsed = z.object({ familyId: uuid.optional(), componentKind: z.enum(materialComponentKinds).optional() }).strict().safeParse(req.query);
   if (!parsed.success) { bad(res, 'INVALID_COMPONENT_FILTER'); return; }
   const rows = await pool.query(`${componentSelect}
-    WHERE ($1::uuid IS NULL OR c.family_id=$1) AND ($2::text IS NULL OR c.component_kind=$2)
+    WHERE ${ordinaryComponentCondition} AND ($1::uuid IS NULL OR c.family_id=$1) AND ($2::text IS NULL OR c.component_kind=$2)
     ORDER BY f.manufacturer,f.name,c.part_number,c.id`,
   [parsed.data.familyId ?? null, parsed.data.componentKind ?? null]);
   res.json({ components: rows.rows });

@@ -1,3 +1,4 @@
+import { TrayStepStatus } from './TrayStepStatus';
 import { Body1, Button, Caption1, Spinner, mergeClasses } from '@fluentui/react-components';
 import { MaterialSupport } from '@/api/client';
 import { TemplateImagePreview } from './TemplateImagePreview';
@@ -14,6 +15,9 @@ type SupportsTableProps = {
   formatNumeric: (value: number | null) => string;
   formatWeight: (value: number | null) => string;
   onDetails: (support: MaterialSupport) => void;
+  onStep?: (support: MaterialSupport) => void;
+  stepRevisions?: Record<string, number>;
+  stepStatus?: 'ready' | 'loading' | 'error';
   onEdit: (support: MaterialSupport) => void;
   onDelete: (support: MaterialSupport) => void;
   token: string | null;
@@ -46,6 +50,9 @@ export const SupportsTable = ({
   formatNumeric,
   formatWeight,
   onDetails,
+  onStep,
+  stepRevisions,
+  stepStatus,
   onEdit,
   onDelete,
   token,
@@ -102,6 +109,7 @@ export const SupportsTable = ({
               <th className={styles.tableHeadCell}>Minimum order</th>
               <th className={styles.tableHeadCell}>Packaging</th>
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>Price</th>
+              {stepStatus ? <th className={styles.tableHeadCell}>STEP</th> : null}
               <th className={styles.tableHeadCell}>Actions</th>
             </tr>
           </thead>
@@ -131,11 +139,34 @@ export const SupportsTable = ({
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatNumeric(support.unitPrice)}
                   </td>
+                  {stepStatus ? (
+                    <td className={styles.tableCell}>
+                      <TrayStepStatus
+                        status={
+                          stepStatus === 'ready'
+                            ? stepRevisions?.[support.id] != null
+                              ? 'attached'
+                              : 'missing'
+                            : stepStatus
+                        }
+                        revision={stepRevisions?.[support.id]}
+                      />
+                    </td>
+                  ) : null}
                   <td className={styles.tableCell}>
                     <div className={styles.actionsCell}>
                       <Button size="small" onClick={() => onDetails(support)}>
                         Details
                       </Button>
+                      {onStep ? (
+                        <Button
+                          size="small"
+                          onClick={() => onStep(support)}
+                          disabled={isBusy || isSubmitting}
+                        >
+                          STEP file
+                        </Button>
+                      ) : null}
                       {isAdmin ? (
                         <>
                           {support.imageTemplateId ? (

@@ -14,6 +14,7 @@ import {
 } from '@fluentui/react-components';
 import { Link } from 'react-router-dom';
 import { TrayStepStatus } from './TrayStepStatus';
+import type { StandardMaterialOwnerCategory } from '@/api/client';
 import { getApiBaseUrl } from '@/api/http';
 import {
   materialComponentKinds as kinds,
@@ -69,19 +70,24 @@ export function MaterialComponentsSection({
   token,
   isAdmin,
   materialTrayId,
+  materialOwner,
   onBusyChange,
   onAssetsChange,
 }: {
   token: string | null;
   isAdmin: boolean;
   materialTrayId?: string;
+  materialOwner?: { category: Exclude<StandardMaterialOwnerCategory, 'cable-type' | 'tray'>; id: string };
   onBusyChange?: (busy: boolean) => void;
   onAssetsChange?: () => void;
 }) {
   const styles = useStyles();
+  const ownerPath = materialOwner ? `/materials/${materialOwner.category}/${materialOwner.id}` : null;
+  const scoped = Boolean(materialTrayId || materialOwner);
   const [families, setFamilies] = useState<Family[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
   const [selectedId, setSelectedId] = useState('');
+  const [ownerResolved, setOwnerResolved] = useState(false);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [assetsError, setAssetsError] = useState(false);
@@ -110,6 +116,14 @@ export function MaterialComponentsSection({
       if (!token) return;
       setLoading(true);
       try {
+        if (ownerPath) {
+          const result = await catalogueRequest<{ component: Component | null }>(token, ownerPath, { signal });
+          if (signal?.aborted) return;
+          setOwnerResolved(true);
+          setComponents(result.component ? [result.component] : []);
+          setSelectedId(result.component?.id ?? '');
+          return;
+        }
         const [familyResult, componentResult] = await Promise.all([
           catalogueRequest<{ families: Family[] }>(token, '/families', { signal }),
           catalogueRequest<{ components: Component[] }>(token, '', { signal }),
@@ -125,11 +139,12 @@ export function MaterialComponentsSection({
         if (!signal?.aborted) setLoading(false);
       }
     },
-    [token, materialTrayId],
+    [token, materialTrayId, ownerPath],
   );
 
   useEffect(() => {
     setSelectedId('');
+    setOwnerResolved(false);
     setAssets([]);
     setAssetsError(false);
     setRemoveCandidate(null);
@@ -227,7 +242,7 @@ export function MaterialComponentsSection({
   };
   const uploadStep = (event: FormEvent) => {
     event.preventDefault();
-    if (!file || !selectedId) return;
+    if (!file || (!selectedId && !ownerPath)) return;
     if (!/\.(step|stp)$/i.test(file.name) || file.size < 1 || file.size > MAX_STEP_SIZE) {
       setError('Select a non-empty STEP file up to 8 MiB.');
       return;
@@ -235,12 +250,17 @@ export function MaterialComponentsSection({
     void mutate(async () => {
       // A slow initial history read must not overwrite the newly uploaded revision.
       assetLoad.current?.abort();
+      let componentId = selectedId;
+      if (!componentId && ownerPath) {
+        const result = await catalogueRequest<{ component: Component }>(token!, ownerPath, { method: 'POST' });
+        componentId = result.component.id;
+      }
       const body = new FormData();
       body.set('file', file);
-      await catalogueRequest(token!, `/${selectedId}/cad-assets`, { method: 'POST', body });
+      await catalogueRequest(token!, `/${componentId}/cad-assets`, { method: 'POST', body });
       const result = await catalogueRequest<{ assets: Asset[] }>(
         token!,
-        `/${selectedId}/cad-assets`,
+        `/${componentId}/cad-assets`,
       );
       setAssets(result.assets);
       setAssetsError(false);
@@ -303,9 +323,9 @@ export function MaterialComponentsSection({
 
   return (
     <section className={styles.root} aria-label="Materials components">
-      <Title3>{materialTrayId ? 'Tray STEP file' : 'Product components and STEP'}</Title3>
+      <Title3>{scoped ? materialTrayId ? 'Tray STEP file' : 'Material STEP file' : 'Product components and STEP'}</Title3>
       <Body1>
-        {materialTrayId ? 'Add a STEP file or upload a replacement as a new revision. Existing placed parts retain their original revision.' :
+        {scoped ? 'STEP files are optional. Add a STEP file or upload a replacement as a new revision. Existing placed parts retain their original revision.' :
           'Each straight, bend, tee or fitting has its own part number within a product family. Routings builder uses these shared Materials components.'}
       </Body1>
       {loading ? <Spinner size="tiny" label="Loading components" /> : null}
@@ -330,9 +350,9 @@ export function MaterialComponentsSection({
           }
         }}
       >
-        {materialTrayId ? 'Refresh STEP files' : 'Refresh components'}
+        {scoped ? 'Refresh STEP files' : 'Refresh components'}
       </Button>
-      {isAdmin && !materialTrayId ? (
+      {isAdmin && !scoped ? (
         <>
           <form className={styles.form} aria-label="Create product family" onSubmit={createFamily}>
             <Field label="Family manufacturer">
@@ -435,7 +455,7 @@ export function MaterialComponentsSection({
           </form>
         </>
       ) : null}
-      {!materialTrayId ? <>
+      {!scoped ? <>
       <Field label="Filter product family">
         <Select
           aria-label="Filter product family"
@@ -485,20 +505,20 @@ export function MaterialComponentsSection({
         <Body1>No components match. Add real catalogue parts with independent part numbers.</Body1>
       ) : null}
       </> : null}
-      {selected ? (
+      {selected || (materialOwner && ownerResolved) ? (
         <section className={styles.root} aria-label="Component STEP revisions">
-          <Title3>{selected.partNumber} — STEP revisions</Title3>
+          <Title3>{selected?.partNumber ?? 'Material'} — STEP revisions</Title3>
           <TrayStepStatus status={assetsLoading ? 'loading' : assetsError ? 'error' : assets.some(asset => asset.active) ? 'attached' : 'missing'}
             revision={assets.find(asset => asset.active)?.revision} />
-          {selected.materialTrayId && !materialTrayId ? (
+          {selected?.materialTrayId && !scoped ? (
             <Link to={`/materials/trays/${selected.materialTrayId}`}>
               Open straight tray material, image and load curve
             </Link>
           ) : null}
-          <Caption1>
-            {selected.widthMm ?? '—'} × {selected.heightMm ?? '—'} × {selected.lengthMm ?? '—'} mm
+          {!materialOwner ? <Caption1>
+            {selected?.widthMm ?? '—'} × {selected?.heightMm ?? '—'} × {selected?.lengthMm ?? '—'} mm
             (width × height × length)
-          </Caption1>
+          </Caption1> : null}
           {isAdmin ? (
             <form className={styles.form} aria-label="Upload component STEP" onSubmit={uploadStep}>
               <Field label="Component STEP file">
@@ -518,7 +538,7 @@ export function MaterialComponentsSection({
                 Up to 8 MiB. A new revision preserves previous STEP files and project references.
               </Caption1>
               <Button type="submit" disabled={busy || !token || !file}>
-                {busy ? 'Saving…' : materialTrayId ? assets.some(asset => asset.active) ? 'Upload replacement STEP' : 'Add STEP file' : 'Upload STEP revision'}
+                {busy ? 'Saving…' : scoped ? assets.some(asset => asset.active) ? 'Upload replacement STEP' : 'Add STEP file' : 'Upload STEP revision'}
               </Button>
             </form>
           ) : null}
@@ -547,7 +567,7 @@ export function MaterialComponentsSection({
       <Dialog open={Boolean(removeCandidate)} onOpenChange={(_, data) => { if (!data.open && !busy) setRemoveCandidate(null); }}>
         <DialogSurface><DialogBody>
           <DialogTitle>Remove current STEP?</DialogTitle>
-          <DialogContent>{removeCandidate?.originalFilename}<p>The tray will have no current STEP for new placements. Existing placements and all revision files are preserved. You can restore this revision later.</p></DialogContent>
+          <DialogContent>{removeCandidate?.originalFilename}<p>The material will have no current STEP for new placements. Existing placements and all revision files are preserved. You can restore this revision later.</p></DialogContent>
           <DialogActions>
             <Button disabled={busy} onClick={() => setRemoveCandidate(null)}>Cancel</Button>
             <Button appearance="primary" disabled={busy} onClick={() => { if (removeCandidate) changeAsset(removeCandidate, true); }}>Remove STEP</Button>

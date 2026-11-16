@@ -276,10 +276,11 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
         onRefresh={() => void loadDetails(true)}
         refreshing={refreshing}
       >
-        {category === 'tray' && import.meta.env.VITE_CAD_DESIGN_ENABLED !== 'false' ? (
+        {category !== 'cable-type' && import.meta.env.VITE_CAD_DESIGN_ENABLED !== 'false' ? (
           <MaterialComponentsSection
             key={`${ownerId}:${token}`}
-            materialTrayId={ownerId}
+            materialTrayId={category === 'tray' ? ownerId : undefined}
+            materialOwner={category !== 'tray' ? { category, id: ownerId } : undefined}
             token={token}
             isAdmin={isAdmin}
           />

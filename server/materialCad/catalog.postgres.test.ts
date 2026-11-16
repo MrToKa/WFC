@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { initializeMaterialTrayCadSchema } from './schema.js';
+import { materialCadOwners, ordinaryComponentCondition } from './owners.js';
 import { initializeCadDesignSchema } from '../cadDesign/schema.js';
 import { initializeCadRouteGroupsSchema } from '../cadDesign/routeGroupsSchema.js';
 
@@ -25,6 +26,11 @@ describe.skipIf(!testUrl)('Materials CAD migrations on disposable PostgreSQL', (
       CREATE TABLE project_model_selections(project_id uuid REFERENCES projects(id) ON DELETE CASCADE,active_model_version_id uuid);
       CREATE TABLE material_trays(id uuid PRIMARY KEY,tray_type text,manufacturer text,width_mm numeric,height_mm numeric,
         load_curve_id uuid,image_template_id uuid,unit_price numeric);
+      CREATE TABLE material_supports(id uuid PRIMARY KEY,support_type text,manufacturer text);
+      CREATE TABLE material_instruments(id uuid PRIMARY KEY,type text,manufacturer text);
+      CREATE TABLE material_cable_installation_materials(id uuid PRIMARY KEY,type text,manufacturer text);
+      CREATE TABLE material_tray_installation_materials(id uuid PRIMARY KEY,type text,manufacturer text);
+      CREATE TABLE material_instrument_installation_materials(id uuid PRIMARY KEY,type text,manufacturer text);
       -- Reproduce the pre-Materials project table: the two reference columns did not exist.
       CREATE TABLE cad_catalog_items (
         id uuid PRIMARY KEY,project_id uuid REFERENCES projects(id) ON DELETE CASCADE,manufacturer text,part_number text,family text,
@@ -44,6 +50,41 @@ describe.skipIf(!testUrl)('Materials CAD migrations on disposable PostgreSQL', (
       await pool.query('INSERT INTO projects VALUES($1)', [project]);
       await pool.query('INSERT INTO model_versions(id,project_id) VALUES($1,$2)', [model, project]);
       await initializeMaterialTrayCadSchema(pool);
+      const support = randomUUID(), instrument = randomUUID();
+      await pool.query('INSERT INTO material_supports VALUES($1,$2,$3)', [support, 'STRAIGHT-300', 'Niedax']);
+      await pool.query('INSERT INTO material_instruments VALUES($1,$2,$3)', [instrument, 'STRAIGHT-300', 'Niedax']);
+      const trayFamily = (await pool.query('SELECT family_id FROM material_components WHERE id=$1', [tray])).rows[0].family_id;
+      for (const [column, owner] of [['material_support_id',support],['material_instrument_id',instrument]]) {
+        // Equal human identifiers in different categories own independent assets.
+        const component = randomUUID(), sourceAsset = randomUUID();
+        await pool.query(`INSERT INTO material_components(id,family_id,manufacturer,part_number,component_kind,name,${column})
+          VALUES($1,$2,'Niedax','STRAIGHT-300','other','Independent attachment',$3)`, [component,trayFamily,owner]);
+        await pool.query(`INSERT INTO material_component_cad_assets
+          (id,component_id,revision,original_filename,source_sha256,source_bytes,source_object_key,mesh_object_key,mesh_metadata)
+          VALUES($1,$2,1,'attachment.step',$3,100,$4,$5,'{}')`, [sourceAsset,component,'b'.repeat(64),`${sourceAsset}/source`,`${sourceAsset}/mesh`]);
+      }
+      await expect(pool.query('DELETE FROM material_supports WHERE id=$1', [support])).rejects.toMatchObject({ code: '23001' });
+      await expect(pool.query(`INSERT INTO material_components(id,family_id,manufacturer,part_number,component_kind,name,material_support_id)
+        VALUES($1,$2,'Niedax','ANOTHER','other','Duplicate owner',$3)`, [randomUUID(),trayFamily,support])).rejects.toMatchObject({ code: '23505' });
+      await pool.query(`UPDATE material_component_cad_assets SET active=FALSE WHERE component_id IN
+        (SELECT id FROM material_components WHERE material_support_id=$1)`, [support]);
+      await expect(pool.query('DELETE FROM material_supports WHERE id=$1', [support])).rejects.toMatchObject({ code: '23001' });
+      // Upgrade an already initialized earlier attachment FK as well as a clean DB.
+      await pool.query(`ALTER TABLE material_components DROP CONSTRAINT material_cad_owner_0_fk;
+        ALTER TABLE material_components ADD CONSTRAINT old_support_owner_fk
+          FOREIGN KEY(material_support_id) REFERENCES material_supports(id) ON DELETE RESTRICT`);
+      await initializeMaterialTrayCadSchema(pool);
+      for (const [category, owner] of Object.entries(materialCadOwners)) {
+        const emptyOwner = randomUUID(), emptyFamily = randomUUID(), emptyComponent = randomUUID();
+        await pool.query(`INSERT INTO ${owner.table}(id,${owner.name},manufacturer) VALUES($1,'Empty attempted upload','Vendor')`, [emptyOwner]);
+        await pool.query(`INSERT INTO material_product_families(id,manufacturer,name) VALUES($1,'Vendor',$2)`,
+          [emptyFamily,`Material STEP: ${category}: ${emptyOwner}`]);
+        await pool.query(`INSERT INTO material_components(id,family_id,manufacturer,part_number,component_kind,name,${owner.column})
+          VALUES($1,$2,'Vendor','EMPTY','other','Empty attempted upload',$3)`, [emptyComponent,emptyFamily,emptyOwner]);
+        await pool.query(`DELETE FROM ${owner.table} WHERE id=$1`, [emptyOwner]);
+        expect((await pool.query('SELECT id FROM material_components WHERE id=$1', [emptyComponent])).rows).toHaveLength(0);
+        expect((await pool.query('SELECT id FROM material_product_families WHERE id=$1', [emptyFamily])).rows).toHaveLength(0);
+      }
       expect((await pool.query('SELECT part_number FROM material_components WHERE id=$1', [longTray])).rows[0].part_number).toHaveLength(200);
       const before = (await pool.query('SELECT * FROM material_trays WHERE id=$1', [tray])).rows[0];
       expect((await pool.query('SELECT component_kind,part_number,material_tray_id FROM material_components WHERE id=$1', [tray])).rows[0])
@@ -57,6 +98,9 @@ describe.skipIf(!testUrl)('Materials CAD migrations on disposable PostgreSQL', (
       expect((await pool.query(`SELECT c.part_number,c.component_kind,c.material_tray_id FROM material_components c
         JOIN material_component_cad_assets a ON a.component_id=c.id WHERE a.id=$1`, [asset])).rows[0])
         .toEqual({ part_number: 'BEND-300', component_kind: 'bend', material_tray_id: null });
+      const routingAssets = await pool.query(`SELECT a.id FROM material_component_cad_assets a
+        JOIN material_components c ON c.id=a.component_id WHERE ${ordinaryComponentCondition}`);
+      expect(routingAssets.rows.map(row => row.id)).toEqual([asset]);
       await initializeCadDesignSchema(pool);
       await pool.query(`INSERT INTO cad_catalog_items
         (id,project_id,manufacturer,part_number,family,original_filename,source_sha256,source_object_key,source_bytes,
