@@ -271,7 +271,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     expect(screen.getByRole('button', { name: 'Recalculate all the cables' })).toBeDisabled();
     expect(automaticCapture.render.mock.calls.at(-1)![0]).toMatchObject({ preferences: null, configurationMessage: expect.any(String) });
     expect(screen.getByText(mode === 'pending'
-      ? 'Wait for the saved barrier command to finish, or use Retry saved command in Barriers if its outcome is unknown.'
+      ? 'A barrier change is awaiting confirmation. In Barriers, choose Inspect saved outcome; if no terminal outcome is recorded, choose Close this exact command, then check and save the intended barrier set before calculating.'
       : mode === 'dirty' ? 'Save the obstacle selection in Barriers before calculating.'
         : mode === 'missing' ? 'Check the current model and saved selection in Barriers before calculating.'
           : 'Configure Barriers: save the selected obstacles, or enter an Explicit empty reason and choose Declare no barriers to calculate without obstacle checks.')).toBeVisible();
@@ -713,10 +713,12 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     expect(screen.getByRole('button', { name: 'Calculate path' })).toBeDisabled();
     expect(workspaceCapture.render.mock.lastCall![0].preferences).toBeNull();
     expect(resultCapture.render.mock.lastCall![0].calculationBlocker).toBe('Save the obstacle selection in Barriers before calculating.');
+    expect(workspaceCapture.render.mock.lastCall![0].calculationBlocker).toBe('Save the obstacle selection in Barriers before calculating.');
     barrierComposition.mode = 'ready';
     await act(async () => view.rerender(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />));
     expect(screen.getByRole('button', { name: 'Recalculate all the cables' })).toBeEnabled();
     expect(workspaceCapture.render.mock.lastCall![0].preferences).not.toBeNull();
+    expect(workspaceCapture.render.mock.lastCall![0].calculationBlocker).toBeNull();
     expect(submitAllPathFinderCalculations).not.toHaveBeenCalled(); expect(pf.actionWithoutRefresh).not.toHaveBeenCalled();
   });
   it('reserves shared preparation inputs while checking the network without marking the popup controller busy', async () => {

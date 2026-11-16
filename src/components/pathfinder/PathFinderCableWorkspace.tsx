@@ -39,6 +39,7 @@ const selectedCalculationPending = (calculation: CableWorkflowRow['calculation']
 export type PathFinderCableWorkspaceProps = Access & { pf: ReturnType<typeof usePathFinder>; active: boolean;
   preferences: PathFinderPreferences | null; selectedCableId?: string | null; refreshKey?: number; onSelect: (row: CableWorkflowRow) => void;
   readPreferences?: CableWorkflowDetailQuery | null;
+  calculationBlocker?: string | null;
   display?: PathFinderWorkflowDisplay; onTogglePath?: (cableId: string) => void; review?: PathFinderWorkflowReview | null;
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
   onCalculationStart?: (cableId: string) => void; onConfigureCalculation?: () => void;
@@ -225,7 +226,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const drillThroughWalls = Boolean(selected && drillDraft?.cableId === selected.cable.id && drillDraft.checked);
   const selectedPreferences = props.getCalculationPreferences ? props.getCalculationPreferences(drillThroughWalls) : preferences;
   const calculationBlockedReason = enabled && !selectedPreferences
-    ? 'You can save From/To assignments now. Configure the current route settings and barriers before calculating routing. Existing Cable list values are retained.' : null;
+    ? props.calculationBlocker ?? 'You can save From/To assignments now. Configure the current route settings and barriers before calculating routing. Existing Cable list values are retained.' : null;
   const calculation = calculationEnabled && selectedEligible && preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
   const selectedReadScope = workspaceReadScope(props);
   const previousReadScope = useRef(selectedReadScope);
@@ -731,7 +732,8 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     const attempt = Object.freeze({ epoch: ++attemptEpoch.current, owner: calculationAttemptOwner(current) });
     const selectedPreferences = current.getCalculationPreferences ? current.getCalculationPreferences(drillThroughWalls) : current.preferences;
     if (!selectedPreferences) {
-      const message = 'Configure the current route settings and barriers before calculating. No calculation was submitted and the existing cable values are retained.';
+      const reason = current.calculationBlocker ?? 'Configure the current route settings and barriers before calculating.';
+      const message = `${reason} No calculation was submitted and the existing cable values are retained.`;
       setNotice(message); rememberFeedback({ cableId: row.cable.id, attempt, message, working: false });
       current.onConfigureCalculation?.();
       return;

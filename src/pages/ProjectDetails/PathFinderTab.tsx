@@ -101,7 +101,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const backgroundBarrierRouting = createBarrierAdmissionIntent(currentBarrierRegistry, false);
   const backgroundPreferences = preferences && backgroundBarrierRouting ? { ...preferences, barrierRouting: backgroundBarrierRouting } : null;
   const calculationBlocker = !validSecondary ? 'Enter a SECONDARY trigger distance from 0 to 1,000,000 metres in Path.'
-    : barrierAuthoring.pending ? 'Wait for the saved barrier command to finish, or use Retry saved command in Barriers if its outcome is unknown.'
+    : barrierAuthoring.pending ? 'A barrier change is awaiting confirmation. In Barriers, choose Inspect saved outcome; if no terminal outcome is recorded, choose Close this exact command, then check and save the intended barrier set before calculating.'
       : barrierAuthoring.dirty ? 'Save the obstacle selection in Barriers before calculating.'
         : !currentBarrierRegistry ? 'Check the current model and saved selection in Barriers before calculating.'
           : !backgroundBarrierRouting ? 'Configure Barriers: save the selected obstacles, or enter an Explicit empty reason and choose Declare no barriers to calculate without obstacle checks.'
@@ -262,7 +262,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           onChanged={cableValuesChanged} onAuthorityLost={cableValuesChanged} />
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation} onResultRefresh={workflowResultRefreshed}
-          getCalculationPreferences={getCableCalculationPreferences} onCalculationPreferences={setWorkflowCalculationPreferences}
+          calculationBlocker={calculationBlocker} getCalculationPreferences={getCableCalculationPreferences} onCalculationPreferences={setWorkflowCalculationPreferences}
           display={workflowDisplay} review={popupReview} onCalculationStart={workflowCalculationStarted} onTogglePath={cableId => setWorkflowDisplayRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1,
             action: workflowDisplay.cableId === cableId && workflowDisplay.visible ? 'hide' : 'show' }))}
           onEndpointForegroundContexts={endpointForegroundChanged}

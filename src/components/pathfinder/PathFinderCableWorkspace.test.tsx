@@ -349,6 +349,29 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(vi.mocked(usePathfinderLocationImpactProgress).mock.calls.at(-1)?.[0].active).toBe(false);
     expect(vi.mocked(usePathfinderInitialFillProgress).mock.calls.at(-1)?.[0].active).toBe(false);
   });
+  it('updates the open cable blocker and submits only after the barrier configuration is ready', async () => {
+    const p = props(), readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
+    const configure = vi.fn(), getPreferences = vi.fn(() => null as PathFinderCableWorkspaceProps['preferences']);
+    const view = render(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences}
+      calculationBlocker="Save the obstacle selection in Barriers before calculating."
+      getCalculationPreferences={getPreferences} onConfigureCalculation={configure} />);
+    await openListCable();
+    expect(panelProps.calculationBlockedReason).toBe('Save the obstacle selection in Barriers before calculating.');
+    const pendingReason = 'A barrier change is awaiting confirmation. Inspect saved outcome in Barriers.';
+    view.rerender(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences}
+      calculationBlocker={pendingReason} getCalculationPreferences={getPreferences} onConfigureCalculation={configure} />);
+    await act(async () => { await panelProps.onCalculate?.(); });
+    expect(panelProps.calculationBlockedReason).toBe(pendingReason);
+    expect(panelProps.calculationFeedback?.message).toBe(`${pendingReason} No calculation was submitted and the existing cable values are retained.`);
+    expect(configure).toHaveBeenCalledOnce(); expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+    const ready = barrierCalculationFixture(id, false).preferences;
+    getPreferences.mockReturnValue(ready);
+    view.rerender(<PathFinderCableWorkspace {...p} preferences={ready} readPreferences={readPreferences}
+      calculationBlocker={null} getCalculationPreferences={getPreferences} onConfigureCalculation={configure} />);
+    expect(panelProps.calculationBlockedReason).toBeNull(); expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+    await act(async () => { await panelProps.onCalculate?.(); });
+    expect(p.pf.submitCalculation).toHaveBeenCalledExactlyOnceWith([id(3)], ready);
+  });
   it('keeps only exact retained Apply recovery reachable when calculation preferences are unavailable', async () => {
     const p = props(), review = reviewController(id(3), id(80));
     const readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
