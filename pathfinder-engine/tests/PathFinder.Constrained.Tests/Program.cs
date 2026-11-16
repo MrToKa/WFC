@@ -152,6 +152,16 @@ internal static class Program
     }
     private static void CompleteCandidateDomain()
     {
+        Run("expanded profile permits sixty-four candidates and refuses values beyond its published ceilings", () =>
+        {
+            var trays = new[] { Tray("A", P(0), P(1)) };
+            var expanded = Route(trays, P(0), P(1), FarQuery(), limits: new() { MaxCandidatesPerEnd = 64, MaxPairs = 4104 });
+            Need(expanded.Route.Success);
+            Reject<ArgumentException>(() => Route(trays, P(0), P(1), FarQuery(), limits: new() { MaxCandidatesPerEnd = 65 }));
+            Reject<ArgumentException>(() => Route(trays, P(0), P(1), FarQuery(), limits: new() { MaxPairs = 4105 }));
+            Equal(16, new ConstrainedRoutingLimits().MaxCandidatesPerEnd);
+            Equal(264, new ConstrainedRoutingLimits().MaxPairs);
+        });
         Run("straight constrained search exhausts all retained pairs while preserving wall collision refusal", () =>
         {
             var kernel = Kernel(Box("separating-wall", x0: -100, x1: 200, y0: 1.4, y1: 1.6));

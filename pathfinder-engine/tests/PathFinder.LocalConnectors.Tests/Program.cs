@@ -362,6 +362,15 @@ internal static class Program
             Need(AnchoredRanks(1, 16).SequenceEqual(Enumerable.Range(0, 16).Select(rank => (0, rank))));
             Need(AnchoredRanks(16, 1).SequenceEqual(Enumerable.Range(0, 16).Select(rank => (rank, 0))));
         });
+        Run("expanded nearest-anchored scheduling covers all 4096 retained pairs exactly once", () =>
+        {
+            var pairs = AnchoredRanks(64, 64);
+            Equal(4096, pairs.Count); Equal(4096, pairs.Distinct().Count());
+            Need(pairs.All(pair => pair.First >= 0 && pair.First < 64 && pair.Last >= 0 && pair.Last < 64));
+            for (int rank = 0; rank < 64; rank++)
+                Need(pairs.Take(127).Contains((0, rank)) && pairs.Take(127).Contains((rank, 0)));
+            Equal((63, 63), pairs[^1]);
+        });
         Run("nearest-anchored scheduling retains original rank-sum order for all interior pairs", () =>
         {
             var expected = new List<(int, int)>();
@@ -410,6 +419,39 @@ internal static class Program
             Need(expanded.RouteEvaluation.Route.SegmentIds.SequenceEqual(new[] { "connected" }));
             Need(expanded.RouteEvaluation.FinalChecks.Count > 0, "Expanded search skipped the fresh final collision checks.");
             Equal(0, expanded.PlannerAttempts); Need(expanded.RouteEvaluation.CollisionQueries <= 100000 && expanded.LocalEdgeChecks <= 16384);
+        });
+        Run("expanded candidate window reaches a free upper connection beyond forty nearer lower-component candidates", () =>
+        {
+            var kernel = Kernel(Box("floor", x0: -100, x1: 60, y0: -100, y1: 100, z0: 4, z1: 5));
+            var from = P(0); var to = P(20, 2, 10);
+            var trays = Enumerable.Range(1, 40).Select(rank => Tray("lower" + rank.ToString("D2"), P(rank), P(rank, .5))).ToList();
+            trays.Add(Tray("upper-network", P(20, 2, 10), P(200, 2, 10)));
+            trays.Add(Tray("upper-free-entry", P(200, 2, 10), P(201, 2, 10)));
+            var routing = Options(); routing.PreferVerticalApproach = false;
+            var local = new LocalConnectorOptions { UseNearestAnchoredSearch = true };
+            Equal(BarrierSegmentStatus.Blocked, kernel.CheckSegment(B(from), B(to)).Status);
+            Equal(BarrierSegmentStatus.Clear, kernel.CheckSegment(B(from), B(P(200, 2, 10))).Status);
+            foreach (int candidates in new[] { 16, 32, 40 })
+            {
+                var limited = Route(trays.ToArray(), from, to, Query(kernel), routing,
+                    limits: new() { MaxCandidatesPerEnd = candidates, MaxPairs = ConstrainedRoutingLimits.ExpandedCandidatePairAllowance }, local: local);
+                Need(!limited.RouteEvaluation.Route.Success, $"The nearest-{candidates} domain unexpectedly reached the far free connection.");
+                Need(limited.RouteEvaluation.CandidatesTruncated);
+                Need(limited.RouteEvaluation.Reason != "CANDIDATE_PAIR_LIMIT", limited.RouteEvaluation.Reason);
+            }
+            var expanded = Route(trays.ToArray(), from, to, Query(kernel), routing,
+                limits: new() { MaxCandidatesPerEnd = ConstrainedRoutingLimits.ExpandedCandidateLimit,
+                    MaxPairs = ConstrainedRoutingLimits.ExpandedCandidatePairAllowance }, local: local);
+            ClearRoute(expanded, kernel);
+            Need(expanded.RouteEvaluation.Route.SegmentIds.Contains("upper-free-entry"));
+            Need(expanded.RouteEvaluation.Route.SegmentIds.Contains("upper-network"));
+            Need(!expanded.RouteEvaluation.Route.SegmentIds.Any(id => id.StartsWith("lower", StringComparison.Ordinal)));
+            Need(Same(from, expanded.RouteEvaluation.Route.PathPoints[0]) && Same(to, expanded.RouteEvaluation.Route.PathPoints[^1]));
+            Need(expanded.RouteEvaluation.FinalChecks.Count > 0);
+            Equal(expanded.RouteEvaluation.Route.PathPoints.Count - 1, expanded.RouteEvaluation.FinalChecks.Count);
+            Need(expanded.RouteEvaluation.FinalChecks.All(check => check.Observation.Status == RouteCollisionStatus.Clear));
+            Need(expanded.RouteEvaluation.Work <= 20000000 && expanded.RouteEvaluation.CollisionQueries <= 100000);
+            Need(expanded.PlannerAttempts <= 8 && expanded.LocalEdgeChecks <= 16384);
         });
         Run("all sixteen by sixteen local target pairs are visited without bypassing original barrier material", () =>
         {

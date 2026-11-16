@@ -27,7 +27,8 @@ internal static partial class Program
                 : observation.Status == MixedBarrierSegmentStatus.Blocked ? RouteCollisionStatus.Blocked : RouteCollisionStatus.Indeterminate,
                 observation.Witness?.ComponentId, observation.Reason, observation.Work);
         };
-        var limits = new ConstrainedRoutingLimits { MaxPairs = context.FullPairs ? 264 : 64 };
+        var limits = new ConstrainedRoutingLimits { MaxCandidatesPerEnd = context.ExpandedCandidates ? ConstrainedRoutingLimits.ExpandedCandidateLimit : 16,
+            MaxPairs = context.ExpandedCandidates ? ConstrainedRoutingLimits.ExpandedCandidatePairAllowance : context.FullPairs ? 264 : 64 };
         ConstrainedSecondaryEvaluation? secondary = null; LocalApproachRouteEvaluation local;
         var localOptions = context.NearestAnchoredSearch ? new LocalConnectorOptions { UseNearestAnchoredSearch = true } : null;
         var purposeTrays = PurposeRouting.Filter(prepared.Segments, request.AllowedPurposeRouteCodes, token);

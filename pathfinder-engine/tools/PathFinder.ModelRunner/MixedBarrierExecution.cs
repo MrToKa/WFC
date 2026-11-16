@@ -34,7 +34,8 @@ internal static partial class Program
         var value = request.Barriers ?? throw new ArgumentException("Mixed runtime is required.");
         BarrierFields(value, "schemaVersion", "binding", "profile", "profileSha256", "storage");
         var profile = value.GetProperty("profile");
-        bool fullPairs = BarrierEqual(profile, MixedFullPairProfile);
+        bool expandedCandidates = BarrierEqual(profile, MixedExpandedCandidateProfile);
+        bool fullPairs = expandedCandidates || BarrierEqual(profile, MixedFullPairProfile);
         bool measuredFit = fullPairs || BarrierEqual(profile, MixedMeasuredFitProfile);
         bool nearestAnchoredSearch = measuredFit || BarrierEqual(profile, MixedNearestAnchoredProfile);
         bool largeSelection = nearestAnchoredSearch || BarrierEqual(profile, MixedLargeSelectionProfile);
@@ -72,7 +73,7 @@ internal static partial class Program
             if (BarrierString(snapshot, "mode") == "mixed-mesh-set") BarrierBlob.Validate(storage.GetProperty("capture"), 33554432);
             else if (storage.GetProperty("capture").ValueKind != JsonValueKind.Null) throw new ArgumentException("Explicit-empty mixed scope cannot carry a capture.");
         }
-        return new(value.Clone(), binding.Clone(), scope.Clone(), snapshot.Clone(), storage.Clone(), drill, interTrayManeuvers, largeSelection, nearestAnchoredSearch, fullPairs);
+        return new(value.Clone(), binding.Clone(), scope.Clone(), snapshot.Clone(), storage.Clone(), drill, interTrayManeuvers, largeSelection, nearestAnchoredSearch, fullPairs, expandedCandidates);
     }
     private static object MixedBarrierFailure(Request request, MixedBarrierRuntimeContext context, string status, string reason, string message) => new
     {
@@ -84,7 +85,7 @@ internal static partial class Program
             engineeringAccepted = false, ownTerminalExemptionsSupported = false, authority = "none" }
     };
 }
-internal sealed record MixedBarrierRuntimeContext(JsonElement Value, JsonElement Binding, JsonElement Scope, JsonElement Snapshot, JsonElement Storage, bool Drill, bool InterTrayManeuvers, bool LargeSelection, bool NearestAnchoredSearch, bool FullPairs)
+internal sealed record MixedBarrierRuntimeContext(JsonElement Value, JsonElement Binding, JsonElement Scope, JsonElement Snapshot, JsonElement Storage, bool Drill, bool InterTrayManeuvers, bool LargeSelection, bool NearestAnchoredSearch, bool FullPairs, bool ExpandedCandidates)
 {
     internal string? Mode => Snapshot.ValueKind == JsonValueKind.Null ? null : Snapshot.GetProperty("mode").GetString();
     internal int MaximumParents => LargeSelection ? 2048 : 128;

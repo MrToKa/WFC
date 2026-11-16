@@ -170,6 +170,7 @@ internal static partial class Program
         await NearestAnchoredProfileTransport(runner, root);
         await MeasuredFitProfileTransport(runner, root);
         await RetainedPairsProfileTransport(runner, root);
+        await ExpandedCandidatesProfileTransport(runner, root);
         await LargeSelectionTransport(runner, root);
         await CapacityTransport(runner, root);
     }

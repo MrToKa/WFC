@@ -247,14 +247,23 @@ export const mixedBarrierFullPairRuntimeProfileSchema = mixedBarrierMeasuredFitR
   schemaVersion: z.literal(MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE.schemaVersion),
   routing: literalObject(MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE.routing),
 }).strict();
+/** Wider retained attachment domain, with unchanged collision, work and time budgets. */
+export const MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE = Object.freeze({ ...MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE,
+  schemaVersion: 'wfc.pf.barrier-runtime-profile.v8',
+  routing: Object.freeze({ ...MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE.routing, maxCandidatesPerEnd: 64, maxPairs: 4104 }),
+} as const);
+export const mixedBarrierExpandedCandidateRuntimeProfileSchema = mixedBarrierFullPairRuntimeProfileSchema.extend({
+  schemaVersion: z.literal(MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE.schemaVersion),
+  routing: literalObject(MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE.routing),
+}).strict();
 export const mixedBarrierSupportedRuntimeProfileSchema = z.union([mixedBarrierRuntimeProfileSchema, mixedBarrierOpeningRuntimeProfileSchema,
-  mixedBarrierLargeSelectionRuntimeProfileSchema, mixedBarrierNearestAnchoredRuntimeProfileSchema, mixedBarrierMeasuredFitRuntimeProfileSchema, mixedBarrierFullPairRuntimeProfileSchema]);
+  mixedBarrierLargeSelectionRuntimeProfileSchema, mixedBarrierNearestAnchoredRuntimeProfileSchema, mixedBarrierMeasuredFitRuntimeProfileSchema, mixedBarrierFullPairRuntimeProfileSchema, mixedBarrierExpandedCandidateRuntimeProfileSchema]);
 const blob = z.object({ blobId: uuid, sha256: hash, bytes: positive(BARRIER_LIMITS.captureBytes) }).strict();
 export const mixedBarrierRuntimeContextSchema = z.object({ schemaVersion: z.literal('wfc.pf.barrier-runtime.v2'), binding: mixedBarrierCalculationBindingSchema,
   profile: mixedBarrierSupportedRuntimeProfileSchema, profileSha256: hash,
   storage: z.object({ intentId: uuid, manifest: blob, capture: blob.nullable() }).strict().nullable() }).strict().superRefine((value, context) => {
   const snapshot = value.binding.snapshot;
-  const maximumManifestBytes = ['wfc.pf.barrier-runtime-profile.v4', 'wfc.pf.barrier-runtime-profile.v5', 'wfc.pf.barrier-runtime-profile.v6', 'wfc.pf.barrier-runtime-profile.v7'].includes(value.profile.schemaVersion) ? BARRIER_LIMITS.manifestBytes : 256 * 1024;
+  const maximumManifestBytes = ['wfc.pf.barrier-runtime-profile.v4', 'wfc.pf.barrier-runtime-profile.v5', 'wfc.pf.barrier-runtime-profile.v6', 'wfc.pf.barrier-runtime-profile.v7', 'wfc.pf.barrier-runtime-profile.v8'].includes(value.profile.schemaVersion) ? BARRIER_LIMITS.manifestBytes : 256 * 1024;
   if (!snapshot ? !value.binding.policy.drillThroughWalls || value.storage !== null
     : !value.storage || value.storage.manifest.bytes > maximumManifestBytes || (snapshot.mode === 'mixed-mesh-set') !== (value.storage.capture !== null))
     issue(context, 'Mixed runtime must retain bounded exact stored originals, or an explicit unpublished drilling bypass.');
@@ -310,7 +319,7 @@ const connector = z.object({ policyVersion: z.literal(BARRIER_RUNTIME_PROFILE.lo
 export const mixedBarrierExecutionSchema = z.object({ schemaVersion: z.literal('wfc.pf.barrier-execution.v2'), context: mixedBarrierRuntimeContextSchema,
   proof: mixedBarrierCheckProofSchema.nullable(), directSecondary: mixedBarrierDirectSecondarySchema.nullable(),
   diagnostics: z.object({ status: z.enum(['clear', 'blocked', 'indeterminate', 'search-incomplete', 'bypassed', 'unavailable', 'no-barriers-declared']), reasonCode,
-    searchComplete: z.boolean(), candidatesTruncated: z.boolean(), pairAttempts: count(264), collisionQueries: count(100000), work,
+    searchComplete: z.boolean(), candidatesTruncated: z.boolean(), pairAttempts: count(4104), collisionQueries: count(100000), work,
     plannerAttempts: count(8), straightPairAttempts: count(64), localEdgeChecks: count(16384), localPhaseUsed: z.boolean(), straightPhaseTruncated: z.boolean() }).strict(),
   connectors: z.object({ from: connector.nullable(), to: connector.nullable() }).strict(),
   qualification: z.object({ captureSha256: hash, evidence: mixedBarrierVerifierEvidenceSchema }).strict().nullable(), ...noAuthority,
@@ -363,8 +372,11 @@ const mixedMeasuredFitIdentityPolicies = mixedNearestAnchoredIdentityPolicies.ex
 const mixedFullPairIdentityPolicies = mixedMeasuredFitIdentityPolicies.extend({
   runtimeProfile: z.literal(MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE.schemaVersion),
 }).strict();
+const mixedExpandedCandidateIdentityPolicies = mixedFullPairIdentityPolicies.extend({
+  runtimeProfile: z.literal(MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE.schemaVersion),
+}).strict();
 const mixedIdentityBody = barrierEngineIdentityBodySchema.omit({ schemaVersion: true, policyVersions: true }).extend({ schemaVersion: z.literal('wfc.pf.engine-identity.v3'),
-  policyVersions: z.union([mixedIdentityPolicies, mixedOpeningIdentityPolicies, mixedLargeSelectionIdentityPolicies, mixedNearestAnchoredIdentityPolicies, mixedMeasuredFitIdentityPolicies, mixedFullPairIdentityPolicies]) }).strict();
+  policyVersions: z.union([mixedIdentityPolicies, mixedOpeningIdentityPolicies, mixedLargeSelectionIdentityPolicies, mixedNearestAnchoredIdentityPolicies, mixedMeasuredFitIdentityPolicies, mixedFullPairIdentityPolicies, mixedExpandedCandidateIdentityPolicies]) }).strict();
 export const mixedBarrierEngineIdentityBodySchema = mixedIdentityBody;
 export const mixedBarrierEngineIdentitySchema = mixedIdentityBody.extend({ contentSha256: hash }).strict();
 export type MixedBarrierCaptureCommand = z.infer<typeof mixedBarrierCaptureCommandSchema>;

@@ -512,3 +512,39 @@ describe('full retained candidate pair runtime profile', () => {
     expect(mixed.verifyMixedBarrierEngineIdentity(identity(), hash)).toBe(true);
   });
 });
+
+describe('expanded attachment candidate runtime profile', () => {
+  const expandedContext = (): mixed.MixedBarrierRuntimeContext => ({ ...context(),
+    profile: mixed.mixedBarrierExpandedCandidateRuntimeProfileSchema.parse(mixed.MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE),
+    profileSha256: digest(mixed.MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE) });
+  it('widens only the retained candidate domain and pair budget with historical profiles unchanged', () => {
+    const next=mixed.MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE, old=mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE;
+    expect(next.schemaVersion).toBe('wfc.pf.barrier-runtime-profile.v8');
+    expect(next.routing.maxCandidatesPerEnd).toBe(64); expect(next.routing.maxPairs).toBe(8 + 64 * 64);
+    expect({ ...next, schemaVersion:old.schemaVersion, routing:{...next.routing,maxCandidatesPerEnd:16,maxPairs:264} }).toEqual(old);
+    const current=expandedContext(); current.storage!.manifest.bytes=1024*1024;
+    expect(mixed.verifyMixedBarrierRuntimeContext(current,hash)).toBe(true);
+    expect(mixed.mixedBarrierSupportedRuntimeProfileSchema.safeParse({...old,routing:next.routing}).success).toBe(false);
+    for(const change of [{maxPairs:4105},{maxCandidatesPerEnd:65},{maxCollisionQueries:100001},{timeoutMilliseconds:30001}]) {
+      const profile={...next,routing:{...next.routing,...change}};
+      expect(mixed.verifyMixedBarrierRuntimeContext({...current,profile,profileSha256:digest(profile)},hash)).toBe(false);
+    }
+  });
+  it('accepts its expanded diagnostics only with the corresponding profile and exact final proof', () => {
+    const current=expandedContext(), value={...execution(),context:current}; value.diagnostics.pairAttempts=4104;
+    expect(mixed.verifyMixedBarrierExecutionRoute(value,{context:current,points,componentMemberships:evidence().componentMemberships,qualificationEvidence:evidence()},hash)).toBe(true);
+    expect(mixed.mixedBarrierExecutionSchema.safeParse({...value,proof:null}).success).toBe(false);
+    value.diagnostics.pairAttempts=4105; expect(mixed.mixedBarrierExecutionSchema.safeParse(value).success).toBe(false);
+    value.diagnostics.pairAttempts=265;
+    expect(mixed.mixedBarrierExecutionSchema.safeParse({...value,context:{...current,profile:mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE,profileSha256:digest(mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE)}}).success).toBe(false);
+  });
+  it('binds the expanded domain to its own identity and rejects a borrowed digest', () => {
+    const {contentSha256:_hash,...old}=identity();const body={...old,policyVersions:{...old.policyVersions,
+      runtimeProfile:mixed.MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE.schemaVersion,
+      fitting:mixed.MEASURED_BEND_MESH_FITTING_PROFILE.modelBuildRules,interTrayManeuvers:mixed.INTER_TRAY_OPENING_MANEUVER_POLICY,
+      localSearch:mixed.NEAREST_ANCHORED_LOCAL_SEARCH_POLICY,geometryFitting:mixed.MEASURED_BEND_MESH_FITTING_POLICY}};
+    expect(mixed.verifyMixedBarrierEngineIdentity({...body,contentSha256:digest(body)},hash)).toBe(true);
+    expect(mixed.verifyMixedBarrierEngineIdentity({...body,contentSha256:identity().contentSha256},hash)).toBe(false);
+    expect(mixed.verifyMixedBarrierEngineIdentity(identity(),hash)).toBe(true);
+  });
+});

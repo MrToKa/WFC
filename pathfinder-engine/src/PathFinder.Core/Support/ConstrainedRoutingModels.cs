@@ -52,6 +52,10 @@ namespace AddinRibbon.Routing
         // allowance. Straight-only search needs at most 257 (legacy + 16*16).
         // Keep this aligned with the candidate and local preflight ceilings.
         public const int CompleteCandidatePairAllowance = 16 * 16 + 8;
+        // Explicit expanded profiles can reach an accessible tray outside the
+        // historical nearest-sixteen window. Defaults retain that old domain.
+        public const int ExpandedCandidateLimit = 64;
+        public const int ExpandedCandidatePairAllowance = ExpandedCandidateLimit * ExpandedCandidateLimit + 8;
         public int MaxCandidatesPerEnd { get; set; } = 16;
         public int MaxPairs { get; set; } = CompleteCandidatePairAllowance;
         public int MaxCollisionQueries { get; set; } = 100000;
@@ -64,7 +68,7 @@ namespace AddinRibbon.Routing
 
         internal ConstrainedRoutingLimits Snapshot()
         {
-            if (MaxCandidatesPerEnd < 1 || MaxCandidatesPerEnd > 16 || MaxPairs < 1 || MaxPairs > CompleteCandidatePairAllowance
+            if (MaxCandidatesPerEnd < 1 || MaxCandidatesPerEnd > ExpandedCandidateLimit || MaxPairs < 1 || MaxPairs > ExpandedCandidatePairAllowance
                 || MaxCollisionQueries < 1 || MaxCollisionQueries > 100000 || MaxWork < 1 || MaxWork > 20000000
                 || TimeoutMilliseconds < 1 || TimeoutMilliseconds > 30000 || MaxInputTrays < 1 || MaxInputTrays > 4096
                 || MaxInputPieces < 1 || MaxInputPieces > 50000 || MaxGraphNodes < 2 || MaxGraphNodes > 100000

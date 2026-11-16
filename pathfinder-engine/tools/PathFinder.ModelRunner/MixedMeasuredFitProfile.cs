@@ -31,18 +31,19 @@ internal static partial class Program
     {
         bool measured = request.SchemaVersion == "pathfinder.model.runner.v2" && UsesMixedBarrierRuntime(request)
             && (BarrierEqual(MixedBarrierContext(request).Value.GetProperty("profile"), MixedMeasuredFitProfile)
-                || BarrierEqual(MixedBarrierContext(request).Value.GetProperty("profile"), MixedFullPairProfile));
+                || BarrierEqual(MixedBarrierContext(request).Value.GetProperty("profile"), MixedFullPairProfile)
+                || BarrierEqual(MixedBarrierContext(request).Value.GetProperty("profile"), MixedExpandedCandidateProfile));
         if (request.Rules?.Version is { } version && version is not ("pf2.rules.v1" or FittedModelCache.MeasuredBendRulesVersion))
             throw new ArgumentException("Unknown model build rules.");
         if (measured)
         {
             if (request.Rules is not null && request.Rules.Version != FittedModelCache.MeasuredBendRulesVersion)
-                throw new ArgumentException("Runtime profile v6/v7 requires explicit rules v2 or omitted rules.");
+                throw new ArgumentException("Runtime profile v6/v7/v8 requires explicit rules v2 or omitted rules.");
             return request.Rules ?? new ModelBuildRules { Version = FittedModelCache.MeasuredBendRulesVersion };
         }
         if (request.Rules?.Version == FittedModelCache.MeasuredBendRulesVersion
             && (request.SchemaVersion != "pathfinder.model.runner.v1" || request.Operation != "prepare" || request.FittedTraceExport is not null))
-            throw new ArgumentException("Rules v2 require runtime profile v6/v7 or a standalone preparation diagnostic without trace export.");
+            throw new ArgumentException("Rules v2 require runtime profile v6/v7/v8 or a standalone preparation diagnostic without trace export.");
         return request.Rules;
     }
 }
