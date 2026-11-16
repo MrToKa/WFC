@@ -474,7 +474,7 @@ describe('scope, frozen limits, final route and original evidence stay exact', (
 
 describe('full retained candidate pair runtime profile', () => {
   const fullContext = (): mixed.MixedBarrierRuntimeContext => ({ ...context(),
-    profile: structuredClone(mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE),
+    profile: mixed.mixedBarrierFullPairRuntimeProfileSchema.parse(mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE),
     profileSha256: digest(mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE) });
   it('changes only the version and pair budget while preserving historical profiles', () => {
     const next = mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE, previous = mixed.MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE;
