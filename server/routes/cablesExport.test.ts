@@ -63,6 +63,18 @@ const readSheetXml = async (response: Awaited<ReturnType<typeof runExport>>) => 
   return archive.file('xl/worksheets/sheet1.xml')!.async('string');
 };
 
+it('writes routing notes before table parts in the worksheet schema order Excel requires', async () => {
+  const response = await runExport({ view: 'list', columns: 'cableId,tag,routing' });
+  const xml = await readSheetXml(response);
+  expect(xml).toContain('<legacyDrawing ');
+  expect(xml).toContain('<tableParts ');
+  expect(xml.indexOf('<legacyDrawing ')).toBeLessThan(xml.indexOf('<tableParts '));
+  const sheet = await readSheet(response);
+  expect(JSON.stringify(sheet.getCell('C2').note)).toContain('TRAY-01');
+  expect(sheet.getTable('Cables')).toBeDefined();
+  expect(xml).toContain('<sheetProtection ');
+});
+
 it.each([undefined, 'cableId', 'routing,cableId,designLength'])(
   'locks the ID header and full column while leaving other exported columns editable: %s',
   async (columns) => {

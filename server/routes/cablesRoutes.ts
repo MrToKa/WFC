@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { Request as ExpressRequest, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
+import { writeExcelWorkbook } from '../utils/excelWorkbook.js';
 import { uploadExcelFile } from '../utils/excelUpload.js';
 import type { PoolClient } from 'pg';
 import * as XLSX from 'xlsx';
@@ -4733,7 +4734,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       }
     }
 
-    const buffer = await workbook.xlsx.writeBuffer();
+    const buffer = await writeExcelWorkbook(workbook);
 
     const projectSegment = sanitizeFileSegment(project.project_number);
     const fileSuffix =
