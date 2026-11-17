@@ -513,7 +513,7 @@ export function CadRoutesPanel({
         throw new Error('Cannot read the saved centreline length.');
       await onTraysChanged?.();
       setMessage(
-        `Added to trays list: ${selected.name}. Centreline length: ${(result.lengthMm / 1000).toFixed(3)} m.`,
+        `Added to trays list and assigned to saved geometry: ${selected.name}. Centreline length: ${(result.lengthMm / 1000).toFixed(3)} m.`,
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Cannot add route to trays list.');
@@ -855,8 +855,8 @@ export function CadRoutesPanel({
         ) : null}
         {selected?.status === 'draft' ? (
           <Caption1>
-            Prepare the current network after adding this route to Trays, then add it to the routing
-            network. Its saved STEP centerline becomes available for automatic cable routing.
+            Add to trays list assigns this route to its saved geometry. Generate network in Path Finder
+            includes the assigned route and verifies it for cable calculations.
           </Caption1>
         ) : null}
         {selected?.status === 'draft' ? (

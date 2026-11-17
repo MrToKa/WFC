@@ -59,12 +59,17 @@ describe('simple project tray preparation', () => {
     view.rerender(<ProjectPreparationPanel pf={{ ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel!, selectionRevision: '999' } } }} active />);
     expect(screen.queryByRole('img', { name: 'Included in calculation network' })).toBeNull();
   });
-  it('explains saved CAD geometry without requesting a fake model object assignment',()=>{
+  it('automatically assigns a saved CAD route to its own geometry after adding it to Trays',()=>{
     const {state,pf}=setup();
     state.context.trays.push({...state.context.trays[0],projectTrayId:'10000000-0000-4000-8000-000000000099',rawName:'CAD001',routeName:'/CAD001',geometrySource:'saved-cad-route'});
     render(<ProjectPreparationPanel pf={pf} active/>);
-    expect(screen.getByText('Saved CAD geometry')).toBeVisible();
-    expect(screen.getByText(/CAD routes use their saved STEP geometry/)).toHaveTextContent('CAD001');
+    const card = screen.getByRole('article', { name: 'Tray CAD001' });
+    expect(within(card).getByText('Assigned')).toBeVisible();
+    expect(card.style.backgroundColor).toBe('');
+    expect(within(card).queryByText('Not assigned')).toBeNull();
+    expect(within(card).getByText(/Assigned to saved CAD geometry/)).toBeVisible();
+    expect(within(card).queryByRole('img', { name: 'Included in calculation network' })).toBeNull();
+    expect(screen.getByText(/CAD routes are assigned to their saved STEP geometry/)).toHaveTextContent('CAD001');
     expect(screen.getByRole('button',{name:'Use current model selection for CAD001'})).toBeDisabled();
   });
   it('shows a manually published tray as assigned without requiring source model objects', () => {
