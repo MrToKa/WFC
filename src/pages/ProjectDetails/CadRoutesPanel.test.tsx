@@ -5,6 +5,9 @@ import type { CadRouteGroup } from '../../../shared/cadRouteGroups';
 import { CadRoutesPanel } from './CadRoutesPanel';
 import { projectTrayPurposesRequest } from '@/api/projectTrayPurposes';
 
+const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
+vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ showToast }) }));
+
 vi.mock('@/api/projectTrayPurposes', () => ({ projectTrayPurposesRequest: vi.fn() }));
 const purposesRequest = vi.mocked(projectTrayPurposesRequest);
 
@@ -73,6 +76,7 @@ function catalogue(routes: CadRouteGroup[]) {
   }));
 }
 beforeEach(() => {
+  showToast.mockClear();
   purposesRequest.mockReset().mockResolvedValue([{ name: draft.purpose, trayCount: 9 }]);
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockReset();
@@ -251,6 +255,13 @@ describe('complete CAD routes', () => {
     );
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Trays list/i));
     expect(screen.getByRole('status')).toHaveTextContent('Centreline length: 2.680 m.');
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Route added to trays list',
+        intent: 'success',
+        body: expect.stringContaining('Centreline length: 2.680 m.'),
+      }),
+    );
     expect(
       screen.queryByRole('button', { name: 'Withdraw from routing network' }),
     ).not.toBeInTheDocument();
@@ -715,6 +726,13 @@ describe('complete CAD routes', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add to routing network' }));
     expect(await screen.findByText('STALE_CAD_ROUTE')).toBeInTheDocument();
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Routing network command failed',
+        body: 'STALE_CAD_ROUTE',
+        intent: 'error',
+      }),
+    );
     expect(screen.queryByText('Route added to the routing network.')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Withdraw from routing network' }),
@@ -724,4 +742,77 @@ describe('complete CAD routes', () => {
       screen.getByRole('button', { name: /Main riser · 2 components · draft/ }),
     ).toBeInTheDocument();
   });
+});
+
+describe('route command toaster feedback', () => {
+  it.each([
+    ['Save route changes', 'Route saved', 'success'],
+    ['Auto-select connection points', 'Connection points checked', 'success'],
+    ['Align whole route to network point', 'Route aligned', 'success'],
+    ['Add to routing network', 'Route added to routing network', 'success'],
+    ['Withdraw from routing network', 'Route withdrawn', 'success'],
+    ['Remove route group', 'Route group removed', 'success'],
+  ])('reports the result of %s', async (button, title, intent) => {
+    const route: CadRouteGroup = button.startsWith('Withdraw')
+      ? { ...draft, status: 'published', projectTrayId: id(70) }
+      : draft;
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => ({
+      ok: true,
+      json: async () =>
+        options.method
+          ? { route, connectionsCreated: 2, routingTransitionsCreated: 0, connected: true }
+          : url.endsWith('/auto-attachments')
+            ? autoResult
+            : { routes: [route] },
+    }));
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+    if (button === 'Save route changes')
+      fireEvent.change(screen.getByLabelText('Route colour hex'), { target: { value: '#FF0000' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: button })).toBeEnabled());
+    expect(showToast).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: button }));
+    if (button === 'Remove route group')
+      fireEvent.click(
+        await within(await screen.findByRole('dialog')).findByRole('button', { name: 'Remove group' }),
+      );
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ title, intent })),
+    );
+    expect(showToast).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([true, false])(
+    'notifies on every repeated connection check, connected=%s',
+    async (connected) => {
+      fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => ({
+        ok: true,
+        json: async () =>
+          options.method === 'POST'
+            ? { connectionsCreated: 0, routingTransitionsCreated: 0, connected }
+            : url.endsWith('/auto-attachments')
+              ? autoResult
+              : { routes: [draft] },
+      }));
+      show();
+      fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+      for (let count = 1; count <= 2; count++) {
+        await waitFor(() =>
+          expect(
+            screen.getByRole('button', { name: 'Auto-select connection points' }),
+          ).toBeEnabled(),
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Auto-select connection points' }));
+        await waitFor(() => expect(showToast).toHaveBeenCalledTimes(count));
+      }
+      expect(showToast).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          intent: connected ? 'success' : 'warning',
+          body: expect.stringContaining(
+            connected ? 'The route is connected.' : 'Some ends need review',
+          ),
+        }),
+      );
+    },
+  );
 });

@@ -4,6 +4,9 @@ import { useCallback, useState, type ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CadPlacementPanel } from './CadPlacementPanel';
 
+const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
+vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ showToast }) }));
+
 vi.mock('@/api/projectTrayPurposes', () => ({
   projectTrayPurposesRequest: vi.fn(async () => [
     { name: 'Low voltage cable tray', trayCount: 9 },

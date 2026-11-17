@@ -5,6 +5,9 @@ import { CadPlacementPanel } from './CadPlacementPanel';
 import { rotateVector } from '../../../shared/cadTransforms';
 import { STRAIGHT_SOURCES } from '../../../shared/cadStraightSources';
 
+const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
+vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ showToast }) }));
+
 const projectId = '00000000-0000-4000-8000-000000000001';
 const modelVersionId = '00000000-0000-4000-8000-000000000002';
 const designId = '00000000-0000-4000-8000-000000000003';

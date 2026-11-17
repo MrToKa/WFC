@@ -14,6 +14,7 @@ import {
   Title3,
 } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
+import { useToast } from '@/context/ToastContext';
 import { useProjectTrayPurposes } from '@/hooks/useProjectTrayPurposes';
 import { cadRouteGroupInputSchema, type CadRouteGroup } from '../../../shared/cadRouteGroups';
 
@@ -116,6 +117,15 @@ export function CadRoutesPanel({
   onSectionVisibility,
   hiddenSectionIds = [],
 }: Props) {
+  const { showToast } = useToast();
+  const reportCommand = (
+    title: string,
+    body: string,
+    intent: 'success' | 'error' | 'warning' = 'success',
+  ) => {
+    setMessage(body);
+    showToast({ title, body, intent, ...(intent === 'success' ? {} : { timeout: 10000 }) });
+  };
   const projectPurposes = useProjectTrayPurposes(projectId, token);
   const purposeOptions = projectPurposes.purposes
     .filter((purpose) => purpose.trayCount > 0)
@@ -335,8 +345,10 @@ export function CadRoutesPanel({
       ...(legacyTag ? { tag: legacyTag } : {}),
     });
     if (!parsed.success) {
-      setMessage(
+      reportCommand(
+        'Cannot save route',
         'Enter a unique route name (letters, digits, dot, dash or underscore), purpose, colour and at least one component.',
+        'warning',
       );
       return;
     }
@@ -344,7 +356,11 @@ export function CadRoutesPanel({
       selected?.status !== 'published' &&
       (projectPurposes.loading || projectPurposes.error || !purposeOptions.includes(fields.purpose))
     ) {
-      setMessage('Choose a purpose available in this project before saving.');
+      reportCommand(
+        'Cannot save route',
+        'Choose a purpose available in this project before saving.',
+        'warning',
+      );
       return;
     }
     if (busy || externalBusy) return;
@@ -368,9 +384,13 @@ export function CadRoutesPanel({
       await reload();
       edit(data.route);
       await onMetadataChanged?.();
-      setMessage('Route saved. Its colour is applied to all member components.');
+      reportCommand('Route saved', 'Route saved. Its colour is applied to all member components.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Cannot save route.');
+      reportCommand(
+        'Cannot save route',
+        error instanceof Error ? error.message : 'Cannot save route.',
+        'error',
+      );
     } finally {
       setBusy(false);
     }
@@ -418,13 +438,18 @@ export function CadRoutesPanel({
         setRoutes((old) => old.map((route) => (route.id === data.route.id ? data.route : route)));
       edit(data.route);
       await onMetadataChanged?.();
-      setMessage(
+      reportCommand(
+        'Section added',
         source
           ? `Section moved from ${source.name} to ${data.route.name}.`
           : `Section added to ${data.route.name}.`,
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Cannot add section.');
+      reportCommand(
+        'Cannot add section',
+        error instanceof Error ? error.message : 'Cannot add section.',
+        'error',
+      );
     } finally {
       setBusy(false);
     }
@@ -440,7 +465,11 @@ export function CadRoutesPanel({
       }),
     );
     if (action === 'align' && !pointsReady) {
-      setMessage('Find compatible automatic connection points before continuing.');
+      reportCommand(
+        'Cannot align route',
+        'Find compatible automatic connection points before continuing.',
+        'warning',
+      );
       return;
     }
     setBusy(true);
@@ -461,7 +490,12 @@ export function CadRoutesPanel({
       if (action === 'align') await onGeometryChanged?.();
       if (action === 'publish' || action === 'withdraw') await onTraysChanged?.();
       await reload();
-      setMessage(
+      reportCommand(
+        action === 'publish'
+          ? 'Route added to routing network'
+          : action === 'align'
+            ? 'Route aligned'
+            : 'Route withdrawn',
         action === 'publish'
           ? 'Route added to the routing network.'
           : action === 'align'
@@ -469,7 +503,11 @@ export function CadRoutesPanel({
             : 'Route withdrawn from the routing network.',
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Network publication failed.');
+      reportCommand(
+        'Routing network command failed',
+        error instanceof Error ? error.message : 'Network publication failed.',
+        'error',
+      );
     } finally {
       setBusy(false);
     }
@@ -488,11 +526,17 @@ export function CadRoutesPanel({
       ).json();
       await onConnectionsChanged?.();
       await reload();
-      setMessage(
+      reportCommand(
+        'Connection points checked',
         `${result.connectionsCreated ?? 0} component connections and ${result.routingTransitionsCreated ?? 0} routing transitions saved automatically. ${result.connected ? 'The route is connected. Checking network connection points.' : 'Some ends need review: no unique nearby connection was found.'}`,
+        result.connected ? 'success' : 'warning',
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Cannot find automatic connections.');
+      reportCommand(
+        'Cannot find connection points',
+        error instanceof Error ? error.message : 'Cannot find automatic connections.',
+        'error',
+      );
     } finally {
       setBusy(false);
     }
@@ -512,11 +556,16 @@ export function CadRoutesPanel({
       if (typeof result.lengthMm !== 'number' || !Number.isFinite(result.lengthMm))
         throw new Error('Cannot read the saved centreline length.');
       await onTraysChanged?.();
-      setMessage(
+      reportCommand(
+        'Route added to trays list',
         `Added to trays list and assigned to saved geometry: ${selected.name}. Centreline length: ${(result.lengthMm / 1000).toFixed(3)} m.`,
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Cannot add route to trays list.');
+      reportCommand(
+        'Cannot add route to trays list',
+        error instanceof Error ? error.message : 'Cannot add route to trays list.',
+        'error',
+      );
     } finally {
       setBusy(false);
     }
@@ -539,9 +588,16 @@ export function CadRoutesPanel({
       onSelectionChange?.(null);
       await reload();
       await onMetadataChanged?.();
-      setMessage('Route group removed. Its individual components remain in the proposal.');
+      reportCommand(
+        'Route group removed',
+        'Route group removed. Its individual components remain in the proposal.',
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Cannot remove route group.');
+      reportCommand(
+        'Cannot remove route group',
+        error instanceof Error ? error.message : 'Cannot remove route group.',
+        'error',
+      );
     } finally {
       setBusy(false);
     }
@@ -567,9 +623,15 @@ export function CadRoutesPanel({
                 setFields(empty);
                 setMembers([]);
                 onSelectionChange?.(null);
-                setMessage('Saved routes refreshed.');
+                reportCommand('Routes refreshed', 'Saved routes refreshed.');
               })
-              .catch((error) => setMessage(error.message))
+              .catch((error) =>
+                reportCommand(
+                  'Cannot refresh routes',
+                  error instanceof Error ? error.message : 'Cannot refresh saved routes.',
+                  'error',
+                ),
+              )
               .finally(() => setBusy(false));
           }}
         >
@@ -658,11 +720,19 @@ export function CadRoutesPanel({
                               instance.id,
                               hiddenSectionIds.includes(instance.id),
                             )
+                              .then(() =>
+                                reportCommand(
+                                  'Section visibility updated',
+                                  `Section ${instance.partNumber} ${hiddenSectionIds.includes(instance.id) ? 'shown' : 'hidden'}.`,
+                                ),
+                              )
                               .catch((error) =>
-                                setMessage(
+                                reportCommand(
+                                  'Cannot change section visibility',
                                   error instanceof Error
                                     ? error.message
                                     : 'Cannot change section visibility.',
+                                  'error',
                                 ),
                               )
                               .finally(() => setVisibilityBusy(false));
@@ -850,14 +920,14 @@ export function CadRoutesPanel({
         {selected ? (
           <Caption1>
             Routes can be separate or connect to nearby trays using the project connection gap.
-            Sections within one route can also be separate. Empty gaps are not included in the saved tray length.
-            Cable routing checks the current purposes and registered barriers.
+            Sections within one route can also be separate. Empty gaps are not included in the saved
+            tray length. Cable routing checks the current purposes and registered barriers.
           </Caption1>
         ) : null}
         {selected?.status === 'draft' ? (
           <Caption1>
-            Add to trays list assigns this route to its saved geometry. Generate network in Path Finder
-            includes the assigned route and verifies it for cable calculations.
+            Add to trays list assigns this route to its saved geometry. Generate network in Path
+            Finder includes the assigned route and verifies it for cable calculations.
           </Caption1>
         ) : null}
         {selected?.status === 'draft' ? (
