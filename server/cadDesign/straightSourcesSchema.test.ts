@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { STRAIGHT_SOURCES } from '../../shared/cadStraightSources.js';
+import { FITTING_SOURCES } from '../../shared/cadFittingSources.js';
 import { initializeCadDesignSchema } from './schema.js';
 
 async function initializationSql() {
@@ -21,6 +22,11 @@ describe('verified straight source schema', () => {
       expect(sql).toContain(`('${source.filename.toUpperCase()}','${source.sha256}')`);
     expect(sql).toContain("p.component_kind='straight'");
     expect(sql).toContain('ON CONFLICT (catalog_item_id,name) DO NOTHING');
+    for (const source of FITTING_SOURCES) {
+      expect(sql).toContain(source.sha256);
+      expect(sql).toContain(source.filename.toUpperCase());
+    }
+    expect(sql).toContain("AND (p.component_kind='straight' OR s.fitting)");
     expect(sql).not.toMatch(/ON CONFLICT \(catalog_item_id,name\) DO UPDATE/);
   });
 });
@@ -115,6 +121,25 @@ postgres('straight source migration in isolated PostgreSQL', () => {
       ${reject(instance(100))}${reject(instance(101))}${reject(instance(102))}
       DO $assert$ BEGIN IF EXISTS(SELECT 1 FROM cad_catalog_ports WHERE catalog_item_id IN ('${id(3100)}','${id(3101)}','${id(3102)}'))
         THEN RAISE EXCEPTION 'Unsupported source received connector anchors'; END IF; END; $assert$;
+      ROLLBACK;`);
+  });
+
+  it('backfills measured tee and bend ports for existing references without allowing cuts', () => {
+    psql(`BEGIN;
+      ${FITTING_SOURCES.map((source, index) => catalog(200 + index, source.filename, source.sha256)).join('\n')}
+      ${schemaSql}
+      CREATE TEMP TABLE fitting_port_snapshot AS SELECT * FROM cad_catalog_ports;
+      ${FITTING_SOURCES.map((source, index) => `
+        DO $assert$ BEGIN IF (SELECT count(*) FROM cad_catalog_ports WHERE catalog_item_id='${id(3200 + index)}')<>${source.ports.length}
+          THEN RAISE EXCEPTION 'Missing measured fitting ports'; END IF; END; $assert$;
+        ${source.ports.map(port => `DO $assert$ BEGIN IF NOT EXISTS(SELECT 1 FROM cad_catalog_ports
+          WHERE catalog_item_id='${id(3200 + index)}' AND name=${literal(port.id)}
+          AND local_transform=${literal(JSON.stringify(port.local))}::jsonb)
+          THEN RAISE EXCEPTION 'Fitting frame changed'; END IF; END; $assert$;`).join('\n')}
+        ${reject(instance(200 + index))}`).join('\n')}
+      ${schemaSql}
+      DO $assert$ BEGIN IF EXISTS(SELECT * FROM fitting_port_snapshot EXCEPT SELECT * FROM cad_catalog_ports)
+        THEN RAISE EXCEPTION 'Existing port IDs changed'; END IF; END; $assert$;
       ROLLBACK;`);
   });
 });

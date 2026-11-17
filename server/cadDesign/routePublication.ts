@@ -68,7 +68,10 @@ function ports(row:PublicationInstance) {
   if (available.length!==2 || !((row.component_kind==='straight'&&supportsStraightCut(row.original_filename,row.source_sha256)) ||
       (row.component_kind==='bend'&&row.cut_length_mm==null&&row.source_sha256==='7a5cf4947a9ea5fa213ceef84ba952fe2a9a63dee752f0c23a598320802c0014')))
     refuse('CAD_ROUTE_UNSUPPORTED_GEOMETRY','Publish only the verified straight and bend STEP samples. Other components need verified routing centerlines.');
-  return available.map(port => ({...port,world:composeTransform(world(row),port.local)}));
+  // Physical fitting snaps can have a branch. Publication still requires a
+  // measured two-ended routing centerline and must not infer one from a tee.
+  const chainPorts=available.filter((port):port is typeof port & {id:'start'|'end'}=>port.id!=='branch');
+  return chainPorts.map(port => ({...port,world:composeTransform(world(row),port.local)}));
 }
 export function routePort(row:PublicationInstance,name:string) {
   const selected=ports(row).find(port=>port.id===name);

@@ -1,4 +1,5 @@
 import { getStraightSource } from './cadStraightSources.js';
+import { FITTING_SOURCES } from './cadFittingSources.js';
 
 /** Common, pure CAD port contract shared by browser and Node backend. */
 type Quaternion = Readonly<{ x: number; y: number; z: number; w: number }>;
@@ -14,7 +15,7 @@ type RigidTransform = Readonly<{
  * remain unverified. Never use these as automatic manufacturer CAD rules.
  */
 export type PocPort = Readonly<{
-  id: 'start' | 'end';
+  id: 'start' | 'end' | 'branch';
   label: string;
   profile: string;
   local: RigidTransform;
@@ -50,5 +51,8 @@ export function getAalborgPocPorts(originalFilename: string, sourceSha256: strin
   }
   if (canonical === 'NDX_KLBK_60-303_MED_214.STEP' &&
       sourceSha256 === '7a5cf4947a9ea5fa213ceef84ba952fe2a9a63dee752f0c23a598320802c0014') return bend;
+  const fitting = FITTING_SOURCES.find(source =>
+    source.filename.toUpperCase() === canonical && source.sha256 === sourceSha256);
+  if (fitting) return fitting.ports;
   return [];
 }

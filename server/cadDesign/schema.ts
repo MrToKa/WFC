@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { STRAIGHT_SOURCES } from '../../shared/cadStraightSources.js';
+import { FITTING_SOURCES } from '../../shared/cadFittingSources.js';
 import { cadPocPortSeeds } from './pocPortSeed.js';
 
 const sqlLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
@@ -13,9 +14,13 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
   const verifiedSources = STRAIGHT_SOURCES.map(source =>
     `(${sqlLiteral(source.filename.toUpperCase())},${sqlLiteral(source.sha256)})`,
   ).join(',\n');
-  const verifiedPorts = STRAIGHT_SOURCES.flatMap(source =>
+  const portSources = [
+    ...STRAIGHT_SOURCES.map(source => ({ ...source, fitting: false })),
+    ...FITTING_SOURCES.map(source => ({ ...source, fitting: true })),
+  ];
+  const verifiedPorts = portSources.flatMap(source =>
     cadPocPortSeeds(source.filename, source.sha256).map(port =>
-      `(${sqlLiteral(source.filename.toUpperCase())},${sqlLiteral(source.sha256)},${sqlLiteral(port.name)},${sqlLiteral(port.portType)},${sqlLiteral(JSON.stringify(port.localTransform))}::jsonb)`,
+      `(${sqlLiteral(source.filename.toUpperCase())},${sqlLiteral(source.sha256)},${sqlLiteral(port.name)},${sqlLiteral(port.portType)},${sqlLiteral(JSON.stringify(port.localTransform))}::jsonb,${source.fitting})`,
     ),
   ).join(',\n');
   await pool.query(`
@@ -178,10 +183,11 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
       SELECT gen_random_uuid(),c.project_id,c.id,s.name,s.port_type,s.local_transform
       FROM cad_catalog_items c
       JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
-      JOIN material_components p ON p.id=a.component_id AND p.component_kind='straight'
+      JOIN material_components p ON p.id=a.component_id
       JOIN (VALUES ${verifiedPorts})
-        AS s(filename,sha256,name,port_type,local_transform)
+        AS s(filename,sha256,name,port_type,local_transform,fitting)
         ON upper(trim(c.original_filename))=s.filename AND c.source_sha256=s.sha256
+        AND (p.component_kind='straight' OR s.fitting)
       ON CONFLICT (catalog_item_id,name) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS cad_design_connections (

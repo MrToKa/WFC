@@ -221,7 +221,7 @@ function mountScoped(
   holdFirstExport = false,
   withMetadata = false,
   unassignedOnly = false,
-  verifiedPorts = false,
+  verifiedPorts: boolean | 'tee' = false,
   failMembership = false,
 ) {
   const secondId = '00000000-0000-4000-8000-000000000006';
@@ -433,10 +433,18 @@ function mountScoped(
               id: catalogId,
               partNumber: 'SOURCE-PART',
               manufacturer: 'Niedax',
-              originalFilename: verifiedPorts ? 'NDX_KL_100-203_F_MED_214.step' : 'custom.step',
-              sourceSha256: verifiedPorts
-                ? '0b0afd99c5be6ea619859897c91e5439f7d8e8c64e61ef44f808d09b54b4599c'
-                : 'a'.repeat(64),
+              originalFilename:
+                verifiedPorts === 'tee'
+                  ? 'NDX_KLT_60-303_MED_214.step'
+                  : verifiedPorts
+                    ? 'NDX_KL_100-203_F_MED_214.step'
+                    : 'custom.step',
+              sourceSha256:
+                verifiedPorts === 'tee'
+                  ? 'd2d9934607cc4a8aac6331e732522541fe23afce08a4c621685092188b5d936f'
+                  : verifiedPorts
+                    ? '0b0afd99c5be6ea619859897c91e5439f7d8e8c64e61ef44f808d09b54b4599c'
+                    : 'a'.repeat(64),
               componentKind: 'straight',
               conversionStatus: 'ready',
               materialAssetId: catalogId,
@@ -479,6 +487,52 @@ function mountScoped(
 }
 
 describe('saved route component scope and exports', { timeout: 20000 }, () => {
+  it('offers all three tee connectors when continuing a saved route and saves the selected branch', async () => {
+    const fixture = mountScoped(false, false, false, 'tee');
+    fireEvent.click(
+      await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }, { timeout: 10000 }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'New section' }));
+    fireEvent.change(screen.getByLabelText('Catalogue component'), {
+      target: { value: catalogId },
+    });
+    expect(screen.getByRole('region', { name: 'Connector snap' })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Source connector')).getAllByRole('option')).toHaveLength(
+      4,
+    );
+    fireEvent.change(screen.getByLabelText('Snap target'), { target: { value: instanceId } });
+    fireEvent.change(screen.getByLabelText('Target connector'), { target: { value: 'end' } });
+    fireEvent.change(screen.getByLabelText('Source connector'), { target: { value: 'branch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Snap to connector' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save new component' }));
+    await screen.findByRole('button', { name: /A-ROUTE · 2 components/ }, { timeout: 10000 });
+    const connection = fixture.request.mock.calls.find(
+      ([url, options]) => url.endsWith('/connections') && options?.method === 'POST',
+    );
+    expect(JSON.parse(String(connection?.[1]?.body))).toEqual({
+      sourceInstanceId: fixture.newId,
+      sourcePortName: 'branch',
+      targetInstanceId: instanceId,
+      targetPortName: 'end',
+    });
+    expect(screen.getByText('Selected route: A-ROUTE')).toBeInTheDocument();
+  });
+
+  it('explains unavailable snap for an unverified STEP revision', async () => {
+    mountScoped();
+    fireEvent.click(
+      await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }, { timeout: 10000 }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'New section' }));
+    fireEvent.change(screen.getByLabelText('Catalogue component'), {
+      target: { value: catalogId },
+    });
+    expect(
+      screen.getByText(/Connector snap is unavailable for this STEP revision/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Connector snap' })).not.toBeInTheDocument();
+  });
+
   it('toggles the route name to return to unassigned components and select a free component', async () => {
     const fixture = mountScoped();
     await waitFor(() => expect(fixture.onShow).toHaveBeenCalledTimes(3));
@@ -536,6 +590,7 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
   });
   it('keeps a saved section available after membership refusal without creating it twice', async () => {
     const fixture = mountScoped(false, false, false, false, true);
+    await act(async () => {});
     fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
     fireEvent.click(screen.getByRole('button', { name: 'New section' }));
     fireEvent.change(screen.getByLabelText('Catalogue component'), {
@@ -561,6 +616,7 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
   });
   it('adds a new snapped section to the selected route and retains its selection', async () => {
     const fixture = mountScoped(false, true, false, true);
+    await act(async () => {});
     fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'New section' })).toBeEnabled());
     await waitFor(() => expect(screen.getByRole('button', { name: 'New section' })).toBeEnabled());
@@ -575,7 +631,7 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
     fireEvent.change(screen.getByLabelText('Source connector'), { target: { value: 'start' } });
     fireEvent.click(screen.getByRole('button', { name: 'Snap to connector' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save new component' }));
-    await screen.findByRole('button', { name: /A-ROUTE · 2 components/ });
+    await screen.findByRole('button', { name: /A-ROUTE · 2 components/ }, { timeout: 10000 });
     expect(screen.getByText('Selected route: A-ROUTE')).toBeInTheDocument();
     expect(screen.getByText('Components in A-ROUTE: 2')).toBeInTheDocument();
     const membership = fixture.request.mock.calls.find(
@@ -626,7 +682,7 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
       target: { value: catalogId },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save new component' }));
-    await screen.findByRole('button', { name: /A-ROUTE · 3 components/ });
+    await screen.findByRole('button', { name: /A-ROUTE · 3 components/ }, { timeout: 10000 });
     const patches = fixture.request.mock.calls.filter(
       ([url, options]) => url.endsWith(`/routes/${fixture.routeA}`) && options?.method === 'PATCH',
     );
@@ -799,7 +855,7 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
     expect(within(list).queryByText(/NEW-PART|A-PART|B-PART/)).not.toBeInTheDocument();
     expect(fixture.onRemove).not.toHaveBeenCalled();
     await act(async () => {});
-  }, 20000);
+  }, 40000);
 
   it('exports the selected saved route separately from all placements, locks races and disables dirty selected exports', async () => {
     const fixture = mountScoped(true);

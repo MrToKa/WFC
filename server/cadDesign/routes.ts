@@ -505,9 +505,9 @@ type PortRow = {
 
 const connectionInput = z.object({
   sourceInstanceId: uuid,
-  sourcePortName: z.enum(['start', 'end']),
+  sourcePortName: z.enum(['start', 'end', 'branch']),
   targetInstanceId: uuid,
-  targetPortName: z.enum(['start', 'end']),
+  targetPortName: z.enum(['start', 'end', 'branch']),
 }).strict().refine(value => value.sourceInstanceId !== value.targetInstanceId, 'Two different components are required.');
 
 const localRigid = z.object({ position, rotation: quaternion }).strict();

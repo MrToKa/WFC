@@ -26,7 +26,7 @@ import {
   rotateAboutLocalAxis,
   orientAboutLocalPivot,
 } from '../../../shared/cadRotation';
-import { MATE_OPPOSING_FACE } from '@/viewer/pocConnectorCatalog';
+import { MATE_OPPOSING_FACE, type PocPort } from '@/viewer/pocConnectorCatalog';
 import { supportsStraightCut, getInstanceCadPorts } from '../../../shared/cadLengths';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { CadRoutesPanel } from './CadRoutesPanel';
@@ -150,8 +150,8 @@ export function CadPlacementPanel({
   const [snapSourcePort, setSnapSourcePort] = useState('');
   const [pendingSnap, setPendingSnap] = useState<{
     targetInstanceId: string;
-    targetPortName: 'start' | 'end';
-    sourcePortName: 'start' | 'end';
+    targetPortName: PocPort['id'];
+    sourcePortName: PocPort['id'];
   } | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [coordinates, setCoordinates] = useState<Coordinates>(empty);
@@ -1011,6 +1011,11 @@ export function CadPlacementPanel({
                 Snap to connector
               </Button>
             </section>
+          ) : chosenPart ? (
+            <Caption1 block>
+              Connector snap is unavailable for this STEP revision: no verified connector positions
+              are registered. Choose a supported component or place this part using 3D picking.
+            </Caption1>
           ) : null}
           <Button
             type="button"

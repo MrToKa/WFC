@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { STRAIGHT_SOURCE_SHA256 } from '../../shared/cadLengths.js';
 import { STRAIGHT_SOURCES } from '../../shared/cadStraightSources.js';
+import { FITTING_SOURCES } from '../../shared/cadFittingSources.js';
 vi.mock('../db.js',()=>({pool:{query:vi.fn(),connect:vi.fn()}}));
 vi.mock('../config.js',()=>({config:{jwtSecret:'test-only',bcryptRounds:4}}));
 vi.mock('../services/objectStorageService.js',()=>({getObjectStream:vi.fn(),getProjectBucket:vi.fn()}));
@@ -16,6 +17,10 @@ const verifiedStraight=(filename:string):PublicationInstance=>{
   return {...straight,original_filename:source.filename,source_sha256:source.sha256};
 };
 describe('server-derived publishable CAD chains',()=>{
+  it.each(FITTING_SOURCES)('does not treat fitting snap frames as a routing centerline: $filename',source=>{
+    const fitting={...straight,original_filename:source.filename,source_sha256:source.sha256,cut_length_mm:null};
+    expect(()=>buildCadChain([fitting],[])).toThrow('verified straight and bend');
+  });
   it('derives a trimmed straight in canonical metres without changing the saved manufacturer source',()=>{
     const result=buildCadChain([straight],[]);
     expect(result.points).toEqual([[0,.03,0],[0,.03,1.5]]);
