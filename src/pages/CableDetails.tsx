@@ -120,6 +120,7 @@ const CABLE_DETAILS_DIALOG_VISIBLE_FIELDS: CableDialogField[] = [
   'fromLocation',
   'toLocation',
   'routing',
+  'remarks',
   'delivery',
   'designLength',
   'installLength',
@@ -808,7 +809,7 @@ export const CableDetails = () => {
 
   const handleCableEditFieldChange =
     (field: keyof CableFormState) =>
-    (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
+    (_event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, data: { value: string }) => {
       setCableEditDialogValues((previous) => changeCableFormField(previous, field, data.value));
       setCableEditDialogErrors((previous) => ({
         ...previous,
@@ -1479,6 +1480,10 @@ export const CableDetails = () => {
         </div>
         <Caption1 className={styles.label}>Used route</Caption1>
         <CableRoutingValue cable={details.cable} />
+        <div className={styles.field}>
+          <Caption1 className={styles.label}>Remarks</Caption1>
+          <Body1 style={{ whiteSpace: 'pre-wrap' }}>{formatOptionalText(details.cable.remarks ?? null)}</Body1>
+        </div>
         <div className={styles.field}>
           <Caption1 className={styles.label}>Manual route</Caption1>
           <Body1 className={styles.routingText}>

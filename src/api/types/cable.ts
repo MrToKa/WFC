@@ -40,6 +40,7 @@ export type Cable = {
   fromLocation: string | null;
   toLocation: string | null;
   routing: string | null;
+  remarks?: string | null;
   delivery: string | null;
   designLength: number | null;
   installLength: number | null;
@@ -70,6 +71,7 @@ export type CableVersion = {
   fromLocation: string | null;
   toLocation: string | null;
   routing: string | null;
+  remarks?: string | null;
   delivery: string | null;
   designLength: number | null;
   installLength: number | null;
@@ -105,6 +107,7 @@ export type CableInput = {
   fromLocation?: string | null;
   toLocation?: string | null;
   routing?: string | null;
+  remarks?: string | null;
   delivery?: string | null;
   designLength?: number | null;
   installLength?: number | null;

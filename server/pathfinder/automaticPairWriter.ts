@@ -1,3 +1,4 @@
+import { routeObstacleRemarks, clearRouteObstacleRemarks } from './obstacleRemarks.js';
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { AUTOMATIC_PAIR_LIMITS, automaticPairHistorySchema, automaticPairProvenanceSchema, automaticPairCapacityClearProvenanceSchema, automaticPairWriteRequestSchema,
@@ -155,13 +156,13 @@ export function createAutomaticPairWriter(pool: Pool, adapters: AutomaticPairWri
       if(verified)await currentScope();await fence(client, claim); await mandateFence(client, m); signal?.throwIfAborted();
       await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
       const nextRouting = capacityClear ? null : result.route!.routeText, nextDesign = capacityClear ? null : result.design!.designLengthMeters;
-      const after = (await client.query<Row>(`/* automatic-pair:write */ UPDATE cables c SET routing=$3,design_length=$4,updated_at=clock_timestamp()
+      const after = (await client.query<Row>(`/* automatic-pair:write */ UPDATE cables c SET routing=$3,design_length=$4,remarks=$8,updated_at=clock_timestamp()
         WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 AND c.routing IS NOT DISTINCT FROM $6::text AND c.design_length IS NOT DISTINCT FROM $7::numeric
         RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,
-      [m.projectId, m.cableId, nextRouting, nextDesign, m.cableWriteRevision, before.routing, before.design_length])).rows[0]?.value;
+      [m.projectId, m.cableId, nextRouting, nextDesign, m.cableWriteRevision, before.routing, before.design_length, capacityClear ? clearRouteObstacleRemarks(before.remarks) ?? null : routeObstacleRemarks(before.remarks,result) ?? null])).rows[0]?.value;
       if (!after) return fail('CABLE_WRITE_CONFLICT');
       if (capacityClear ? !automaticPairCapacityClearTransition(m.projectId, m.cableId, before, after)
-        : !automaticPairOwnTransition(m.projectId, m.cableId, before, after) || after.routing !== nextRouting
+        : !automaticPairOwnTransition(m.projectId, m.cableId, before, after, result) || after.routing !== nextRouting
           || !automaticPairDecimalEqual(after.design_length, nextDesign)) return fail('AUTOMATIC_PAIR_WRITE_INTEGRITY');
       const h = await (adapters.history ?? recordPathFinderCableHistory)(client, { projectId: m.projectId, cableId: m.cableId, actorId: m.actorId });
       const history = automaticPairHistorySchema.parse({ id: h.id, version: h.versionNumber });

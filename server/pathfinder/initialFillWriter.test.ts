@@ -120,7 +120,7 @@ describe('conditional initial-fill writer with synthetic transactional SQL and e
     expect(f.barrierFence).toHaveBeenCalledTimes(2);
     expect(f.fence).toHaveBeenCalledTimes(3); expect(mandateMocks.requireCurrent).toHaveBeenCalledTimes(3);
     expect(f.query.mock.calls.map(([sql]) => sql).join('\n')).not.toMatch(/pf_reviews|UPDATE pf_location|INSERT INTO pf_jobs/);
-    expect(f.query.mock.calls.find(([sql]) => sql.startsWith('UPDATE cables c'))?.[1]?.slice(4)).toEqual(['7', INITIAL_FILL_ROUTING_WHITESPACE]);
+    expect(f.query.mock.calls.find(([sql]) => sql.startsWith('UPDATE cables c'))?.[1]?.slice(4)).toEqual(['7', INITIAL_FILL_ROUTING_WHITESPACE, null]);
   });
   it.each([null, '', ' \t\n\u00a0\ufeff'])('accepts only truly blank routing %j paired with SQL NULL design', async routing => {
     const f = fixture(); f.state.cable.routing = routing; expect((await f.run()).status).toBe('written');

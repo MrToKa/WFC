@@ -16,6 +16,7 @@ export type CableRow = {
   cable_type_id: string;
   from_location: string | null;
   to_location: string | null;
+  remarks?: string | null;
   routing: string | null;
   delivery: string | null;
   design_length: number | string | null;
@@ -54,6 +55,7 @@ export type PublicCable = {
   weightKgPerM: number | null;
   fromLocation: string | null;
   toLocation: string | null;
+  remarks?: string | null;
   routing: string | null;
   delivery: string | null;
   designLength: number | null;
@@ -108,6 +110,7 @@ export const mapCableRow = (row: CableWithTypeRow): PublicCable => ({
   weightKgPerM: toNumberOrNull(row.type_weight_kg_per_m),
   fromLocation: row.from_location ?? null,
   toLocation: row.to_location ?? null,
+  ...(Object.hasOwn(row, 'remarks') ? { remarks: row.remarks ?? null } : {}),
   routing: row.routing ?? null,
   delivery: row.delivery ?? null,
   designLength: toIntegerOrNull(row.design_length),

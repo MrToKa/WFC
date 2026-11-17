@@ -18,11 +18,18 @@ internal static partial class Program
         var category = request.Category is "Control" or "Instrumentation" ? CableCategory.Control : CableCategory.LV;
         bool bypass = context.Drill || context.Mode == "explicit-empty";
         var terminalFrom = Point(request.From); var terminalTo = Point(request.To);
+        var rejectedObstacles = new HashSet<string>(StringComparer.Ordinal); bool exactBlockers = true;
+        var rejectedAttributions = new Dictionary<string, ParentContact>(StringComparer.Ordinal);
         RouteCollisionQuery oracle = (first, last, cancellation) =>
         {
             if (barriers.Qualified is null) throw new InvalidOperationException("Qualified barrier collision data unavailable.");
             var observation = barriers.Qualified.Kernel.CheckRouteSegment(new(first.X, first.Y, first.Z), new(last.X, last.Y, last.Z),
                 new(terminalFrom.X, terminalFrom.Y, terminalFrom.Z), new(terminalTo.X, terminalTo.Y, terminalTo.Z), cancellationToken: cancellation);
+            if (observation.Status == MixedBarrierSegmentStatus.Blocked)
+            {
+                var parents = MixedContactParents(barriers, observation.Witness, rejectedAttributions);
+                rejectedObstacles.UnionWith(parents.Associated); exactBlockers &= parents.Exact;
+            }
             return new(observation.Status == MixedBarrierSegmentStatus.Clear ? RouteCollisionStatus.Clear
                 : observation.Status == MixedBarrierSegmentStatus.Blocked ? RouteCollisionStatus.Blocked : RouteCollisionStatus.Indeterminate,
                 observation.Witness?.ComponentId, observation.Reason, observation.Work);
@@ -111,9 +118,10 @@ internal static partial class Program
         }
         string diagnosticStatus = route.Success ? context.Drill ? "bypassed" : context.Mode == "explicit-empty" ? "no-barriers-declared" : "clear"
             : evaluated.Status == ConstrainedRouteStatus.Bypassed ? "unavailable" : RouteStatus(evaluated.Status);
+        var obstacleReport = MixedObstacleReport(root, context, barriers, session, route.PathPoints, route.Success, rejectedObstacles, exactBlockers, token);
         var execution = new
         {
-            schemaVersion = "wfc.pf.barrier-execution.v2", context = context.Value, proof, directSecondary = direct,
+            schemaVersion = "wfc.pf.barrier-execution.v2", context = context.Value, proof, directSecondary = direct, obstacleReport,
             diagnostics = new { status = diagnosticStatus, reasonCode = evaluated.Reason, searchComplete = evaluated.SearchComplete,
                 candidatesTruncated = evaluated.CandidatesTruncated, pairAttempts = evaluated.PairAttempts, collisionQueries = evaluated.CollisionQueries,
                 work = evaluated.Work.ToString(CultureInfo.InvariantCulture), plannerAttempts = local.PlannerAttempts,
@@ -123,7 +131,7 @@ internal static partial class Program
             qualification = barriers.Qualification, engineeringAccepted = false, ownTerminalExemptionsSupported = false, authority = "none"
         };
         var result = new Dictionary<string, object?> { ["schemaVersion"] = "pathfinder.model.response.v3", ["requestId"] = request.RequestId,
-            ["status"] = status, ["message"] = status == "settings_required" ? "Project Details SECONDARY length is required." : route.Message,
+            ["status"] = status, ["message"] = status == "settings_required" ? "Project Details SECONDARY length is required." : route.Success ? route.Message : ObstacleFailureMessage(route.Message, obstacleReport),
             ["model"] = model, ["prepared"] = summary, ["effectiveCategory"] = category.ToString(), ["route"] = route,
             ["design"] = design, ["projectSettings"] = settings, ["engineeringAccepted"] = false, ["lookupScope"] = null,
             ["usedConnectionGapMeters"] = null, ["barriers"] = execution };

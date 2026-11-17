@@ -42,6 +42,21 @@ function installSavedSelection(f: ReturnType<typeof fixture>, manifest = savedMa
 }
 
 describe('administrator barrier authoring panel', () => {
+  it('uses the same model object number in saved and draft lists after reordering', () => {
+    const f = fixture(), manifest = savedManifest(), first = manifest.selectedParents[0];
+    manifest.selectedParents.push({ ...first, selectionId: id(19), objectId: 'dbid:42', dbId: 42 });
+    installSavedSelection(f, manifest);
+    const view = render(<PathFinderBarriersPanel {...f.props} />);
+    for (const label of ['Saved barrier parents', 'Selected barrier parents']) {
+      const list = within(screen.getByRole('list', { name: label }));
+      expect(list.getByText('Obstacle #18 ·')).toBeVisible();
+      expect(list.getByText('Obstacle #42 ·')).toBeVisible();
+    }
+    f.state.draftParents = [manifest.selectedParents[1]]; f.install(); view.rerender(<PathFinderBarriersPanel {...f.props} />);
+    const draft = within(screen.getByRole('list', { name: 'Selected barrier parents' }));
+    expect(draft.getByText('Obstacle #42 ·')).toBeVisible();
+    expect(draft.queryByText('Obstacle #18 ·')).toBeNull();
+  });
   it('shows a current barrier directly and removes only its draft entry without another viewer action', async () => {
     const f = fixture(); installSavedSelection(f); render(<PathFinderBarriersPanel {...f.props} />);
     const draft = within(screen.getByRole('list', { name: 'Selected barrier parents' }));

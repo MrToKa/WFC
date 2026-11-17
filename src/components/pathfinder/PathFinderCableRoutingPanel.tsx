@@ -9,6 +9,7 @@ import { CablePopupSurface, type CablePopupSurfaceStyles } from '@/components/Ca
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
 import { PathFinderCableComparison } from './PathFinderCableComparison';
 import { CableAutoCalculatedLength } from './CableAutoCalculatedLength';
+import { PathFinderBarrierResult } from '@/pages/ProjectDetails/PathFinderBarrierResult';
 import type { PathFinderEndpointForegroundContexts } from '@/pages/ProjectDetails/pathFinderEndpointVisibility';
 import { cableEndpointConfirmedDisplaySelectionSchema } from '../../../shared/pathfinderCableEndpoints';
 import type { CanonicalPoint } from '../../../viewer-runtime/protocol.mjs';
@@ -293,6 +294,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
             disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || calculationPending || Boolean(currentReview?.pending)}
             onChange={(_, value) => onDrillThroughWallsChange(value.checked === true)} />
           <Caption1>For the next calculation of this cable only. Ignore all registered barrier types. New shared-location Saves keep drilling disabled. Existing results and pending commands retain their original setting.</Caption1>
+          <Caption1>Detected obstacle crossings are still recorded in Remarks when the calculated route is saved.</Caption1>
         </> : null}
         {submittedDrillThroughWalls !== null && submittedDrillThroughWalls !== undefined ? <p className={styles.note}>Submitted calculation: Drill through the walls {submittedDrillThroughWalls ? 'enabled' : 'disabled'}. The next-calculation checkbox does not change this request.</p> : null}
         {calculationFeedback ? calculationFeedback.working
@@ -344,6 +346,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <a href={`/projects/${access.projectId}/cables/${cable.cable.id}`}>Edit route and protection in Cable details</a>
         <h4 className={styles.heading}>{pairSaved ? 'Routing and length saved' : automaticStopped ? 'Cable list update not saved' : usingSavedExactPath ? 'Routing and length saved' : automaticRecoveryRequired ? 'Cable update needs confirmation' : automaticWriting ? 'Updating cable values' : 'Review and Apply'}</h4>
         {currentReview?.recordedDrillThroughWalls !== null && currentReview?.recordedDrillThroughWalls !== undefined ? <p className={styles.note}>Recorded result: Drill through the walls {currentReview.recordedDrillThroughWalls ? 'enabled' : 'disabled'}. This setting belongs to the exact calculated proposal.</p> : null}
+        {currentReview?.barriers ? <PathFinderBarrierResult execution={currentReview.barriers} /> : null}
         {currentReview?.autoLength || currentReview?.autoLengthLoading || currentReview?.autoLengthError ? <section aria-label="Automatic length from Cable list">
           <h4 className={styles.heading}>Auto calculated length [m]</h4>
           {currentReview.autoLengthLoading ? <Spinner size="tiny" label="Reading automatic cable length…" /> : null}

@@ -17,6 +17,7 @@ export type CableVersionRow = {
   cable_type_name: string;
   from_location: string | null;
   to_location: string | null;
+  remarks?: string | null;
   routing: string | null;
   delivery: string | null;
   design_length: number | string | null;
@@ -47,6 +48,7 @@ export type PublicCableVersion = {
   typeName: string;
   fromLocation: string | null;
   toLocation: string | null;
+  remarks?: string | null;
   routing: string | null;
   delivery: string | null;
   designLength: number | null;
@@ -102,6 +104,7 @@ export const mapCableVersionRow = (row: CableVersionRow): PublicCableVersion => 
   typeName: row.cable_type_name,
   fromLocation: row.from_location ?? null,
   toLocation: row.to_location ?? null,
+  remarks: row.remarks ?? null,
   routing: row.routing ?? null,
   delivery: row.delivery ?? null,
   designLength: toIntegerOrNull(row.design_length),

@@ -16,12 +16,13 @@ internal static partial class Program
     { try { await action(); Checks.Add(new { name, status = "PASS", detail = "" }); } catch (Exception error) { failures++; Checks.Add(new { name, status = "FAIL", detail = error.GetType().Name + ": " + error.Message }); } }
     private static async Task<int> Main(string[] args)
     {
+        bool obstacleReportOnly = args.Length == 5 && args[4] == "--obstacle-report-only";
         bool edgePartitionOnly = args.Length == 5 && args[4] == "--edge-partition-only";
-        var invocation = edgePartitionOnly ? args[..4] : args;
+        var invocation = edgePartitionOnly || obstacleReportOnly ? args[..4] : args;
         if (invocation is not ["--runner", var runner, "--work-root", var work] || !Path.IsPathFullyQualified(runner) || !File.Exists(runner)
             || !Path.IsPathFullyQualified(work) || File.Exists(work) || Directory.Exists(work)) return 2;
         Directory.CreateDirectory(work);
-        try { if (edgePartitionOnly) { await EdgePartitionTransport(runner, work); await OwnerContactTransport(runner, work); await CutFloorIncidenceTransport(runner, work); } else await Transport(runner, work); }
+        try { if (obstacleReportOnly) await ObstacleReportTransport(runner, work); else if (edgePartitionOnly) { await EdgePartitionTransport(runner, work); await OwnerContactTransport(runner, work); await CutFloorIncidenceTransport(runner, work); } else await Transport(runner, work); }
         catch (Exception error) { failures++; Checks.Add(new { name = "mixed-runtime-fixture", status = "FAIL", detail = error.GetType().Name + ": " + error.Message }); }
         Console.WriteLine(JsonSerializer.Serialize(new { status = failures == 0 ? "PASS" : "FAIL", passed = Checks.Count - failures, failed = failures, checks = Checks,
             scope = "Private independent synthetic mixed one-shot/session transport; no live SDK/frame, own-terminal or global catalog authority" }));
@@ -82,6 +83,7 @@ internal static partial class Program
         var floor = Store(root, Fixtures.Transform(Wall(), p => Fixtures.P(p.Y, p.Z, p.X)));
         var floorOpening = Store(root, Fixtures.Transform(Ring(), p => Fixtures.P(p.Y, p.Z, p.X)));
         var solid = Store(root, Fixtures.Box(-4, 4, -4, 4, -4, 4)); var empty = Store(root, null);
+        await ObstacleReportTransport(runner, root);
         await EdgePartitionTransport(runner, root);
         await OwnerContactTransport(runner, root);
         await CutFloorIncidenceTransport(runner, root);

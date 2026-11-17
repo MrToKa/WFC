@@ -176,6 +176,20 @@ const headers = () =>
     .map((cell) => cell.textContent);
 
 describe('personal cable list columns', () => {
+  it('shows obstacle remarks and supports multiline inline editing', async () => {
+    const remarks = 'Check installation\nCrosses obstacle #18.';
+    const mounted = render(view(false, false, { ...cable, remarks }));
+    await screen.findByRole('table');
+    expect(headers()).toContain('Remarks');
+    expect(screen.getByText(/Crosses obstacle #18/)).toHaveTextContent('Check installation');
+    mounted.rerender(view(true, false, { ...cable, remarks }));
+    const input = screen.getByRole('textbox', { name: 'Cable remarks' });
+    expect(input).toHaveValue(remarks);
+    fireEvent.change(input, { target: { value: 'New note\nCrosses obstacle #18.' } });
+    expect(draftChange).toHaveBeenCalledWith(cable.id, 'remarks', 'New note\nCrosses obstacle #18.');
+    fireEvent.blur(input);
+    expect(textFieldBlur).toHaveBeenCalledWith(expect.objectContaining({ id: cable.id }), 'remarks');
+  });
   it('renders newly saved ordinary Routing, Auto length and Design business values without remounting the list', async () => {
     const mounted = render(view(false, false, { ...cable, routing: null, designLength: null }));
     await screen.findByRole('table');
@@ -346,20 +360,20 @@ describe('personal cable list columns', () => {
   it('lets a read-only user hide matching headers and cells, with choices isolated by account and restored after remount', async () => {
     const page = render(view());
     const dialog = await openColumns();
-    expect(headers()).toHaveLength(14);
+    expect(headers()).toHaveLength(DEFAULT_CABLE_LIST_COLUMNS.length);
     fireEvent.click(dialog.getByRole('checkbox', { name: 'Routing' }));
     fireEvent.click(dialog.getByRole('checkbox', { name: 'Actions' }));
     await saveColumns();
     expect(headers()).not.toContain('Routing');
     expect(headers()).not.toContain('Actions');
     expect(screen.queryByText('TRAY-01')).not.toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getAllByRole('cell')).toHaveLength(12);
+    expect(within(screen.getByRole('table')).getAllByRole('cell')).toHaveLength(DEFAULT_CABLE_LIST_COLUMNS.length - 2);
     expect(requests.find(({ method }) => method === 'PUT')?.token).toBe('user-a');
 
     auth.token = 'user-b';
     page.rerender(view());
     await screen.findByRole('table');
-    expect(headers()).toHaveLength(14);
+    expect(headers()).toHaveLength(DEFAULT_CABLE_LIST_COLUMNS.length);
     expect(screen.getByText('TRAY-01')).toBeInTheDocument();
 
     auth.token = 'user-a';
@@ -385,7 +399,7 @@ describe('personal cable list columns', () => {
     expect(dialog.getByRole('checkbox', { name: 'Tag' })).toBeChecked();
     fireEvent.click(dialog.getByRole('button', { name: 'Show all columns' }));
     await saveColumns();
-    expect(headers()).toHaveLength(14);
+    expect(headers()).toHaveLength(DEFAULT_CABLE_LIST_COLUMNS.length);
     expect(stored.get('user-a')).toEqual(DEFAULT_CABLE_LIST_COLUMNS);
   });
 
@@ -411,7 +425,7 @@ describe('personal cable list columns', () => {
     stored.set('user-a', ['tag']);
     render(view());
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load');
-    expect(headers()).toHaveLength(14);
+    expect(headers()).toHaveLength(DEFAULT_CABLE_LIST_COLUMNS.length);
     expect(screen.getByRole('button', { name: 'Columns' })).toBeDisabled();
     failLoad = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry column settings' }));

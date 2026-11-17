@@ -1,3 +1,4 @@
+import { routeObstacleRemarks, exactObstacleRemarksTransition } from './obstacleRemarks.js';
 import { randomUUID } from 'node:crypto';
 import { assertAutomaticRoutingControl } from './cableRoutingControlRepository.js';
 import type { Pool } from 'pg';
@@ -70,14 +71,14 @@ export function createPathFinderApply(pool:Pool) {
     await assertAutomaticRoutingControl(client, projectId, proposal.cable_id, before);
     await requireEnrollmentAuthority(client,{projectId,jobId:proposal.job_id,cableId:proposal.cable_id});
     await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
-    const after = (await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,updated_at=NOW()
-      WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,[projectId,proposal.cable_id,route,length,input.expectedCableWriteRevision])).rows[0]?.value;
+    const after = (await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,remarks=$6,updated_at=NOW()
+      WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,[projectId,proposal.cable_id,route,length,input.expectedCableWriteRevision,routeObstacleRemarks(before.remarks,result) ?? null])).rows[0]?.value;
     if (!after) throw new PathFinderError('CABLE_WRITE_CONFLICT',409);
     // Verify the exact pair and preserved fields even if a schema trigger changes.
     let validTransition=false;
     try {
-      const changed=new Set(['routing','design_length','updated_at','cable_write_revision']);
-      validTransition=after.routing===route&&canonicalDecimalString(after.design_length)===canonicalDecimalString(length)
+      const changed=new Set(['routing','design_length','remarks','updated_at','cable_write_revision']);
+      validTransition=exactObstacleRemarksTransition(before,after,result)&&after.routing===route&&canonicalDecimalString(after.design_length)===canonicalDecimalString(length)
         &&BigInt(after.cable_write_revision)===BigInt(before.cable_write_revision)+1n
         &&canonicalPurposeJson(Object.keys(before).sort())===canonicalPurposeJson(Object.keys(after).sort())
         &&Object.keys(before).every(key=>changed.has(key)||canonicalPurposeJson(before[key])===canonicalPurposeJson(after[key]));

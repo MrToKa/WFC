@@ -10,6 +10,13 @@ import { emptyRoutingControl } from '../../shared/cableRoutingControl';
 
 const base = { ...emptyCableForm, cableId: '1', tag: 'C-1', cableTypeId: 'type-1' };
 describe('routing and execution edit form', () => {
+  it('keeps multiline remarks when editing an existing cable', () => {
+    const remarks = 'Check installation\n[PathFinder obstacles]\nCrosses obstacle #18.\n[/PathFinder obstacles]';
+    const form = toCableFormState({ cableId: 1, cableTypeId: 'type-1', tag: 'C-1', designLength: 25, routing: '/AUTO', remarks } as Cable);
+    expect(form.remarks).toBe(remarks);
+    expect(buildCableInput(form).input.remarks).toBe(remarks);
+    expect(buildCableInput({ ...base, remarks: '' }).input.remarks).toBeNull();
+  });
   it('checks manual protection on an actual route change, permits uncheck, and releases on clear', () => {
     const edited = changeCableFormField(base, 'routing', '/BC01/BC02');
     expect(edited.manualRoutingProtected).toBe('true');

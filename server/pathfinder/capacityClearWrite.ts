@@ -1,3 +1,4 @@
+import { clearRouteObstacleRemarks } from './obstacleRemarks.js';
 import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
@@ -88,8 +89,8 @@ export async function readCurrentPositiveCapacity(client: PoolClient, input: { d
 }
 export function automaticPairCapacityClearTransition(projectId: string, cableId: string, before: Row, after: Row): boolean {
   try {
-    const allowed = new Set(['routing', 'design_length', 'updated_at', 'cable_write_revision']);
-    return before?.id === cableId && after?.id === cableId && before.project_id === projectId && after.project_id === projectId
+    const allowed = new Set(['routing', 'design_length', 'remarks', 'updated_at', 'cable_write_revision']);
+    return Object.is(after?.remarks,clearRouteObstacleRemarks(before?.remarks)) && before?.id === cableId && after?.id === cableId && before.project_id === projectId && after.project_id === projectId
       && policyRevisionSchema.safeParse(before.cable_write_revision).success && policyRevisionSchema.safeParse(after.cable_write_revision).success
       && BigInt(after.cable_write_revision) === BigInt(before.cable_write_revision) + 1n && after.routing === null && after.design_length === null
       && Object.hasOwn(before, 'install_length') && Object.hasOwn(after, 'install_length')

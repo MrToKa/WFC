@@ -39,10 +39,10 @@ describe.skipIf(process.env.WFC_ROUTING_CONTROL_POSTGRES!=='1')('manual route wo
       CREATE TABLE viewer_login_bindings(login_id uuid PRIMARY KEY,user_id uuid NOT NULL,expires_at timestamptz NOT NULL,revoked_at timestamptz);
       CREATE TABLE pf_installation_state(singleton boolean PRIMARY KEY,installation_epoch uuid NOT NULL);
       CREATE TABLE cable_types(id uuid PRIMARY KEY,project_id uuid,name text);
-      CREATE TABLE cables(id uuid PRIMARY KEY,project_id uuid NOT NULL,cable_id integer,revision text DEFAULT '00',tag text,mto text DEFAULT 'LV',routing text,
+      CREATE TABLE cables(remarks text,id uuid PRIMARY KEY,project_id uuid NOT NULL,cable_id integer,revision text DEFAULT '00',tag text,mto text DEFAULT 'LV',routing text,
         from_location text DEFAULT 'FROM',to_location text DEFAULT 'TO',cable_type_id uuid,design_length numeric,install_length numeric,
         pull_date date,connected_from date,connected_to date,tested date,delivery text,updated_at timestamptz NOT NULL DEFAULT now(),cable_write_revision bigint NOT NULL DEFAULT 1,UNIQUE(project_id,id));
-      CREATE TABLE cable_versions(id uuid PRIMARY KEY,cable_id uuid REFERENCES cables(id) ON DELETE CASCADE,version_number bigint,change_type text,change_source text,
+      CREATE TABLE cable_versions(remarks text,id uuid PRIMARY KEY,cable_id uuid REFERENCES cables(id) ON DELETE CASCADE,version_number bigint,change_type text,change_source text,
         cable_number integer,revision text,mto text,tag text,cable_type_id uuid,cable_type_name text,from_location text,to_location text,routing text,delivery text,
         design_length numeric,install_length numeric,pull_date date,connected_from date,connected_to date,tested date,changed_by uuid,changed_by_snapshot jsonb,
         UNIQUE(cable_id,version_number));
@@ -133,6 +133,26 @@ describe.skipIf(process.env.WFC_ROUTING_CONTROL_POSTGRES!=='1')('manual route wo
       .toEqual([{change_source:'pathfinder',changed_by:actorId,design_length:'7',routing:'/A',install_length:null}]);
     expect((await pool.query("SELECT count(*)::int AS count FROM pf_recalculation_events WHERE domain='cables'")).rows[0].count).toBe(1);
     await expect(pool.query("UPDATE pf_manual_route_results SET record='{}'::jsonb")).rejects.toThrow('Manual routing result is immutable');
+  });
+  it('atomically persists the exact calculated obstacle Remarks with manual Design and immutable history',async()=>{
+    const row=await seed();await pool.query('UPDATE cables SET remarks=$2 WHERE id=$1',[row.id,'User instruction']);
+    const parent={selectionId:randomUUID(),kind:'wall',objectId:'dbid:123',dbId:123,externalId:null,name:'Synthetic wall',identityBasis:'version-local-only',inclusion:'own-and-all-descendant-fragments'};
+    const w=fixture(row,{execute:async request=>{
+      const {calculationMode:_mode,...response}=structuredClone(f.result);response.requestId=request.requestId;
+      if(response.route){response.route.routeCodes=['/A'];response.route.routeText='/A';}
+      if(response.schemaVersion==='pathfinder.model.response.v3'){
+        response.barriers.directSecondary=null;response.barriers.obstacleReport={status:'complete',crossedParentSelectionIds:[parent.selectionId],blockingParentSelectionIds:[],
+          checkedSegments:1,totalSegments:1,reasonCode:'SYNTHETIC_REPORT_WRITER_TEST',selectedParents:[parent as any]};
+      }
+      return response;
+    }});await w.worker.tick();
+    expect(await state(row)).toMatchObject({state:'calculated',length_metres:7});
+    const expected='User instruction\n[PathFinder obstacles] Crosses obstacles: #123.';
+    expect((await pool.query('SELECT remarks,design_length,routing FROM cables WHERE id=$1',[row.id])).rows[0]).toEqual({remarks:expected,design_length:'7',routing:'/A'});
+    expect((await pool.query('SELECT remarks,design_length,routing FROM cable_versions WHERE cable_id=$1',[row.id])).rows).toEqual([{remarks:expected,design_length:'7',routing:'/A'}]);
+    const result=(await pool.query('SELECT record FROM pf_manual_route_results WHERE cable_id=$1',[row.id])).rows[0].record;
+    expect(result.response.barriers.obstacleReport.crossedParentSelectionIds).toEqual([parent.selectionId]);
+    expect(result.designWrite.status).toBe('written');
   });
   it('fences an old completion after A→B→A manual edits',async()=>{
     const row=await seed(),w=fixture(row,{onExecute:async()=>{await put(row,'/B');await put(row,'/A');}});await w.worker.tick();

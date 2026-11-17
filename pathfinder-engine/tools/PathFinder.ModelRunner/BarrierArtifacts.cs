@@ -48,7 +48,7 @@ internal static partial class Program
                 || file.Length != blob.Bytes) throw new ArgumentException("Barrier input must be the exact regular immutable blob.");
         }
     }
-    private static PreparedBarriers LoadBarriers(string root, BarrierRuntimeContext context, SessionExecutionContext? session, CancellationToken token)
+    private static PreparedBarriers LoadBarriers(string root, BarrierRuntimeContext context, SessionExecutionContext? session, CancellationToken token, bool reporting = false)
     {
         string key = BarrierHash(context.Value); session?.SelectBarrierKey(key);
         if (context.Snapshot.ValueKind == JsonValueKind.Null) return new(null, null);
@@ -85,9 +85,10 @@ internal static partial class Program
         _ = BarrierDigest(verification, "verificationSha256");
         if (BarrierUuid(captureRef, "captureId") != intent) throw new ArgumentException("Barrier capture does not belong to the exact published storage intent.");
         var captureBytes = ReadBarrierBlob(root, project, intent, captureBlob, token);
-        // An explicit drilling request checks immutable references but performs
-        // no collision query or geometric qualification and claims no clearance.
-        if (context.Drill) return new(null, null);
+        // Routing under explicit drilling authenticates immutable references without
+        // qualification. A later informational report can independently qualify
+        // the geometry while the routing proof continues to claim only bypass.
+        if (context.Drill && !reporting) return new(null, null, manifest.GetProperty("selectedParents").EnumerateArray().Select(parent => parent.Clone()).ToArray());
         if (session?.BarrierCache is { } cached) return cached;
         var result = BarrierCaptureVerifier.Verify(captureBytes, cancellationToken: token);
         if (result.Qualified is null || result.Receipt.Evidence is not { } evidence || result.Receipt.CaptureSha256 != captureBlob.Sha256)
@@ -118,12 +119,16 @@ internal static partial class Program
         var memberships = result.Qualified.Meshes.Select(mesh => new BarrierMembership(mesh.Mesh.Id,
             mesh.TriangleSources.SelectMany(source => source.ParentSelectionIds).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             mesh.TriangleSources.Select(source => source.FragmentId).Distinct().Order().ToArray())).ToArray();
-        var prepared = new PreparedBarriers(result.Qualified, new BarrierQualification(captureBlob.Sha256, evidence.VerificationSha256, evidence.DecompositionSha256, memberships));
+        var prepared = new PreparedBarriers(result.Qualified, new BarrierQualification(captureBlob.Sha256, evidence.VerificationSha256, evidence.DecompositionSha256, memberships), manifest.GetProperty("selectedParents").EnumerateArray().Select(parent => parent.Clone()).ToArray());
         session?.StoreBarriers(prepared); return prepared;
     }
 }
 internal sealed record BarrierMembership(string ComputationalMeshId, string[] ParentSelectionIds, int[] FragmentIds);
 internal sealed record BarrierQualification(string CaptureSha256, string PureVerificationSha256, string DecompositionSha256, BarrierMembership[] ComputationalMemberships);
-internal sealed record PreparedBarriers(QualifiedBarrierCapture? Qualified, BarrierQualification? Qualification);
+internal sealed record PreparedBarriers(QualifiedBarrierCapture? Qualified, BarrierQualification? Qualification, JsonElement[]? SelectedParents = null)
+{
+    internal IReadOnlyDictionary<string, QualifiedBarrierMesh> MeshesById { get; } = Qualified?.Meshes.ToDictionary(value => value.Mesh.Id, StringComparer.Ordinal)
+        ?? new Dictionary<string, QualifiedBarrierMesh>(StringComparer.Ordinal);
+}
 internal sealed class BarrierQualificationException(string code) : ArgumentException("Independent barrier qualification refused: " + code)
 { internal string Code { get; } = code; }

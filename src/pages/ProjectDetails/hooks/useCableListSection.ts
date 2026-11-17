@@ -75,7 +75,7 @@ type CableDialogController = {
   submitting: boolean;
   handleFieldChange: (
     field: keyof CableFormState,
-  ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
+  ) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, data: { value: string }) => void;
   handleCableTypeSelect: (event: unknown, data: { optionValue?: string }) => void;
   handleMtoSelect: (event: unknown, data: { optionValue?: string }) => void;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
@@ -309,6 +309,7 @@ export const useCableListSection = ({
           cable.fromLocation,
           cable.toLocation,
           cable.routing,
+          cable.remarks,
           cable.delivery,
           cable.designLength !== null ? String(cable.designLength) : '',
         ];
@@ -541,7 +542,7 @@ export const useCableListSection = ({
 
   const handleFieldChange =
     (field: keyof CableFormState) =>
-    (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
+    (_event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, data: { value: string }) => {
       setDialogValues((previous: CableFormState) =>
         changeCableFormField(previous, field, data.value),
       );
@@ -912,8 +913,9 @@ export const useCableListSection = ({
         case 'tag':
         case 'fromLocation':
         case 'toLocation':
+        case 'remarks':
         case 'delivery': {
-          const normalized = draft[field].trim();
+          const normalized = (draft[field] ?? '').trim();
           const current = (cable[field] ?? '').trim();
 
           if (normalized === current) {

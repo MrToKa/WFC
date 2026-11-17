@@ -40,7 +40,7 @@ internal static partial class Program
         if (triangles > 250000 || allParents.Count > context.MaximumParents || allFragments.Count > 8192) throw new ArgumentException("Mixed aggregate membership exceeds the explicit profile capture ceilings.");
         return result.ToArray();
     }
-    private static PreparedMixedBarriers LoadMixedBarriers(string root, MixedBarrierRuntimeContext context, SessionExecutionContext? session, CancellationToken token)
+    private static PreparedMixedBarriers LoadMixedBarriers(string root, MixedBarrierRuntimeContext context, SessionExecutionContext? session, CancellationToken token, bool reporting = false)
     {
         session?.SelectBarrierKey(BarrierHash(context.Value));
         if (context.Snapshot.ValueKind == JsonValueKind.Null) return new(null, null);
@@ -83,9 +83,9 @@ internal static partial class Program
         if (selected.ValueKind != JsonValueKind.Array || selected.GetArrayLength() < 1 || selected.GetArrayLength() > context.MaximumParents
             || summaries.ValueKind != JsonValueKind.Array || summaries.GetArrayLength() is < 1 or > 8192) throw new ArgumentException("Mixed selected fragment scope is invalid.");
         var captureBytes = ReadBarrierBlob(root, project, intent, captureBlob, token);
-        // Same as v1: an explicit bypass authenticates immutable supplied blobs,
-        // but does not assert that geometric qualification or collision ran.
-        if (context.Drill) return new(null, null);
+        // The routing bypass authenticates supplied blobs and claims no clearance.
+        // Only a separate informational report asks for independent qualification.
+        if (context.Drill && !reporting) return new(null, null, selected.EnumerateArray().Select(parent => parent.Clone()).ToArray());
         if (session?.MixedBarrierCache is { } cached) return cached;
         var result = MixedBarrierCaptureVerifier.Verify(captureBytes, context.VerifierLimits, cancellationToken: token, maximumReceiptBytes: context.MaximumReceiptBytes);
         if (result.Qualified is null || result.Receipt.Evidence is not { } evidence || result.Receipt.CaptureSha256 != captureBlob.Sha256)
@@ -122,9 +122,13 @@ internal static partial class Program
         // Keep the independently qualified bounded membership, never a manifest
         // reconstruction. The parsed manifest array above only validates shape.
         if (memberships.Length != evidence.ComponentMemberships.Count) throw new ArgumentException("Mixed membership count mismatch.");
-        var prepared = new PreparedMixedBarriers(result.Qualified, new(captureBlob.Sha256, evidence));
+        var prepared = new PreparedMixedBarriers(result.Qualified, new(captureBlob.Sha256, evidence), selected.EnumerateArray().Select(parent => parent.Clone()).ToArray());
         session?.StoreMixedBarriers(prepared); token.ThrowIfCancellationRequested(); return prepared;
     }
 }
 internal sealed record MixedBarrierQualification(string CaptureSha256, MixedBarrierVerifierEvidence Evidence);
-internal sealed record PreparedMixedBarriers(MixedBarrierCapture? Qualified, MixedBarrierQualification? Qualification);
+internal sealed record PreparedMixedBarriers(MixedBarrierCapture? Qualified, MixedBarrierQualification? Qualification, JsonElement[]? SelectedParents = null)
+{
+    internal IReadOnlyDictionary<string, MixedBarrierComponent> ComponentsById { get; } = Qualified?.Components.ToDictionary(value => value.Id, StringComparer.Ordinal)
+        ?? new Dictionary<string, MixedBarrierComponent>(StringComparer.Ordinal);
+}

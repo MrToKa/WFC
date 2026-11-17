@@ -75,6 +75,14 @@ it('writes routing notes before table parts in the worksheet schema order Excel 
   expect(xml).toContain('<sheetProtection ');
 });
 
+it('exports cable Remarks including numbered crossings as one unchanged multiline cell', async () => {
+  const remarks = 'Монтажна бележка\n[PathFinder obstacles] Crosses obstacles: #123, #456.';
+  database.query.mockResolvedValue({ rows: [{ cable_id: 42, remarks, design_length: null, install_length: null }] });
+  const sheet = await readSheet(await runExport({ view: 'list', columns: 'cableId,remarks' }));
+  expect(sheet.getRow(1).values).toEqual([undefined, 'Cable Id', 'Remarks']);
+  expect(sheet.getCell('B2').value).toBe(remarks);
+});
+
 it.each([undefined, 'cableId', 'routing,cableId,designLength'])(
   'locks the ID header and full column while leaving other exported columns editable: %s',
   async (columns) => {

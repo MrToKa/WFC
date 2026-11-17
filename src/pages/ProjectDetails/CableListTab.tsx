@@ -17,6 +17,7 @@ import {
   Option,
   Spinner,
   Switch,
+  Textarea,
   mergeClasses,
 } from '@fluentui/react-components';
 
@@ -78,6 +79,7 @@ type CableListTabProps = {
       | 'tag'
       | 'fromLocation'
       | 'toLocation'
+      | 'remarks'
       | 'routing'
       | 'delivery'
       | 'designLength',
@@ -472,6 +474,16 @@ export const CableListTab = ({
                         ) : (
                           <CableRoutingValue cable={cable} />
                         )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('remarks') ? (
+                      <td className={styles.tableCell} style={{ whiteSpace: 'pre-wrap' }}>
+                        {isInlineEditable && draft ? (
+                          <Textarea value={draft.remarks ?? ''}
+                            onChange={(_, data) => onDraftChange(cable.id, 'remarks', data.value)}
+                            onBlur={() => onTextFieldBlur(cable, 'remarks')}
+                            disabled={isRowUpdating} maxLength={32767} aria-label="Cable remarks" />
+                        ) : cable.remarks ?? '-'}
                       </td>
                     ) : null}
                     {visibleColumns.has('delivery') ? (

@@ -423,8 +423,13 @@ public sealed class MixedBarrierKernel
         MixedBarrierQueryLimits? limits = null, CancellationToken cancellationToken = default)
         => CheckSegmentCore(from, to, terminalFrom, terminalTo, limits, cancellationToken);
 
+    /// <summary>Reporting-only enumeration: production routing retains its exact scope.</summary>
+    public MixedBarrierSegmentResult CheckRouteSegmentExcluding(BarrierPoint from, BarrierPoint to, BarrierPoint terminalFrom, BarrierPoint terminalTo,
+        IReadOnlySet<string> excludedParents, MixedBarrierQueryLimits? limits = null, CancellationToken cancellationToken = default)
+        => CheckSegmentCore(from, to, terminalFrom, terminalTo, limits, cancellationToken, excludedParents);
+
     private MixedBarrierSegmentResult CheckSegmentCore(BarrierPoint from, BarrierPoint to, BarrierPoint? terminalFrom, BarrierPoint? terminalTo,
-        MixedBarrierQueryLimits? limits, CancellationToken cancellationToken)
+        MixedBarrierQueryLimits? limits, CancellationToken cancellationToken, IReadOnlySet<string>? excludedParents = null)
     {
         cancellationToken.ThrowIfCancellationRequested(); limits ??= new() { MaximumWork = maximumQueryWork, MaximumMilliseconds = maximumQueryMilliseconds }; var budget = new MixedBudget(limits.MaximumWork, limits.MaximumMilliseconds, cancellationToken);
         if (limits.MaximumWork is < 1 or > 2_000_000 || limits.MaximumWork > maximumQueryWork || limits.MaximumMilliseconds is < 1 or > 10_000 || limits.MaximumMilliseconds > maximumQueryMilliseconds || !Valid(from, 1e9) || !Valid(to, 1e9)) return new(MixedBarrierSegmentStatus.Indeterminate, "INVALID_QUERY", 0);
@@ -439,7 +444,7 @@ public sealed class MixedBarrierKernel
                 budget.Spend(); if (!component.Bounds.Overlaps(from, to, guard)) continue;
                 foreach (var triangle in component.Triangles)
                 {
-                    budget.Spend(); if (!Bounds.Of(triangle).Overlaps(from, to, guard)) continue;
+                    budget.Spend(); if (excludedParents is not null && triangle.Source.ParentSelectionIds.All(excludedParents.Contains) || !Bounds.Of(triangle).Overlaps(from, to, guard)) continue;
                     var contact = OriginalTriangleSurfaceContact.Check(from, to, triangle.A, triangle.B, triangle.C, tolerance, cancellationToken); budget.Spend(contact.Work);
                     if (contact.Status == OriginalTriangleContactStatus.Indeterminate)
                     {
@@ -463,7 +468,7 @@ public sealed class MixedBarrierKernel
             }
             foreach (var component in components)
             {
-                budget.Spend(); if (component.Kind != MixedBarrierComponentKind.QualifiedClosedSolid) continue;
+                budget.Spend(); if (component.Kind != MixedBarrierComponentKind.QualifiedClosedSolid || excludedParents is not null && component.Triangles.All(triangle => triangle.Source.ParentSelectionIds.All(excludedParents.Contains))) continue;
                 var midpoint = first + (last - first) * .5;
                 foreach (var point in first == last ? new[] { first } : firstBoundary.Contains(component.Id) || lastBoundary.Contains(component.Id)
                     ? new[] { first, last, midpoint } : new[] { first, last })

@@ -52,6 +52,42 @@ function mixedExecution(blocked = false): MixedBarrierExecution {
 afterEach(cleanup);
 
 describe('recorded barrier calculation explanation', () => {
+  it('shows numbered crossings and blocked candidates from the recorded model, including drilling', () => {
+    const value = execution('bypassed');
+    value.obstacleReport = { status: 'complete', crossedParentSelectionIds: [id(8)], blockingParentSelectionIds: [id(9)],
+      checkedSegments: 1, totalSegments: 1, reasonCode: 'OBSTACLE_REPORT_COMPLETE', selectedParents: [
+        { selectionId: id(8), dbId: 18, objectId: 'dbid:18', name: 'Floor slab', kind: 'floor', externalId: null,
+          identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' },
+        { selectionId: id(9), dbId: 42, objectId: 'dbid:42', name: 'Wall panel', kind: 'wall', externalId: null,
+          identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' },
+      ] };
+    render(<PathFinderBarrierResult execution={value} />);
+    expect(screen.getByText('Obstacle #18 · Floor slab (floor)')).toBeVisible();
+    expect(screen.getByText('Obstacle #42 · Wall panel (wall)')).toBeVisible();
+    expect(screen.getByText(/cable Remarks when this route is saved/)).toBeVisible();
+    expect(screen.getByText(/A successful route may avoid them/)).toBeVisible();
+  });
+  it('distinguishes contributing objects when blocking contact cannot be attributed individually', () => {
+    const value = execution('blocked');
+    value.obstacleReport = { status: 'complete', crossedParentSelectionIds: [], blockingParentSelectionIds: [id(8)], blockingAttribution: 'component-membership',
+      checkedSegments: 0, totalSegments: 0, reasonCode: 'OBSTACLE_REPORT_COMPLETE', selectedParents: [
+        { selectionId: id(8), dbId: 18, objectId: 'dbid:18', name: 'Combined floor shell', kind: 'floor', externalId: null,
+          identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' },
+      ] };
+    render(<PathFinderBarrierResult execution={value} />);
+    expect(screen.getByRole('heading', { name: 'Selected objects associated with blocking geometry' })).toBeVisible();
+    expect(screen.getByText(/cannot identify which individual object was touched/)).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Obstacles blocking checked routing candidates' })).toBeNull();
+    expect(screen.queryByText(/No registered obstacles intersect/)).toBeNull();
+  });
+  it('keeps incomplete obstacle checks visible without claiming a clear route', () => {
+    const value = execution('bypassed');
+    value.obstacleReport = { status: 'partial', crossedParentSelectionIds: [], blockingParentSelectionIds: [],
+      checkedSegments: 0, totalSegments: 1, reasonCode: 'OBSTACLE_REPORT_LIMIT', selectedParents: [] };
+    render(<PathFinderBarrierResult execution={value} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Additional intersections may exist');
+    expect(screen.queryByText(/No registered obstacles intersect/)).toBeNull();
+  });
   it('shows mixed original-surface/closed-solid coverage without treating a v1 intent as its current policy', () => {
     const value = mixedExecution(), binding = value.context.binding;
     const currentIntent = { schemaVersion: 'wfc.pf.barrier-admission-intent.v2' as const, geometryPolicy: MIXED_BARRIER_POLICY, scope: binding.scope,

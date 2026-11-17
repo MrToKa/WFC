@@ -22,7 +22,9 @@ const explanation = (value: BarrierExecution) => {
         : 'Every final route segment was checked against all provided original surfaces and independently qualified closed-solid occupancy.'
       : value.proof?.routePointCount === 1 ? 'The final point was checked for occupancy against the registered selected objects.'
       : 'Every final route segment was checked against the registered selected objects.';
-    case 'bypassed': return 'Drill through the walls was enabled for this calculation. Checks against all registered obstacles were bypassed, including pipes and tanks. This result does not certify a collision-free route.';
+    case 'bypassed': return value.obstacleReport
+      ? 'Drill through the walls was enabled for this calculation. Registered obstacles were allowed during routing. The separate intersection check below records any detected crossings.'
+      : 'Drill through the walls was enabled for this calculation. Checks against all registered obstacles were bypassed, including pipes and tanks. This result does not certify a collision-free route.';
     case 'no-barriers-declared': return 'The administrator declared an empty registered scope. This does not certify that the model has no walls, floors, ceilings or other obstacles.';
     case 'blocked': return value.proof?.status === 'blocked'
       ? value.schemaVersion === 'wfc.pf.barrier-execution.v2'
@@ -61,6 +63,27 @@ export function PathFinderBarrierResult({ execution, stale = false, currentInten
   return <section aria-label="Barrier routing result">
     <h5>{outdated ? 'Recorded barrier check is outdated' : label(value)}</h5>
     <Body1>{explanation(value)}</Body1>
+    {value.obstacleReport ? <section aria-label="Numbered obstacle findings">
+      {value.obstacleReport.crossedParentSelectionIds.length ? <>
+        <h5>Obstacles crossed by this route</h5>
+        <ul>{value.obstacleReport.crossedParentSelectionIds.map(selectionId => {
+          const parent = value.obstacleReport!.selectedParents.find(item => item.selectionId === selectionId);
+          return <li key={selectionId}>{parent ? `Obstacle #${parent.dbId} · ${parent.name} (${parent.kind})` : `Registered obstacle ${selectionId}`}</li>;
+        })}</ul>
+        <Caption1>Crossings are recorded in the cable Remarks when this route is saved.</Caption1>
+      </> : value.obstacleReport.status === 'complete' && value.proof && value.obstacleReport.totalSegments > 0 && value.obstacleReport.checkedSegments === value.obstacleReport.totalSegments ? <Caption1>No registered obstacles intersect this route.</Caption1> : null}
+      {value.obstacleReport.blockingParentSelectionIds.length ? <>
+        <h5>{value.obstacleReport.blockingAttribution === 'component-membership' ? 'Selected objects associated with blocking geometry' : 'Obstacles blocking checked routing candidates'}</h5>
+        <ul>{value.obstacleReport.blockingParentSelectionIds.map(selectionId => {
+          const parent = value.obstacleReport!.selectedParents.find(item => item.selectionId === selectionId);
+          return <li key={selectionId}>{parent ? `Obstacle #${parent.dbId} · ${parent.name} (${parent.kind})` : `Registered obstacle ${selectionId}`}</li>;
+        })}</ul>
+        <Caption1>{value.obstacleReport.blockingAttribution === 'component-membership'
+          ? 'The blocking geometry was built from these objects. The check cannot identify which individual object was touched. A successful route may avoid this geometry.'
+          : 'These obstacles blocked checked candidates. A successful route may avoid them.'}</Caption1>
+      </> : null}
+      {value.obstacleReport.status !== 'complete' ? <p role="status">Obstacle identification is {value.obstacleReport.status}. Additional intersections may exist.</p> : null}
+    </section> : null}
     {fallback ? <Caption1>{fallback}</Caption1> : null}
     {outdated ? <Caption1 role="status">The model, barrier scope or calculation policy changed. Calculate again before using this result.</Caption1> : null}
     {currentIntent === null ? <Caption1>Current barrier settings are unavailable. This is a recorded result.</Caption1> : null}

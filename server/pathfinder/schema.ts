@@ -33,16 +33,18 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
     await client.query('BEGIN');
     await client.query("SELECT pg_advisory_xact_lock(hashtext('wfc-pathfinder-schema-v1'))");
     await client.query(`
+      ALTER TABLE cables ADD COLUMN IF NOT EXISTS remarks TEXT;
+      ALTER TABLE IF EXISTS cable_versions ADD COLUMN IF NOT EXISTS remarks TEXT;
       ALTER TABLE cables ADD COLUMN IF NOT EXISTS cable_write_revision BIGINT NOT NULL DEFAULT 0 CHECK (cable_write_revision >= 0);
       CREATE OR REPLACE FUNCTION own_cable_write_revision() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         IF TG_OP = 'INSERT' THEN NEW.cable_write_revision := 0;
         ELSE
           NEW.cable_write_revision := OLD.cable_write_revision;
           IF current_setting('wfc.pathfinder_apply',true)='1' OR ROW(NEW.cable_id,NEW.revision,NEW.mto,NEW.tag,NEW.cable_type_id,NEW.from_location,NEW.to_location,
-                 NEW.routing,NEW.delivery,NEW.design_length,NEW.install_length,NEW.pull_date,NEW.connected_from,NEW.connected_to,NEW.tested)
+                 NEW.routing,NEW.remarks,NEW.delivery,NEW.design_length,NEW.install_length,NEW.pull_date,NEW.connected_from,NEW.connected_to,NEW.tested)
              IS DISTINCT FROM
              ROW(OLD.cable_id,OLD.revision,OLD.mto,OLD.tag,OLD.cable_type_id,OLD.from_location,OLD.to_location,
-                 OLD.routing,OLD.delivery,OLD.design_length,OLD.install_length,OLD.pull_date,OLD.connected_from,OLD.connected_to,OLD.tested)
+                 OLD.routing,OLD.remarks,OLD.delivery,OLD.design_length,OLD.install_length,OLD.pull_date,OLD.connected_from,OLD.connected_to,OLD.tested)
           THEN NEW.cable_write_revision := OLD.cable_write_revision + 1; END IF;
         END IF;
         RETURN NEW;

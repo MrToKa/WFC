@@ -1,3 +1,4 @@
+import { routeObstacleRemarks, exactObstacleRemarksTransition } from './obstacleRemarks.js';
 import { assertAutomaticRoutingControl } from './cableRoutingControlRepository.js';
 import {randomUUID} from 'node:crypto';
 import type {Pool,PoolClient} from 'pg';
@@ -111,13 +112,13 @@ export function createInitialFillWriter(pool:Pool,adapters:InitialFillWriterAdap
       await requireCurrentInitialFillMandate(client,{projectId,mandateId:request.mandateId,impactId:mandate.impactId,jobId:proposal.job_id,cableId:proposal.cable_id,principal:who,lock:true});
       await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
       await assertAutomaticRoutingControl(client, projectId, proposal.cable_id, before);
-      const after=(await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,updated_at=NOW() WHERE c.project_id=$1 AND c.id=$2
+      const after=(await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,remarks=$7,updated_at=NOW() WHERE c.project_id=$1 AND c.id=$2
         AND c.cable_write_revision=$5 AND c.design_length IS NULL AND (c.routing IS NULL OR btrim(c.routing,$6)='')
         RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,
-        [projectId,proposal.cable_id,result.route.routeText,result.design.designLengthMeters,request.expectedCableWriteRevision,INITIAL_FILL_ROUTING_WHITESPACE])).rows[0]?.value;
+        [projectId,proposal.cable_id,result.route.routeText,result.design.designLengthMeters,request.expectedCableWriteRevision,INITIAL_FILL_ROUTING_WHITESPACE,routeObstacleRemarks(before.remarks,result) ?? null])).rows[0]?.value;
       if(!after)return fail('CABLE_WRITE_CONFLICT');
-      const changed=new Set(['routing','design_length','updated_at','cable_write_revision']);
-      if(after.routing!==result.route.routeText||canonicalDecimalString(after.design_length)!==canonicalDecimalString(result.design.designLengthMeters)
+      const changed=new Set(['routing','design_length','remarks','updated_at','cable_write_revision']);
+      if(!exactObstacleRemarksTransition(before,after,result)||after.routing!==result.route.routeText||canonicalDecimalString(after.design_length)!==canonicalDecimalString(result.design.designLengthMeters)
         ||BigInt(after.cable_write_revision)!==BigInt(before.cable_write_revision)+1n||canonicalPurposeJson(Object.keys(before).sort())!==canonicalPurposeJson(Object.keys(after).sort())
         ||Object.keys(before).some(key=>!changed.has(key)&&canonicalPurposeJson(before[key])!==canonicalPurposeJson(after[key])))return fail('INITIAL_FILL_WRITE_INTEGRITY');
       const provenance=initialFillProvenanceSchema.parse({schemaVersion:'pathfinder.initial-fill.v2',validationMethod:'automatic-initial-fill',nativeParity:'not-performed',engineeringAccepted:false,

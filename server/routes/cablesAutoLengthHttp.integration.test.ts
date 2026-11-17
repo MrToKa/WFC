@@ -56,12 +56,12 @@ CREATE TABLE IF NOT EXISTS project_tray_purpose_templates(project_id uuid REFERE
  tray_purpose text,project_file_id uuid);
 CREATE TABLE IF NOT EXISTS cable_types(id uuid PRIMARY KEY,project_id uuid REFERENCES projects(id) ON DELETE CASCADE,
  name text,purpose text,material text,description text,manufacturer text,part_no text,remarks text,diameter_mm numeric,weight_kg_per_m numeric);
-CREATE TABLE IF NOT EXISTS cables(id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS cables(remarks text,id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
  cable_id integer NOT NULL,revision text,mto text,tag text,cable_type_id uuid REFERENCES cable_types(id),from_location text,to_location text,
  routing text,delivery text,design_length integer,install_length integer,pull_date date,connected_from date,connected_to date,tested date,
  created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now(),cable_write_revision bigint NOT NULL DEFAULT 0,
  UNIQUE(project_id,id));
-CREATE TABLE IF NOT EXISTS cable_versions(id uuid PRIMARY KEY,cable_id uuid REFERENCES cables(id) ON DELETE CASCADE,version_number integer,
+CREATE TABLE IF NOT EXISTS cable_versions(remarks text,id uuid PRIMARY KEY,cable_id uuid REFERENCES cables(id) ON DELETE CASCADE,version_number integer,
  change_type text,change_source text,cable_number integer,revision text,mto text,tag text,cable_type_id uuid,cable_type_name text,
  from_location text,to_location text,routing text,delivery text,design_length integer,install_length integer,pull_date date,
  connected_from date,connected_to date,tested date,changed_by uuid,changed_by_snapshot jsonb,created_at timestamptz DEFAULT now());

@@ -36,7 +36,7 @@ function BarrierObject({ parent, pf, current, disabled, displayBusy, shown, onSh
   };
   return <>
     <Tooltip relationship="description" content={!current ? 'GUID unavailable for this model revision.' : guid === undefined ? 'Reading GUID…' : guid ? `GUID: ${guid}` : 'GUID is not available for this object.'}>
-      <span tabIndex={0} onMouseEnter={() => void readGuid()} onFocus={() => void readGuid()}>{parent.name}</span>
+      <span tabIndex={0} onMouseEnter={() => void readGuid()} onFocus={() => void readGuid()}><span>Obstacle #{parent.dbId} · </span><span>{parent.name}</span></span>
     </Tooltip>
     <div><Caption1>{kindLabel(parent.kind)}</Caption1>{' '}
       <Button size="small" aria-label={`Show ${parent.name}`} disabled={!current || pf.busy || showing || displayBusy} onClick={() => void show()}>{showing ? 'Showing…' : 'Show'}</Button>{' '}
@@ -121,6 +121,7 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
     {displayObject !== null ? <Button disabled={displayBusy || props.pf.busy} onClick={() => void hideObject()}>Hide</Button> : null}
     {displayError ? <Caption1 role="alert">{displayError}</Caption1> : null}
     <Caption1>Register walls, partitions, floors, ceilings and other obstacles. Choose Obstacle for pipes, tanks or mixed model groups.</Caption1>
+    <Caption1>Obstacle numbers use the model object number and stay the same when the list is reordered. Numbers apply to this model version.</Caption1>
     <Caption1>Existing openings are respected when present in qualified captured triangle geometry. A bounding box is not treated as a solid obstacle.</Caption1>
     <Caption1>Select an object in Model Browser to inspect it and add it. The selected parent and all its descendant fragments are captured together.</Caption1>
     <Caption1>Add selected objects creates an unsaved draft. Use Save barrier set to publish it; unsaved additions do not survive a browser refresh.</Caption1>

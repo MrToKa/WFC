@@ -88,6 +88,14 @@ describe('verified live popup endpoint foreground publisher', () => {
 });
 
 describe('exact selected-cable calculation failure diagnostics', () => {
+  it('keeps numbered blocking obstacles visible beside the failed calculation', () => {
+    const p = props();
+    p.calculationDiagnostics = { cableId: id(3), jobId: id(71), jobStatus: 'complete', itemStatus: 'no_path', itemState: 'blocked',
+      itemMessage: 'No permitted route found. Blocking obstacles: #18, #42.', jobFailure: null, readError: null };
+    p.cable = { ...p.cable!, calculation: { ...p.cable!.calculation, jobId: id(71), jobStatus: 'complete', itemState: 'blocked', outcome: 'no-path' } };
+    render(<PathFinderCableRoutingPanel {...p} />);
+    expect(screen.getByText('Calculation stopped: No permitted route found. Blocking obstacles: #18, #42.')).toBeVisible();
+  });
   it('shows the actual failed item next to Calculate and keeps the previous route separate', () => {
     const p = props();
     p.cable = { ...p.cable!, cable: { ...p.cable!.cable, routing: '/PREVIOUS', designLength: '58' }, calculation: { ...p.cable!.calculation,

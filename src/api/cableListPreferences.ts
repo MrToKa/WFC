@@ -11,6 +11,7 @@ export const CABLE_LIST_COLUMNS = [
   { id: 'fromLocation', label: 'From location' },
   { id: 'toLocation', label: 'To location' },
   { id: 'routing', label: 'Routing' },
+  { id: 'remarks', label: 'Remarks' },
   { id: 'delivery', label: 'Delivery' },
   { id: 'autoCalculatedLength', label: 'Auto calculated length [m]' },
   { id: 'designLength', label: 'Design length [m]' },

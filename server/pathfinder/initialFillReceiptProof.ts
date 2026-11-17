@@ -1,3 +1,4 @@
+import { exactObstacleRemarksTransition } from './obstacleRemarks.js';
 import type { PoolClient } from 'pg';
 import { isPathFinderCableEligible } from '../../shared/pathfinderCableEligibility.js';
 import { z } from 'zod';
@@ -37,7 +38,7 @@ export type InitialFillReceiptProofInput = {
 export const INITIAL_FILL_PROOF_READ_BYTES = 32 * 1024 ** 2;
 
 /** Exact server-owned pair transition only; no current-state or authority exception. */
-export function initialFillOwnWriteTransition(input: Pick<InitialFillReceiptProofInput, 'projectId' | 'cableId' | 'before' | 'after'>): boolean {
+export function initialFillOwnWriteTransition(input: Pick<InitialFillReceiptProofInput, 'projectId' | 'cableId' | 'before' | 'after'> & { result?: unknown }): boolean {
   const before = object(input.before), after = object(input.after);
   let design: string;
   try { design = typeof after?.design_length === 'string' ? canonicalDecimalString(after.design_length) : ''; } catch { return false; }
@@ -47,8 +48,8 @@ export function initialFillOwnWriteTransition(input: Pick<InitialFillReceiptProo
     || before.design_length !== null || before.routing !== null && (typeof before.routing !== 'string' || before.routing.trim().length !== 0)
     || typeof after.routing !== 'string' || routeCompatibilityIssue(after.routing) || typeof after.design_length !== 'string'
     || designLengthCompatibilityIssue(design) || !Object.hasOwn(before, 'install_length') || !Object.hasOwn(after, 'install_length')) return false;
-  const changed = new Set(['routing', 'design_length', 'updated_at', 'cable_write_revision']);
-  return same(Object.keys(before).sort(), Object.keys(after).sort()) && Object.keys(before).every(key => changed.has(key) || same(before[key], after[key]));
+  const changed = new Set(['routing', 'design_length', 'remarks', 'updated_at', 'cable_write_revision']);
+  return exactObstacleRemarksTransition(before, after, input.result) && same(Object.keys(before).sort(), Object.keys(after).sort()) && Object.keys(before).every(key => changed.has(key) || same(before[key], after[key]));
 }
 
 /** Transaction-local immutable common-record caches; no cross-request authority cache. */

@@ -1,3 +1,4 @@
+import { clearRouteObstacleRemarks } from '../pathfinder/obstacleRemarks.js';
 import { createHash, randomUUID } from 'crypto';
 import type { ProjectChangeLogEntry } from '../models/project.js';
 import { recordCableMaterialChanges } from '../services/cableMaterialChangeLogService.js';
@@ -100,6 +101,7 @@ const LIST_OUTPUT_HEADERS = {
   toLocation: 'To Location',
   delivery: 'Delivery',
   routing: 'Routing',
+  remarks: 'Remarks',
   autoCalculatedLength: 'Auto calculated length [m]',
   designLength: 'Design Length [m]',
   installLength: 'Install length [m]', pullDate: 'Pull date', connectedFrom: 'Connected From', connectedTo: 'Connected To', tested: 'Cable tested',
@@ -192,6 +194,7 @@ const CABLE_LIST_EXPORT_COLUMNS = [
     width: 18,
   },
   ...Object.entries(CABLE_EXECUTION_EXCEL_COLUMNS).map(([key, value]) => ({ name: value.header, key, width: key === 'installLength' ? 20 : 18 })),
+  { name: LIST_OUTPUT_HEADERS.remarks, key: 'remarks', width: 48 },
 ] as const;
 
 const CHANGE_TRACKER_REVISION_COLUMNS = [
@@ -389,6 +392,7 @@ const selectCablesQuery = `
     c.from_location,
     c.to_location,
     c.routing,
+    c.remarks,
     c.delivery,
     c.design_length,
     c.install_length,
@@ -423,6 +427,7 @@ const selectCableDetailsQuery = `
     c.from_location,
     c.to_location,
     c.routing,
+    c.remarks,
     c.delivery,
     c.design_length,
     c.install_length,
@@ -459,6 +464,7 @@ const selectCableVersionSourceQuery = `
     c.from_location,
     c.to_location,
     c.routing,
+    c.remarks,
     c.delivery,
     c.design_length,
     c.install_length,
@@ -579,6 +585,7 @@ const buildCableListExportRow = (row: CableWithTypeRow, autoLength: AutoLengthVi
   ...[row.pull_date, row.connected_from, row.connected_to, row.tested].map(value => value instanceof Date
     ? new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()))
     : value ? new Date(`${value.slice(0,10)}T00:00:00.000Z`) : ''),
+  row.remarks ?? '',
 ];
 
 const formatCableVersionUserLabel = (version: PublicCableVersion): string => {
@@ -646,6 +653,9 @@ const diffCableVersions = (
       label: 'To location',
       currentValue: current.toLocation,
       previousValue: previous.toLocation,
+    },
+    {
+      label: 'Remarks', currentValue: current.remarks ?? null, previousValue: previous.remarks ?? null,
     },
     {
       label: 'Routing',
@@ -755,6 +765,7 @@ type CableVersionSourceRow = Pick<
   | 'connected_from'
   | 'connected_to'
   | 'tested'
+  | 'remarks'
 > & {
   type_name: string;
 };
@@ -768,6 +779,7 @@ type CableVersionSnapshot = {
   typeName: string;
   fromLocation: string | null;
   toLocation: string | null;
+  remarks?: string | null;
   routing: string | null;
   delivery: string | null;
   designLength: number | null;
@@ -910,6 +922,7 @@ const buildCableVersionSnapshot = (cable: CableVersionSourceRow): CableVersionSn
   typeName: cable.type_name,
   fromLocation: normalizeOptionalString(cable.from_location ?? null),
   toLocation: normalizeOptionalString(cable.to_location ?? null),
+  remarks: cable.remarks ?? null,
   routing: normalizeOptionalString(cable.routing ?? null),
   delivery: normalizeOptionalString(cable.delivery ?? null),
   designLength: parseInstallLength(cable.design_length),
@@ -927,6 +940,7 @@ const buildCableUpdateAssignments = (
   assignments: string[];
   values: Array<string | number | null>;
 } => {
+  if (current.routing !== next.routing) next.remarks = clearRouteObstacleRemarks(next.remarks) ?? null;
   const assignments: string[] = [];
   const values: Array<string | number | null> = [];
   let parameterIndex = 1;
@@ -964,6 +978,8 @@ const buildCableUpdateAssignments = (
   if (current.toLocation !== next.toLocation) {
     pushAssignment('to_location', next.toLocation);
   }
+
+  if ((current.remarks ?? null) !== (next.remarks ?? null)) pushAssignment('remarks', next.remarks ?? null);
 
   if (current.routing !== next.routing) {
     pushAssignment('routing', next.routing);
@@ -1046,13 +1062,14 @@ const insertCableVersion = async (
         connected_to,
         tested,
         changed_by,
-        changed_by_snapshot
+        changed_by_snapshot,
+        remarks
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
         (SELECT jsonb_build_object(
           'id', id, 'firstName', first_name, 'lastName', last_name, 'email', email
-        ) FROM users WHERE id = $22)
+        ) FROM users WHERE id = $22), $23
       );
     `,
     [
@@ -1078,6 +1095,7 @@ const insertCableVersion = async (
       options.snapshot.connectedTo,
       options.snapshot.tested,
       options.changedBy,
+      options.snapshot.remarks ?? null,
     ],
   );
 };
@@ -1141,6 +1159,7 @@ const listCableVersionsByCableRecordIds = async (
         v.from_location,
         v.to_location,
         v.routing,
+        v.remarks,
         v.delivery,
         v.design_length,
         v.install_length,
@@ -2309,6 +2328,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
     fromLocation,
     toLocation,
     routing,
+    remarks,
     delivery,
     designLength,
     installLength,
@@ -2374,9 +2394,10 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
             pull_date,
             connected_from,
             connected_to,
-            tested
+            tested,
+            remarks
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           RETURNING
             id,
             project_id,
@@ -2395,6 +2416,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
             connected_from,
             connected_to,
             tested,
+            remarks,
             created_at,
             updated_at;
         `,
@@ -2416,6 +2438,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
         normalizeDateValue(connectedFrom ?? null),
         normalizeDateValue(connectedTo ?? null),
         normalizeDateValue(tested ?? null),
+        remarks ?? null,
       ],
     );
 
@@ -2507,6 +2530,7 @@ cablesRouter.patch(
       fromLocation,
       toLocation,
       routing,
+      remarks,
       delivery,
       designLength,
       installLength,
@@ -2587,6 +2611,7 @@ cablesRouter.patch(
           toLocation !== undefined
             ? normalizeOptionalString(toLocation)
             : currentSnapshot.toLocation,
+        remarks: remarks !== undefined ? remarks : currentSnapshot.remarks ?? null,
         routing: routing !== undefined ? normalizeOptionalString(routing) : currentSnapshot.routing,
         delivery:
           delivery !== undefined ? normalizeOptionalString(delivery) : currentSnapshot.delivery,
@@ -2685,6 +2710,7 @@ cablesRouter.patch(
             connected_from,
             connected_to,
             tested,
+            remarks,
             created_at,
             updated_at;
         `,
@@ -2838,6 +2864,7 @@ cablesRouter.get('/:cableId/versions', async (req: Request, res: Response): Prom
           v.from_location,
           v.to_location,
           v.routing,
+        v.remarks,
           v.delivery,
           v.design_length,
           v.install_length,
@@ -3552,6 +3579,7 @@ cablesRouter.post(
         max: 1_000_000,
       },
       { headers: [LIST_OUTPUT_HEADERS.routing], maxLength: 16384 },
+      { headers: [LIST_OUTPUT_HEADERS.remarks], maxLength: 32767 },
       { headers: CABLE_EXECUTION_EXCEL_COLUMNS.installLength.aliases, type: 'number', integer: true, min: 0, max: 1_000_000 },
     ]);
     for (const [index, row] of rows.entries()) {
@@ -3579,6 +3607,7 @@ cablesRouter.post(
       tag?: string | null;
       fromLocation?: string | null;
       toLocation?: string | null;
+      remarks?: string | null;
       routing?: string | null;
       delivery?: string | null;
       designLength?: number | null;
@@ -3610,6 +3639,7 @@ cablesRouter.post(
       tag: hasColumn(INPUT_HEADERS.tag),
       fromLocation: hasColumn(INPUT_HEADERS.fromLocation),
       toLocation: hasColumn(INPUT_HEADERS.toLocation),
+      remarks: hasColumn(LIST_OUTPUT_HEADERS.remarks),
       routing: hasColumn(LIST_OUTPUT_HEADERS.routing),
       delivery: hasColumn(INPUT_HEADERS.delivery),
       designLength: hasColumn(INPUT_HEADERS.designLength),
@@ -3691,6 +3721,7 @@ cablesRouter.post(
         );
       }
 
+      if (columnAvailability.remarks) fields.remarks = String(row[LIST_OUTPUT_HEADERS.remarks] ?? '') || null;
       if (columnAvailability.routing) {
         fields.routing = normalizeOptionalString(
           typeof row[LIST_OUTPUT_HEADERS.routing] === 'number'
@@ -3816,6 +3847,7 @@ cablesRouter.post(
             c.from_location,
             c.to_location,
             c.routing,
+    c.remarks,
             c.delivery,
             c.design_length,
             c.install_length,
@@ -3882,6 +3914,7 @@ cablesRouter.post(
             typeName: type.name,
             fromLocation: fields.fromLocation ?? null,
             toLocation: fields.toLocation ?? null,
+            remarks: fields.remarks ?? null,
             routing: fields.routing ?? null,
             delivery: fields.delivery ?? null,
             designLength: fields.designLength ?? null,
@@ -3911,9 +3944,10 @@ cablesRouter.post(
                 pull_date,
                 connected_from,
                 connected_to,
-                tested
+                tested,
+            remarks
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18);
             `,
             [
               insertedCableId,
@@ -3928,7 +3962,7 @@ cablesRouter.post(
               insertedSnapshot.routing,
               insertedSnapshot.delivery,
               insertedSnapshot.designLength,
-              insertedSnapshot.installLength, insertedSnapshot.pullDate, insertedSnapshot.connectedFrom, insertedSnapshot.connectedTo, insertedSnapshot.tested,
+              insertedSnapshot.installLength, insertedSnapshot.pullDate, insertedSnapshot.connectedFrom, insertedSnapshot.connectedTo, insertedSnapshot.tested, insertedSnapshot.remarks ?? null,
             ],
           );
           const initialControl = await initializeImportedCableRoutingControl(client, {projectId, cableId:insertedCableId, actorId:req.userId!, after:insertedSnapshot, protect:protectRouting, principal});
@@ -3977,6 +4011,7 @@ cablesRouter.post(
             columnAvailability.toLocation && fields.toLocation !== undefined
               ? (fields.toLocation ?? null)
               : currentSnapshot.toLocation,
+          remarks: columnAvailability.remarks ? fields.remarks ?? null : currentSnapshot.remarks ?? null,
           routing:
             columnAvailability.routing && fields.routing !== undefined
               ? (fields.routing ?? null)

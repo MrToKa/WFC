@@ -33,7 +33,7 @@ public enum BarrierSegmentStatus { Clear, Blocked, Indeterminate }
 public sealed record BarrierDiagnostic(string Code, string Message, string? BarrierId = null);
 public sealed record BarrierBuildResult(BarrierBuildStatus Status, BarrierCollisionKernel? Kernel,
     IReadOnlyList<BarrierDiagnostic> Diagnostics, long Work);
-public sealed record BarrierSegmentResult(BarrierSegmentStatus Status, string? BarrierId, string Reason, long Work);
+public sealed record BarrierSegmentResult(BarrierSegmentStatus Status, string? BarrierId, string Reason, long Work, int? TriangleIndex = null);
 
 /// <summary>Describes the qualified domain; it is not a claim of physical cable clearance.</summary>
 public sealed record BarrierKernelSummary(int MeshCount, int VertexCount, int TriangleCount, int BvhNodeCount,

@@ -1,3 +1,4 @@
+import { exactObstacleRemarksTransition } from './obstacleRemarks.js';
 import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { canonicalPurposeJson, policyRevisionSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
@@ -27,10 +28,10 @@ export const automaticPairDecimalEqual = (a: unknown, b: unknown): boolean => {
   try { return typeof a === 'string' && typeof b === 'string' && canonicalDecimalString(a) === canonicalDecimalString(b); } catch { return false; }
 };
 const same = (a: unknown, b: unknown) => canonicalPurposeJson(a) === canonicalPurposeJson(b);
-export function automaticPairOwnTransition(projectId: string, cableId: string, before: Row, after: Row): boolean {
+export function automaticPairOwnTransition(projectId: string, cableId: string, before: Row, after: Row, result?: unknown): boolean {
   try {
-    const allowed = new Set(['routing', 'design_length', 'updated_at', 'cable_write_revision']);
-    return before?.id === cableId && after?.id === cableId && before.project_id === projectId && after.project_id === projectId
+    const allowed = new Set(['routing', 'design_length', 'remarks', 'updated_at', 'cable_write_revision']);
+    return exactObstacleRemarksTransition(before, after, result) && before?.id === cableId && after?.id === cableId && before.project_id === projectId && after.project_id === projectId
       && policyRevisionSchema.safeParse(before.cable_write_revision).success && policyRevisionSchema.safeParse(after.cable_write_revision).success
       && BigInt(after.cable_write_revision) === BigInt(before.cable_write_revision) + 1n
       && typeof after.routing === 'string' && !routeCompatibilityIssue(after.routing) && typeof after.design_length === 'string'
@@ -42,7 +43,7 @@ const historyFields = ['revision', 'mto', 'tag', 'cable_type_id', 'from_location
 /** Audit values corroborate an exact transaction timestamp/revision; they never establish origin alone. */
 export function automaticPairHistoryMatches(row: Row, after: Row, actorId: string): boolean {
   const scalar = (v: unknown) => v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v) ? v.slice(0, 10) : v;
-  return row.change_source === 'pathfinder' && row.changed_by === actorId && String(row.cable_number) === String(after.cable_id)
+  return (!Object.hasOwn(after,'remarks') || Object.hasOwn(row,'remarks') && same(row.remarks,after.remarks)) && row.change_source === 'pathfinder' && row.changed_by === actorId && String(row.cable_number) === String(after.cable_id)
     && historyFields.every(key => Object.hasOwn(after, key) && Object.hasOwn(row, key) && same(scalar(row[key]), scalar(after[key])))
     && ['design_length', 'install_length'].every(key => after[key] === null ? row[key] === null : automaticPairDecimalEqual(String(row[key]), after[key]));
 }
@@ -71,7 +72,7 @@ export function createAutomaticPairReceiptProofReader(client: PoolClient, check:
     const clear = automaticPairCapacityClearProvenanceSchema.safeParse(r.provenance);
     if (r.id !== receiptId || r.project_id !== projectId || r.cable_id !== cableId
       || (clear.success ? r.status !== 'no_path' || !automaticPairCapacityClearTransition(projectId, cableId, before, after)
-        : r.status !== 'calculated' || !automaticPairOwnTransition(projectId, cableId, before, after)) || !r.dependencies || !r.result) return null;
+        : r.status !== 'calculated' || !automaticPairOwnTransition(projectId, cableId, before, after, r.result)) || !r.dependencies || !r.result) return null;
     const dependencies = r.dependencies as DependencySnapshot, result = r.result as EngineResponse;
     if (hash(dependencies) !== r.dependency_hash || dependencies.projectId !== projectId || dependencies.cableId !== cableId
       || dependencies.cableWriteRevision !== before.cable_write_revision || (clear.success

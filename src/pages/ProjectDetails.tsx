@@ -236,6 +236,7 @@ export const ProjectDetails = () => {
       'fromLocation',
       'toLocation',
       'routing',
+      'remarks',
       'delivery',
       'designLength',
       'installLength', 'pullDate', 'connectedFrom', 'connectedTo', 'tested',

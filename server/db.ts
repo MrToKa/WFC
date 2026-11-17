@@ -625,6 +625,7 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE cables ADD COLUMN IF NOT EXISTS remarks TEXT;
     CREATE TABLE IF NOT EXISTS cable_versions (
       id UUID PRIMARY KEY,
       cable_id UUID NOT NULL REFERENCES cables(id) ON DELETE CASCADE,
@@ -660,6 +661,7 @@ export async function initializeDatabase(): Promise<void> {
   // Keep the audit author independently of the account's nullable foreign key.
   // Backfill existing versions while their authors are still available.
   await pool.query(`
+    ALTER TABLE cable_versions ADD COLUMN IF NOT EXISTS remarks TEXT;
     ALTER TABLE cable_versions
     ADD COLUMN IF NOT EXISTS changed_by_snapshot JSONB;
 

@@ -102,6 +102,7 @@ export type PathFinderWorkflowReview = {
   comparisonLoading: boolean; comparisonError: string | null; message: string | null;
   reviewed: boolean; applied: boolean; canReview: boolean; canApply: boolean; busy: boolean;
   recordedDrillThroughWalls?: boolean | null;
+  barriers?: PathFinderProposal['barriers'];
   pending: boolean; canRecover: boolean; recoveryMessage: string | null; recoveryError: string | null;
   autoLength?: AutoLengthView | null; autoLengthLoading?: boolean; autoLengthError?: string | null; refreshAutoLength?: () => void;
   review: () => void; apply: () => void; retry: () => void; closePending: () => void;
@@ -777,6 +778,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     comparisonLoading: popupComparisonLoading, comparisonError: popupComparisonError, message: popupMessage,
     reviewed: Boolean(selectedProposal && reviewId), applied: Boolean(selectedProposal && applied),
     recordedDrillThroughWalls: selectedProposal?.routingPreferences?.barrierRouting?.drillThroughWalls ?? null,
+    barriers: selectedProposal?.barriers,
     canReview: Boolean(selectedProposal && canConfirmReview), canApply: Boolean(selectedProposal && canApplyReviewed),
     busy: Boolean(reviewBusy || pf.busy || previewLoading || pendingApply.busy), pending: pendingForCable,
     canRecover: Boolean(pendingForCable && active && !pf.busy && pendingApply.canRetry),
@@ -786,7 +788,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
       if (reviewActions.current.owner === reviewOwner) void reviewActions.current[action]();
     }])) as Pick<PathFinderWorkflowReview, 'review' | 'apply' | 'retry' | 'closePending'>,
   } : null, [selectedCableId, selectedProposal?.id, popupComparison, popupComparisonLoading, popupComparisonError, popupMessage,
-    reviewId, applied, selectedProposal?.routingPreferences?.barrierRouting?.drillThroughWalls, canConfirmReview, canApplyReviewed, pf.busy, previewLoading, pendingApply.busy, pendingForCable,
+    reviewId, applied, selectedProposal?.barriers, selectedProposal?.routingPreferences?.barrierRouting?.drillThroughWalls, canConfirmReview, canApplyReviewed, pf.busy, previewLoading, pendingApply.busy, pendingForCable,
     active, pendingApply.canRetry, pendingApply.message, pendingApply.error, reviewOwner, reviewBusy]);
   useEffect(() => { onWorkflowReviewChange?.(workflowReview); }, [onWorkflowReviewChange, workflowReview]);
   useEffect(() => () => { onWorkflowReviewChange?.(null); }, [onWorkflowReviewChange]);

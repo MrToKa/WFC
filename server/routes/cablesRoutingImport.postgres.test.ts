@@ -341,6 +341,39 @@ describe.skipIf(process.env.WFC_ROUTING_IMPORT_POSTGRES !== '1')(
       expect(await snapshot()).toEqual(before);
     });
 
+    it('persists cable Remarks through authenticated create, edit, history, Excel export and import', async () => {
+      const original = 'Монтажна бележка\n[PathFinder obstacles] Crosses obstacles: #123, #456.';
+      const created = await create({ cableId: 101, cableTypeId: typeId, remarks: original });
+      expect(created.status).toBe(201); expect(created.body.cable.remarks).toBe(original);
+      const id = created.body.cable.id;
+      expect((await pool!.query('SELECT remarks FROM cables WHERE id=$1', [id])).rows[0].remarks).toBe(original);
+      expect((await pool!.query('SELECT remarks FROM cable_versions WHERE cable_id=$1 ORDER BY version_number', [id])).rows.map(row => row.remarks)).toEqual([original]);
+      const updated = `${original}\nПотвърдено.`;
+      expect((await patch(id, { remarks: updated })).body.cable.remarks).toBe(updated);
+      const exported = await fetch(`${baseUrl}/api/projects/${projectId}/cables/export?view=list&columns=cableId,remarks`, { headers: { Authorization: `Bearer ${token}` } });
+      expect(exported.status).toBe(200);
+      const book = XLSX.read(Buffer.from(await exported.arrayBuffer()), { type: 'buffer' });
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets[book.SheetNames[0]]);
+      expect(rows).toContainEqual({ 'Cable Id': 101, Remarks: updated });
+      const imported = 'От импорт\n[PathFinder obstacles] Crosses obstacles: #789.';
+      const response = await upload(workbook(['Cable Id', 'Remarks'], [[101, imported]]));
+      expect(response.status).toBe(200);
+      expect(response.body.cables.find((row: { id: string }) => row.id === id).remarks).toBe(imported);
+      expect((await pool!.query('SELECT remarks FROM cable_versions WHERE cable_id=$1 ORDER BY version_number', [id])).rows.map(row => row.remarks)).toEqual([original, updated, imported]);
+      const revision = (await pool!.query('SELECT cable_write_revision::text AS revision FROM cables WHERE id=$1', [id])).rows[0].revision;
+      expect((await upload(workbook(['Cable Id', 'Remarks'], [[101, imported]]))).body.summary).toMatchObject({ unchanged: 1, updated: 0 });
+      expect((await pool!.query('SELECT cable_write_revision::text AS revision FROM cables WHERE id=$1', [id])).rows[0].revision).toBe(revision);
+    });
+
+    it('removes stale generated crossing notes on a real manual route change, retaining user text in cable and history', async () => {
+      const created = await create({ cableId: 102, cableTypeId: typeId, routing: '/A', remarks: 'User instruction\r\n[PathFinder obstacles] Crosses obstacles: #123.' });
+      expect(created.status).toBe(201);
+      const changed = await patch(created.body.cable.id, { routing: '/B' });
+      expect(changed.status).toBe(200); expect(changed.body.cable).toMatchObject({ routing: '/B', remarks: 'User instruction' });
+      expect((await pool!.query('SELECT routing,remarks FROM cable_versions WHERE cable_id=$1 ORDER BY version_number DESC LIMIT 1', [created.body.cable.id])).rows[0])
+        .toEqual({ routing: '/B', remarks: 'User instruction' });
+    });
+
     it.each([
       { routing: '/CREATED_AUTO', protect: false },
       { routing: '/CREATED_MANUAL', protect: true },

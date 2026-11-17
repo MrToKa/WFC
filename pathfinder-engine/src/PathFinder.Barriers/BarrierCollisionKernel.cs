@@ -139,7 +139,12 @@ public sealed class BarrierCollisionKernel
     public BarrierSegmentResult CheckRouteSegment(BarrierPoint from, BarrierPoint to, BarrierPoint terminalFrom, BarrierPoint terminalTo, CancellationToken token = default)
         => CheckSegmentCore(from, to, terminalFrom, terminalTo, token);
 
-    private BarrierSegmentResult CheckSegmentCore(BarrierPoint from, BarrierPoint to, BarrierPoint? terminalFrom, BarrierPoint? terminalTo, CancellationToken token)
+    /// <summary>Reporting-only enumeration: production routing retains its exact scope.</summary>
+    public BarrierSegmentResult CheckRouteSegmentReporting(BarrierPoint from, BarrierPoint to, BarrierPoint terminalFrom, BarrierPoint terminalTo,
+        Func<string, int, bool> excludedTriangle, Func<string, bool> excludedSolid, CancellationToken token = default)
+        => CheckSegmentCore(from, to, terminalFrom, terminalTo, token, excludedTriangle, excludedSolid);
+
+    private BarrierSegmentResult CheckSegmentCore(BarrierPoint from, BarrierPoint to, BarrierPoint? terminalFrom, BarrierPoint? terminalTo, CancellationToken token, Func<string, int, bool>? excludedTriangle = null, Func<string, bool>? excludedSolid = null)
     {
         token.ThrowIfCancellationRequested(); var budget = new Budget(limits.MaximumQueryWork, limits.MaximumQueryMilliseconds, token);
         var first = new V(from); var last = new V(to);
@@ -161,7 +166,7 @@ public sealed class BarrierCollisionKernel
                 for (var offset = 0; offset < node.Count; offset++)
                 {
                     budget.Spend(); var triangle = triangles[order[node.Start + offset]];
-                    if (!triangle.Bounds.Overlaps(bounds, guard)) continue;
+                    if (excludedTriangle?.Invoke(solids[triangle.Solid].Id, triangle.Local) == true || !triangle.Bounds.Overlaps(bounds, guard)) continue;
                     budget.Spend(8);
                     double scale = Math.Max(Geometry.Longest(triangle), Math.Max((first - triangle.A).Length, (last - triangle.A).Length));
                     double uncertainty = Geometry.ArithmeticGuard(triangle, scale);
@@ -175,7 +180,7 @@ public sealed class BarrierCollisionKernel
                     if (terminal.Contact && !terminal.Allowed)
                     {
                         budget.Checkpoint();
-                        return new(BarrierSegmentStatus.Blocked, solids[triangle.Solid].Id, "The cable centreline touches or crosses the selected solid surface within numeric tolerance.", budget.Work);
+                        return new(BarrierSegmentStatus.Blocked, solids[triangle.Solid].Id, "The cable centreline touches or crosses the selected solid surface within numeric tolerance.", budget.Work, triangle.Local);
                     }
                     if (terminal.FirstBoundary) firstBoundary.Add(triangle.Solid);
                     if (terminal.LastBoundary) lastBoundary.Add(triangle.Solid);
@@ -187,7 +192,7 @@ public sealed class BarrierCollisionKernel
             for (int solidIndex = 0; solidIndex < solids.Length; solidIndex++)
             {
                 var solid = solids[solidIndex];
-                budget.Spend();
+                budget.Spend(); if (excludedSolid?.Invoke(solid.Id) == true) continue;
                 var midpoint = first + (last - first) * .5;
                 foreach (var point in first == last ? new[] { first } : firstBoundary.Contains(solidIndex) || lastBoundary.Contains(solidIndex)
                     ? new[] { first, last, midpoint } : new[] { first, last })

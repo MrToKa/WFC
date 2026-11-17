@@ -66,6 +66,10 @@ export function automaticPairObservedSnapshot(snapshot: Row, state?: AutomaticPa
 /** Default material initialization/synchronization touches its nonengineering
  * flag and timestamp. Keep all other values and receipt/history lineage exact. */
 export function continuesAutomaticSnapshot(previous: Row, before: Row, authorizedAt: string): boolean {
+  // The additive nullable Remarks migration does not constitute a manual edit.
+  // Accept only the forward absent-to-SQL-NULL transition; actual notes still
+  // participate in the exact immutable lineage comparison.
+  if (!Object.hasOwn(previous, 'remarks') && before.remarks === null) previous = { ...previous, remarks: null };
   if (same(previous, before)) return true;
   const old = automaticPairMaterialState(previous), current = automaticPairMaterialState(before);
   return old !== null && current !== null && materialStateContinues(old, current, authorizedAt)

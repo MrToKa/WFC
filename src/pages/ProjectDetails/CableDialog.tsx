@@ -15,6 +15,7 @@ import {
   Field,
   Input,
   Option,
+  Textarea,
 } from '@fluentui/react-components';
 
 import { CABLE_MTO_OPTIONS, type CableType } from '@/api/client';
@@ -29,6 +30,7 @@ export type CableDialogField =
   | 'cableTypeId'
   | 'fromLocation'
   | 'toLocation'
+  | 'remarks'
   | 'routing'
   | 'delivery'
   | 'designLength'
@@ -49,7 +51,7 @@ type CableDialogProps = {
   visibleFields: CableDialogField[];
   onFieldChange: (
     field: keyof CableFormState,
-  ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
+  ) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, data: { value: string }) => void;
   onCableTypeSelect: (event: unknown, data: { optionValue?: string }) => void;
   onMtoSelect: (event: unknown, data: { optionValue?: string }) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -154,6 +156,11 @@ export const CableDialog = ({
               {isFieldVisible('toLocation') ? (
                 <Field label="To location">
                   <Input value={values.toLocation} onChange={onFieldChange('toLocation')} />
+                </Field>
+              ) : null}
+              {isFieldVisible('remarks') ? (
+                <Field label="Remarks" validationState={errors.remarks ? 'error' : undefined} validationMessage={errors.remarks}>
+                  <Textarea value={values.remarks ?? ''} onChange={onFieldChange('remarks')} maxLength={32767} resize="vertical" />
                 </Field>
               ) : null}
               {isFieldVisible('routing') ? (

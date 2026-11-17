@@ -309,6 +309,7 @@ export type CableFormState = {
   fromLocation: string;
   toLocation: string;
   routing: string;
+  remarks?: string;
   initialRouting?: string;
   initialManualRouting?: string;
   initialManualRoutingProtected?: string;
@@ -339,6 +340,7 @@ export const emptyCableForm: CableFormState = {
   fromLocation: '',
   toLocation: '',
   routing: '',
+  remarks: '',
   delivery: '',
   designLength: '',
   installLength: '',
@@ -361,6 +363,7 @@ export const toCableFormState = (cable: Cable): CableFormState => ({
   routing: cable.routingControl
     ? (cable.routingControl.manualRouting ?? '')
     : (cable.routing ?? ''),
+  remarks: cable.remarks ?? '',
   delivery: cable.delivery ?? '',
   designLength: cable.designLength !== null ? String(cable.designLength) : '',
   installLength: cable.installLength != null ? String(cable.installLength) : '',
@@ -480,6 +483,7 @@ export const buildCableInput = (
         ? (values.initialManualRouting ?? values.routing)
         : values.routing,
     ),
+    remarks: toNullableString(values.remarks ?? ''),
     delivery: normalize(values.delivery),
   };
 

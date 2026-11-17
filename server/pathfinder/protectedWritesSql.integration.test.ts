@@ -33,13 +33,15 @@ CREATE TABLE users(id uuid PRIMARY KEY,is_admin boolean NOT NULL,first_name text
 CREATE TABLE viewer_login_bindings(login_id uuid PRIMARY KEY,user_id uuid NOT NULL,expires_at timestamptz NOT NULL,revoked_at timestamptz);
 CREATE TABLE cable_types(id uuid PRIMARY KEY,name text NOT NULL);
 CREATE TABLE cables(id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id),cable_write_revision bigint NOT NULL DEFAULT 0,
- from_location text,to_location text,mto text,routing text,design_length numeric,install_length numeric,revision text,
+ from_location text,to_location text,mto text,routing text,remarks text,design_length numeric,install_length numeric,revision text,
  cable_id text,tag text,cable_type_id uuid NOT NULL REFERENCES cable_types(id),delivery text,pull_date date,connected_from boolean DEFAULT false,
  connected_to boolean DEFAULT false,tested boolean DEFAULT false,updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(project_id,id));
 CREATE TABLE cable_versions(id uuid PRIMARY KEY,cable_id uuid NOT NULL,version_number integer NOT NULL,change_type text,change_source text,
- cable_number text,revision text,mto text,tag text,cable_type_id uuid,cable_type_name text,from_location text,to_location text,routing text,delivery text,
+ cable_number text,revision text,mto text,tag text,cable_type_id uuid,cable_type_name text,from_location text,to_location text,routing text,remarks text,delivery text,
  design_length numeric,install_length numeric,pull_date date,connected_from boolean,connected_to boolean,tested boolean,changed_by uuid,changed_by_snapshot jsonb,
  UNIQUE(cable_id,version_number));
+CREATE TABLE pf_cable_routing_controls(project_id uuid,cable_id uuid,revision bigint,manual_revision bigint,
+ manual_routing text,manual_protected boolean,execution_locked boolean,execution_routing text,PRIMARY KEY(project_id,cable_id));
 CREATE TABLE pf_jobs(id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id),state text NOT NULL,cancel_requested boolean NOT NULL DEFAULT false,
  kind text NOT NULL DEFAULT 'calculate',total integer NOT NULL DEFAULT 1,completed integer NOT NULL DEFAULT 1,attempts integer NOT NULL DEFAULT 1,
  failure text,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(project_id,id));
@@ -55,7 +57,7 @@ CREATE TABLE pf_apply_receipts(id uuid PRIMARY KEY,project_id uuid NOT NULL,acto
 CREATE TABLE pfb7_barrier_state(project_id uuid PRIMARY KEY REFERENCES projects(id),context jsonb NOT NULL);
 `;
 type Row=Record<string,any>;
-async function seed(){
+async function seed(withObstacleReport=false){
   const f=syntheticBarrierWriteInputs(),{dependencies,result,id}=f,projectId=dependencies.projectId,cableId=dependencies.cableId,proposalId=id(30),jobId=id(31);
   const who={userId:id(32),loginId:id(33),loginExpiresAt:Date.parse('2099-01-01T00:00:00Z')};
   await pool.query('INSERT INTO projects VALUES($1)',[projectId]);
@@ -65,6 +67,14 @@ async function seed(){
   await pool.query(`INSERT INTO cables(id,project_id,from_location,to_location,mto,routing,design_length,install_length,revision,cable_id,tag,cable_type_id)
     VALUES($1,$2,$3,$4,$5,'/OLD',99,123.45,'engineering-1','SYNTHETIC-01','Unchanged synthetic tag',$6)`,
     [cableId,projectId,dependencies.cableInputs.fromLocation,dependencies.cableInputs.toLocation,dependencies.cableInputs.mto,dependencies.cableInputs.cableTypeId]);
+  if(withObstacleReport){
+    if(result.schemaVersion!=='pathfinder.model.response.v3')throw new Error('The synthetic obstacle writer fixture requires a barrier response.');
+    await pool.query('UPDATE cables SET remarks=$2 WHERE id=$1',[cableId,'User instruction']);
+    const parent={selectionId:id(80),kind:'wall' as const,objectId:'dbid:123',dbId:123,externalId:null,name:'Synthetic report wall',
+      identityBasis:'version-local-only' as const,inclusion:'own-and-all-descendant-fragments' as const};
+    result.barriers.obstacleReport={status:'complete',crossedParentSelectionIds:[parent.selectionId],blockingParentSelectionIds:[],checkedSegments:1,totalSegments:1,
+      reasonCode:'SYNTHETIC_REPORT_WRITER_TEST',selectedParents:[parent]};
+  }
   const cable=async()=>(await pool.query(`SELECT to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,
     'cable_write_revision',c.cable_write_revision::text) AS value FROM cables c WHERE project_id=$1 AND id=$2`,[projectId,cableId])).rows[0].value as Row;
   dependencies.cableWriteRevision=(await cable()).cable_write_revision;
@@ -137,6 +147,14 @@ describe.runIf(Boolean(fixturePath))('PF-B7 owned real SQL human Review and Appl
     seams.scope.mockRejectedValue(new Error('Old capture unavailable after committed receipt.'));
     expect((await f.apply(input)).duplicate).toBe(true);expect(await f.counts()).toEqual({history:1,receipts:1,reviews:1});
     await expect(f.apply({...input,expectedCableWriteRevision:after.cable_write_revision})).rejects.toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
+  });
+  it('atomically applies generated obstacle Remarks, preserves user text and records the exact history and receipt',async()=>{
+    const f=await seed(true),input=await f.reviewed(),before=await f.cable(),outcome=await f.apply(input),after=await f.cable();
+    const expected='User instruction\n[PathFinder obstacles] Crosses obstacles: #123.';
+    expect(after.remarks).toBe(expected);expect(after.install_length).toBe(before.install_length);
+    expect((await pool.query('SELECT remarks FROM cable_versions WHERE cable_id=$1',[f.cableId])).rows).toEqual([{remarks:expected}]);
+    expect(outcome.receipt.after.remarks).toBe(expected);expect(outcome.receipt.before.remarks).toBe('User instruction');
+    expect((await f.apply(input)).duplicate).toBe(true);expect(await f.counts()).toEqual({history:1,receipts:1,reviews:1});
   });
   it('rolls back a new Review when the final barrier fence changes',async()=>{
     const f=await seed(),before=await f.cable();f.setScopeHook(async(_client,context,ordinal)=>ordinal===2?{...context,storage:null}:context);

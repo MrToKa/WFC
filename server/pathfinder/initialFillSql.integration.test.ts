@@ -50,13 +50,15 @@ CREATE TABLE users(id uuid PRIMARY KEY,is_admin boolean NOT NULL,pf_admin_revisi
 CREATE TABLE viewer_login_bindings(login_id uuid PRIMARY KEY,user_id uuid NOT NULL,expires_at timestamptz NOT NULL,revoked_at timestamptz);
 CREATE TABLE cable_types(id uuid PRIMARY KEY,name text NOT NULL);
 CREATE TABLE cables(id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id),cable_write_revision bigint NOT NULL DEFAULT 7,
- from_location text,to_location text,mto text,routing text,design_length numeric,install_length numeric,revision text,
+ from_location text,to_location text,mto text,routing text,remarks text,design_length numeric,install_length numeric,revision text,
  cable_id text,tag text,cable_type_id uuid NOT NULL REFERENCES cable_types(id),delivery text,pull_date date,connected_from boolean DEFAULT false,
  connected_to boolean DEFAULT false,tested boolean DEFAULT false,updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(project_id,id));
 CREATE TABLE cable_versions(id uuid PRIMARY KEY,cable_id uuid NOT NULL,version_number integer NOT NULL,change_type text,change_source text,
- cable_number text,revision text,mto text,tag text,cable_type_id uuid,cable_type_name text,from_location text,to_location text,routing text,delivery text,
+ cable_number text,revision text,mto text,tag text,cable_type_id uuid,cable_type_name text,from_location text,to_location text,routing text,remarks text,delivery text,
  design_length numeric,install_length numeric,pull_date date,connected_from boolean,connected_to boolean,tested boolean,changed_by uuid,changed_by_snapshot jsonb,
  UNIQUE(cable_id,version_number));
+CREATE TABLE pf_cable_routing_controls(project_id uuid,cable_id uuid,revision bigint,manual_revision bigint,
+ manual_routing text,manual_protected boolean,execution_locked boolean,execution_routing text,PRIMARY KEY(project_id,cable_id));
 CREATE TABLE pf_project_state(project_id uuid PRIMARY KEY REFERENCES projects(id),registry_revision bigint NOT NULL,updated_at timestamptz DEFAULT now());
 CREATE TABLE pf_locations(id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id),name text NOT NULL,revision bigint NOT NULL DEFAULT 1,
  created_by uuid NOT NULL,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now(),UNIQUE(project_id,id));
@@ -214,11 +216,12 @@ describe.runIf(Boolean(fixturePath))('PF-U4 owned actual command/mandate/initial
 
   it('v3 saves one shared binding/impact/finite mandate atomically; exact replay never creates a second one', async () => {
     const before = await counts(), command = await commandFor(), receipt = await commands.save(sample.aggregate.projectId, who, cableIds[0], 'from', command);
-    expect(receipt.locationImpact).toMatchObject({ eligibleCables: 18, excludedMvCables: 1, blockedCategoryCables: 1 }); expect(receipt.initialFillMandate).toMatchObject({ impactId: receipt.locationImpact!.id, mode: 'when-both-empty' });
+    // Current policy treats optional MTO as reporting metadata; only explicit MV is excluded.
+    expect(receipt.locationImpact).toMatchObject({ eligibleCables: 19, excludedMvCables: 1, blockedCategoryCables: 0 }); expect(receipt.initialFillMandate).toMatchObject({ impactId: receipt.locationImpact!.id, mode: 'when-both-empty' });
     expect(await counts()).toMatchObject({ commands: 1, bindings: 1, impacts: 1, mandates: 1, receipts: 0, history: 0, cable_hash: before.cable_hash });
     expect(await commands.save(sample.aggregate.projectId, who, cableIds[0], 'from', command)).toEqual({ ...receipt, duplicate: true }); expect((await counts()).mandates).toBe(1);
     const retained = (await pool.query('SELECT record FROM pf_initial_fill_mandates')).rows[0].record;
-    expect(retained).toMatchObject({ actorId: who.userId, loginId: who.loginId, eligibleCableIds: cableIds.filter((_, at) => at !== 3 && at !== 4) });
+    expect(retained).toMatchObject({ actorId: who.userId, loginId: who.loginId, eligibleCableIds: cableIds.filter((_, at) => at !== 3) });
     expect(Date.parse(retained.authorityExpiresAt)).toBeLessThanOrEqual(Date.parse(retained.createdAt) + 1800000);
   });
   it('legacy v1, calculation-only v2 and explicit v3 null policy never acquire an initial-fill mandate', async () => {

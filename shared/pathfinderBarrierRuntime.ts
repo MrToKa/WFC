@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { obstacleReportSchema } from './pathfinderObstacleReport.js';
 import { BARRIER_COLLISION_VERSION, BARRIER_LIMITS, BARRIER_ROUTING_POLICY, barrierCalculationBindingSchema,
   barrierCanonicalJson, barrierPointSchema, type BarrierCalculationBinding } from './pathfinderBarriers.js';
 import { policyHashSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
@@ -69,6 +70,7 @@ const connectorPlanSchema = z.object({ policyVersion: z.literal(BARRIER_RUNTIME_
 }).strict();
 export const barrierExecutionSchema = z.object({
   schemaVersion: z.literal('wfc.pf.barrier-execution.v1'), context: barrierRuntimeContextSchema,
+  obstacleReport: obstacleReportSchema.optional(),
   proof: barrierCheckProofV2Schema.nullable(), directSecondary: constrainedDirectSecondaryDecisionSchema.nullable(),
   diagnostics: z.object({ status: z.enum(['clear', 'blocked', 'indeterminate', 'search-incomplete', 'bypassed', 'unavailable', 'no-barriers-declared']),
     reasonCode, searchComplete: z.boolean(), candidatesTruncated: z.boolean(), pairAttempts: boundedCount(64), collisionQueries: boundedCount(100000), work,

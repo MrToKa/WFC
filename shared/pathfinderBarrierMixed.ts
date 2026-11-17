@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { obstacleReportSchema } from './pathfinderObstacleReport.js';
 import { BARRIER_LIMITS, barrierBoundsSchema, barrierCanonicalJson, barrierFragmentSourceSchema, barrierMeshBlobSchema,
   barrierModelScopeSchema, barrierPointSchema, barrierSelectedParentSchema } from './pathfinderBarriers.js';
 import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput } from './pathfinderBarrierRuntime.js';
@@ -317,6 +318,7 @@ const connector = z.object({ policyVersion: z.literal(BARRIER_RUNTIME_PROFILE.lo
   isDetour: z.boolean(), searchComplete: z.boolean(), domain: z.object({ minimum: barrierPointSchema, maximum: barrierPointSchema, stepMeters: z.literal(0.25) }).strict().refine(value => value.minimum.every((coordinate, index) => coordinate <= value.maximum[index])),
   edgeChecks: count(16384), queries: count(100000), work }).strict();
 export const mixedBarrierExecutionSchema = z.object({ schemaVersion: z.literal('wfc.pf.barrier-execution.v2'), context: mixedBarrierRuntimeContextSchema,
+  obstacleReport: obstacleReportSchema.optional(),
   proof: mixedBarrierCheckProofSchema.nullable(), directSecondary: mixedBarrierDirectSecondarySchema.nullable(),
   diagnostics: z.object({ status: z.enum(['clear', 'blocked', 'indeterminate', 'search-incomplete', 'bypassed', 'unavailable', 'no-barriers-declared']), reasonCode,
     searchComplete: z.boolean(), candidatesTruncated: z.boolean(), pairAttempts: count(4104), collisionQueries: count(100000), work,

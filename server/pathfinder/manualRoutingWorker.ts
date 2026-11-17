@@ -163,7 +163,7 @@ export function createManualRoutingWorker(pool: Pool, adapters: ManualRoutingAda
         if (mathematicalHash(current.dependencies) !== mathematicalHash(admitted.dependencies) || current.adminRevision !== admitted.adminRevision || current.installationEpoch !== admitted.installationEpoch)
           throw new PathFinderError('MANUAL_ROUTE_INPUTS_CHANGED', 409);
         const designWrite=length===null?null:await writeManualRoutingDesign(client,{projectId:c.projectId,cableId:c.cableId,actorId:c.principal.userId,
-          manualRevision:c.manualRevision,manualRouting:admitted.dependencies.constraint.routeText,lengthMetres:length});
+          manualRevision:c.manualRevision,manualRouting:admitted.dependencies.constraint.routeText,lengthMetres:length,result:response});
         const id = randomUUID(), diagnostics = length === null ? [response.schemaVersion === 'pathfinder.model.response.v3' ? response.barriers.diagnostics.reasonCode : response.status, response.message] : [];
         const record = { schemaVersion: 'pathfinder.manual-route.result.v1', id, projectId: c.projectId, cableId: c.cableId, manualRevision: c.manualRevision,
           generation: c.generation, inputSha256: hash(admitted.dependencies), dependencies: admitted.dependencies, response, lengthMetres: length,
