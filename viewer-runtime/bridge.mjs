@@ -442,7 +442,16 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         || new TextEncoder().encode(bindingsUrl.search).length > 8 * 1024) throw failure('ROUTE_UNAVAILABLE');
       const response = await fetchImpl(bindingsUrl.href,
         { signal, credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error' });
-      if (!response.ok) throw failure([413,414].includes(response.status) ? 'ROUTING_BINDINGS_LIMIT' : httpCode(response.status));
+      if (!response.ok) {
+        let code = [413,414].includes(response.status) ? 'ROUTING_BINDINGS_LIMIT' : httpCode(response.status);
+        if (response.status === 409) {
+          try {
+            const body = await responseJson(response, ROUTING_BINDINGS_LIMITS.bytes);
+            if (['ROUTING_BINDINGS_INVALID', 'MODEL_UNAVAILABLE', 'MODEL_SELECTION_CHANGED'].includes(body?.code)) code = body.code;
+          } catch { /* Keep the status fallback; never forward server text. */ }
+        }
+        throw failure(code);
+      }
       let bindingValue;
       try { bindingValue = await responseJson(response, ROUTING_BINDINGS_LIMITS.cadBytes); }
       catch (cause) { if (cause?.code === 'INVALID_MESSAGE') throw failure('ROUTING_BINDINGS_INVALID'); throw cause; }

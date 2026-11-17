@@ -1064,6 +1064,32 @@ test('mapping identity, revision, shape and response budgets are checked before 
   assert.equal(f.facts.shows.length, 1); assert.equal(f.messages('ERROR').at(-1).payload.code, 'ROUTING_BINDINGS_INVALID'); f.bridge.dispose();
 });
 
+test('a rejected published mapping preserves the loaded model and allows another Show', async () => {
+  let reads = 0;
+  const f = fixture({ routingBindings: () => ++reads === 1
+    ? Response.json({ code: 'ROUTING_BINDINGS_INVALID', message: 'private mapping details' }, { status: 409 })
+    : routingBindings() });
+  await f.loaded();
+  f.send('SHOW_ROUTE', { rawRouting: '/BC903/BC027-2/BC027-1/BC025/BC026/SECONDARY', source: 'cable', cableId: uuid(12) }); await turn();
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'ROUTING_BINDINGS_INVALID');
+  assert.equal(f.states.at(-1).phase, 'loaded');
+  assert.equal(f.facts.finishes, 0); assert.equal(f.facts.shows.length, 0);
+  assert.equal(JSON.stringify(f.sent).includes('private mapping details'), false);
+  f.send('SHOW_ROUTE', { rawRouting: '/BC903', source: 'cable', cableId: uuid(12) }); await turn();
+  assert.equal(f.messages('ROUTE_RESULT').length, 1); assert.equal(f.facts.shows.length, 1);
+  assert.equal(f.facts.finishes, 0); f.bridge.dispose();
+});
+
+test('structured model mapping refusals retain their terminal identity', async () => {
+  for (const code of ['MODEL_SELECTION_CHANGED', 'MODEL_UNAVAILABLE']) {
+    const f = fixture({ routingBindings: () => Response.json({ code, message: 'private model details' }, { status: 409 }) });
+    await f.loaded(); f.send('SHOW_ROUTE', { rawRouting: '/BC903', source: 'manual', cableId: null }); await turn();
+    assert.equal(f.messages('ERROR').at(-1).payload.code, code);
+    assert.equal(f.states.at(-1).phase, 'error'); assert.equal(f.facts.shows.length, 0);
+    assert.equal(JSON.stringify(f.sent).includes('private model details'), false); f.bridge.dispose();
+  }
+});
+
 test('protected mapping refusals preserve sanitized session and permission errors without falling back to names', async () => {
   for (const [status, code] of [[401, 'SESSION_EXPIRED'], [403, 'ACCESS_REVOKED'], [409, 'MODEL_SELECTION_CHANGED'], [410, 'SESSION_EXPIRED'], [503, 'MODEL_UNAVAILABLE']]) {
     const f = fixture({ routingBindings: () => new Response('private mapping details', { status }) }); await f.loaded();
