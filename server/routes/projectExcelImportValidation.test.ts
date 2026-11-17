@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs';
 import type { Request, Response, Router } from 'express';
 import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { executionRoutingReasons } from '../../shared/cableRoutingControl.js';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -28,6 +29,21 @@ type Layer = {
   route?: { path: string; methods: Record<string, boolean>; stack: { handle: Handler }[] };
 };
 const id = '00000000-0000-4000-8000-000000000001';
+const existingCableId = '00000000-0000-4000-8000-000000000003';
+const loginId = '00000000-0000-4000-8000-000000000002';
+let loginExpiresAt: number;
+type ControlRow = { revision: string; manual_revision: string; manual_routing: string | null;
+  manual_protected: boolean; execution_locked: boolean; execution_routing: string | null };
+const routingControls = new Map<string, ControlRow>();
+const seedControl = (cableId: string, routing: string | null, executed = false) => {
+  const control = { revision: '1', manual_revision: '1', manual_routing: routing,
+    manual_protected: Boolean(routing), execution_locked: executed, execution_routing: executed ? routing : null };
+  routingControls.set(cableId, control);
+  return control;
+};
+const summary = (counts: { inserted: number; updated: number; unchanged: number; skipped: number }) => ({
+  ...counts, blockedRouting: [], routesProtected: 0, routesCleared: 0, executionLocksAdded: 0,
+});
 const cableHeaders = [
   'Cable Id',
   'Type',
@@ -65,7 +81,10 @@ const importBuffer = async (router: Router, buffer: Buffer, path = '/import') =>
   response.status.mockReturnValue(response);
   const request = {
     params: { projectId: id, cableTypeId: id },
+    query: {},
     userId: id,
+    loginId,
+    loginExpiresAt,
     file: {
       buffer,
       originalname: 'import.xlsx',
@@ -99,9 +118,34 @@ const assertInvalid = (
 
 beforeEach(() => {
   vi.resetAllMocks();
+  loginExpiresAt = Date.now() + 60_000;
+  routingControls.clear();
   mocks.ensureProjectExists.mockResolvedValue({ id });
   mocks.connect.mockResolvedValue(client);
   client.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+    if (sql.includes('/* cable-routing:views */')) return { rows: (values![1] as string[]).flatMap(cableId => {
+      const control = routingControls.get(cableId);
+      return control ? [{ ...control, cable_id: cableId, current_manual_revision: control.manual_revision, cable_write_revision: '1' }] : [];
+    }) };
+    if (sql.includes('/* cable-routing:control */')) return { rows: routingControls.has(values![1] as string)
+      ? [routingControls.get(values![1] as string)] : [] };
+    // Match the insertion trigger, including an imported route and first
+    // execution facts, before the real repository initializes import policy.
+    if (sql.includes('INSERT INTO cables (')) seedControl(values![0] as string, values![9] as string | null,
+      executionRoutingReasons({ installLength: values![12] as number | null, pullDate: values![13] as string | null,
+        connectedFrom: values![14] as string | null, connectedTo: values![15] as string | null,
+        tested: values![16] as string | null }).length > 0);
+    if (sql.includes('/* cable-routing:update */')) {
+      const previous = routingControls.get(values![1] as string)!;
+      const control: ControlRow = { revision: String(Number(previous.revision) + 1),
+        manual_revision: String(Number(previous.manual_revision) + (values![7] ? 1 : 0)),
+        manual_routing: values![3] as string | null, manual_protected: values![4] as boolean,
+        execution_locked: values![5] as boolean, execution_routing: values![6] as string | null };
+      routingControls.set(values![1] as string, control);
+      return { rows: [control], rowCount: 1 };
+    }
+    if (sql.includes('SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings'))
+      return { rows: [{ user_id: id, expires_at: new Date(loginExpiresAt), revoked_at: null }] };
     if (sql.includes('INSERT INTO trays')) return {
       rows: [{
         id: values![0], project_id: values![1], name: values![2], tray_type: values![3],
@@ -123,7 +167,10 @@ beforeEach(() => {
     }
     return { rows: [], rowCount: 0 };
   });
-  mocks.query.mockImplementation(async (sql: string) => {
+  mocks.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+    if (sql.includes('/* auto-length:read */')) return {
+      rows: (values![1] as string[]).map(cableId => ({ cable_id: cableId, source: null, latest_ordinal: null })),
+    };
     if (sql.includes('FROM cable_types') && sql.includes('LIMIT 1'))
       return { rows: [{ id, name: 'Cable type' }], rowCount: 1 };
     if (sql.includes('FROM material_cable_installation_materials'))
@@ -219,18 +266,18 @@ describe('project cable Excel validation', () => {
     expect(insert?.[1][5]).toBe('001');
     expect(insert?.[1][11]).toBe(10);
     expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ summary: { inserted: 1, updated: 0, unchanged: 0, skipped: 0 } }),
+      expect.objectContaining({ summary: summary({ inserted: 1, updated: 0, unchanged: 0, skipped: 0 }) }),
     );
   });
 });
 
 describe('partial cable Excel imports', () => {
   const existingCable = {
-    id: 'existing-cable', project_id: id, cable_id: 42,
+    id: existingCableId, project_id: id, cable_id: 42,
     revision: 'A', mto: 'LV', tag: 'C42', cable_type_id: id, type_name: 'Cable type',
     from_location: 'Panel A', to_location: 'Panel B', routing: 'TRAY-01', delivery: 'Delivered',
-    design_length: '25', install_length: '30', pull_date: '2026-01-02',
-    connected_from: '2026-01-03', connected_to: '2026-01-04', tested: '2026-01-05',
+    design_length: '25', install_length: '30' as string | null, pull_date: '2026-01-02' as string | null,
+    connected_from: '2026-01-03' as string | null, connected_to: '2026-01-04' as string | null, tested: '2026-01-05' as string | null,
     type_purpose: 'Power', type_diameter_mm: '12', type_weight_kg_per_m: '0.5',
     created_at: '2026-01-01', updated_at: '2026-01-01',
   };
@@ -245,7 +292,11 @@ describe('partial cable Excel imports', () => {
         expect(sql).toContain('FOR UPDATE OF c');
         expect(values?.[0]).toBe(id);
         const ids = values?.[1] as number[];
-        return { rows: existingCables.filter((cable) => ids.includes(cable.cable_id)) };
+        const rows = existingCables.filter((cable) => ids.includes(cable.cable_id));
+        for (const cable of rows) if (!routingControls.has(cable.id)) seedControl(cable.id, cable.routing,
+          executionRoutingReasons({ installLength: Number(cable.install_length), pullDate: cable.pull_date,
+            connectedFrom: cable.connected_from, connectedTo: cable.connected_to, tested: cable.tested }).length > 0);
+        return { rows };
       }
       return defaultQuery(sql, values);
     });
@@ -275,7 +326,7 @@ describe('partial cable Excel imports', () => {
     const response = await importSheet(cablesRouter, data);
     expect(response.status).not.toHaveBeenCalled();
     expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
-      summary: { ...counts, skipped: 0 },
+      summary: summary({ ...counts, skipped: 0 }),
     }));
     const inserts = client.query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO cables ('));
     expect(inserts).toHaveLength(counts.inserted);
@@ -290,16 +341,49 @@ describe('partial cable Excel imports', () => {
   it.each([
     ['Revision', 'revision', 'B'], ['Rev.', 'revision', 'B'], ['MTO', 'mto', 'MV'],
     ['Tag', 'tag', 'New tag'], ['From Location', 'from_location', 'Panel C'],
-    ['To Location', 'to_location', 'Panel D'], ['Routing', 'routing', 'TRAY-02'],
+    ['To Location', 'to_location', 'Panel D'],
     ['Delivery', 'delivery', 'Pending'], ['Design Length [m]', 'design_length', 35],
   ])('updates only the supplied %s field', async (header, column, value) => {
     const response = await importSheet(cablesRouter, [['ID', header], [42, value]]);
     expect(response.status).not.toHaveBeenCalled();
     expect(cableUpdates()).toHaveLength(1);
     expect(cableUpdates()[0][0]).toContain(`${column} = $1`);
-    expect(cableUpdates()[0][1]).toEqual([value, 'existing-cable']);
+    expect(cableUpdates()[0][1]).toEqual([value, existingCableId]);
     expect(versions()).toHaveLength(1);
-    expect(response.json.mock.calls[0][0].summary).toEqual({ inserted: 0, updated: 1, unchanged: 0, skipped: 0 });
+    expect(response.json.mock.calls[0][0].summary).toEqual(summary({ inserted: 0, updated: 1, unchanged: 0, skipped: 0 }));
+  });
+
+  it('updates Routing on an unexecuted cable and queues its manual route check', async () => {
+    existingCables = [{ ...existingCable, install_length: null, pull_date: null,
+      connected_from: null, connected_to: null, tested: null }];
+    const response = await importSheet(cablesRouter, [['ID', 'Routing'], [42, 'TRAY-02']]);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(cableUpdates()).toHaveLength(1);
+    expect(cableUpdates()[0][1]).toEqual(['TRAY-02', existingCableId]);
+    expect(versions()).toHaveLength(1);
+    expect(response.json.mock.calls[0][0].summary).toEqual(summary({ inserted: 0, updated: 1, unchanged: 0, skipped: 0 }));
+    expect(client.query.mock.calls.some(([sql]) => sql.includes('/* cable-routing:manual-enqueue */'))).toBe(true);
+  });
+
+  it('reports blocked Routing on an executed cable while importing its unrelated Tag', async () => {
+    const response = await importSheet(cablesRouter, [['ID', 'Routing', 'Tag'], [42, 'TRAY-02', 'Renamed']]);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(cableUpdates()).toHaveLength(1);
+    expect(cableUpdates()[0][1]).toEqual(['Renamed', existingCableId]);
+    expect(response.json.mock.calls[0][0].summary).toEqual({
+      ...summary({ inserted: 0, updated: 1, unchanged: 0, skipped: 0 }),
+      blockedRouting: [{ cableId: 42, tag: 'C42', reasons: ['INSTALL_LENGTH_RECORDED', 'PULL_DATE_RECORDED',
+        'CONNECTED_FROM_RECORDED', 'CONNECTED_TO_RECORDED', 'TESTED_DATE_RECORDED'] }],
+    });
+    expect(routingControls.get(existingCableId)?.execution_routing).toBe('TRAY-01');
+  });
+
+  it('preserves a blank Routing cell without an explicit protection option', async () => {
+    const response = await importSheet(cablesRouter, [['ID', 'Routing'], [42, '']]);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json.mock.calls[0][0].summary).toEqual(summary({ inserted: 0, updated: 0, unchanged: 1, skipped: 0 }));
+    assertNoWrites();
+    expect(routingControls.get(existingCableId)?.execution_routing).toBe('TRAY-01');
   });
 
   it.each([
@@ -309,7 +393,7 @@ describe('partial cable Excel imports', () => {
   ])('recognizes equivalent %s values as unchanged', async (header, value) => {
     const response = await importSheet(cablesRouter, [['ID', header], [42, value]]);
     expect(response.status).not.toHaveBeenCalled();
-    expect(response.json.mock.calls[0][0].summary).toEqual({ inserted: 0, updated: 0, unchanged: 1, skipped: 0 });
+    expect(response.json.mock.calls[0][0].summary).toEqual(summary({ inserted: 0, updated: 0, unchanged: 1, skipped: 0 }));
     assertNoWrites();
   });
 
@@ -317,15 +401,15 @@ describe('partial cable Excel imports', () => {
     const response = await importSheet(cablesRouter, [[header, 'Tag'], [42, 'Renamed']]);
     expect(response.status).not.toHaveBeenCalled();
     expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
-      summary: { inserted: 0, updated: 1, unchanged: 0, skipped: 0 },
+      summary: summary({ inserted: 0, updated: 1, unchanged: 0, skipped: 0 }),
     }));
     expect(cableUpdates()).toHaveLength(1);
     expect(cableUpdates()[0][0]).toMatch(/SET\s+tag = \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$2/);
-    expect(cableUpdates()[0][1]).toEqual(['Renamed', 'existing-cable']);
+    expect(cableUpdates()[0][1]).toEqual(['Renamed', existingCableId]);
     expect(client.query.mock.calls.some(([sql]) => /(?:INSERT INTO|UPDATE|DELETE FROM) cable_materials/.test(sql))).toBe(false);
     expect(versions()).toHaveLength(1);
     expect(versions()[0][1].slice(1, 22)).toEqual([
-      'existing-cable', 1, 'update', 'import', 42, 'A', 'LV', 'Renamed', id, 'Cable type',
+      existingCableId, 1, 'update', 'import', 42, 'A', 'LV', 'Renamed', id, 'Cable type',
       'Panel A', 'Panel B', 'TRAY-01', 'Delivered', 25, 30, '2026-01-02', '2026-01-03',
       '2026-01-04', '2026-01-05', id,
     ]);
@@ -335,13 +419,13 @@ describe('partial cable Excel imports', () => {
   it.each([
     ['Tag', 'tag'], ['Design Length [m]', 'design_length'], ['MTO', 'mto'],
     ['Revision', 'revision'], ['From Location', 'from_location'], ['To Location', 'to_location'],
-    ['Routing', 'routing'], ['Delivery', 'delivery'],
+    ['Delivery', 'delivery'],
   ])('clears a blank %s while preserving omitted fields', async (header, column) => {
     const response = await importSheet(cablesRouter, [['ID', header], [42, '']]);
     expect(response.status).not.toHaveBeenCalled();
     expect(cableUpdates()).toHaveLength(1);
     expect(cableUpdates()[0][0]).toContain(`${column} = $1`);
-    expect(cableUpdates()[0][1]).toEqual([null, 'existing-cable']);
+    expect(cableUpdates()[0][1]).toEqual([null, existingCableId]);
   });
 
   it.each([
@@ -351,7 +435,7 @@ describe('partial cable Excel imports', () => {
     const response = await importSheet(cablesRouter, data);
     expect(response.status).not.toHaveBeenCalled();
     expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
-      summary: { inserted: 0, updated: 0, unchanged: 1, skipped: 0 },
+      summary: summary({ inserted: 0, updated: 0, unchanged: 1, skipped: 0 }),
     }));
     assertNoWrites();
   });
@@ -385,7 +469,7 @@ describe('partial cable Excel imports', () => {
     ['Design Length [m]', true], ['Design Length [m]', 'Infinity'],
     ['MTO', 'Unknown'], ['Type', 'Unknown'], ['Revision', 'R'.repeat(501)],
     ['Tag', 'T'.repeat(501)], ['From Location', 'F'.repeat(501)],
-    ['To Location', 'T'.repeat(501)], ['Routing', 'R'.repeat(501)], ['Delivery', 'D'.repeat(501)],
+    ['To Location', 'T'.repeat(501)], ['Routing', 'R'.repeat(16385)], ['Delivery', 'D'.repeat(501)],
   ])('rejects invalid %s without saving an earlier valid change', async (header, invalid) => {
     const data = header === 'ID'
       ? [['ID', 'Tag'], [42, 'Changed'], [invalid, 'Another']]
@@ -396,7 +480,7 @@ describe('partial cable Excel imports', () => {
   it('counts only populated rows, ignoring blank lines and trailing whitespace', async () => {
     const response = await importSheet(cablesRouter, [['ID', 'Tag'], [], [42, 'C42'], [], [' ', ' ']]);
     expect(response.status).not.toHaveBeenCalled();
-    expect(response.json.mock.calls[0][0].summary).toEqual({ inserted: 0, updated: 0, unchanged: 1, skipped: 0 });
+    expect(response.json.mock.calls[0][0].summary).toEqual(summary({ inserted: 0, updated: 0, unchanged: 1, skipped: 0 }));
     assertNoWrites();
   });
 
@@ -408,12 +492,12 @@ describe('partial cable Excel imports', () => {
   it('treats a repeated import as unchanged after the first update', async () => {
     const data = [['ID', 'Tag'], [42, 'Changed']];
     const first = await importSheet(cablesRouter, data);
-    expect(first.json.mock.calls[0][0].summary).toEqual({ inserted: 0, updated: 1, unchanged: 0, skipped: 0 });
+    expect(first.json.mock.calls[0][0].summary).toEqual(summary({ inserted: 0, updated: 1, unchanged: 0, skipped: 0 }));
     existingCables = [{ ...existingCable, tag: 'Changed' }];
     client.query.mockClear();
     const second = await importSheet(cablesRouter, data);
     expect(second.status).not.toHaveBeenCalled();
-    expect(second.json.mock.calls[0][0].summary).toEqual({ inserted: 0, updated: 0, unchanged: 1, skipped: 0 });
+    expect(second.json.mock.calls[0][0].summary).toEqual(summary({ inserted: 0, updated: 0, unchanged: 1, skipped: 0 }));
     assertNoWrites();
   });
 
@@ -442,7 +526,7 @@ describe('partial cable Excel imports', () => {
     expect(response.status).toHaveBeenCalledWith(500);
     expect(response.json).toHaveBeenCalledWith({
       error: 'Cables imported but failed to refresh list',
-      summary: { inserted: 0, updated: 1, unchanged: 1, skipped: 0 },
+      summary: summary({ inserted: 0, updated: 1, unchanged: 1, skipped: 0 }),
     });
     expect(client.query).toHaveBeenCalledWith('COMMIT');
     expect(client.query).not.toHaveBeenCalledWith('ROLLBACK');
@@ -452,7 +536,7 @@ describe('partial cable Excel imports', () => {
     const response = await importSheet(cablesRouter, [['ID', 'Type'], [99, 'Cable type']]);
     expect(response.status).not.toHaveBeenCalled();
     expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
-      summary: { inserted: 1, updated: 0, unchanged: 0, skipped: 0 },
+      summary: summary({ inserted: 1, updated: 0, unchanged: 0, skipped: 0 }),
     }));
     const insert = client.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO cables ('));
     expect(insert?.[1].slice(2, 12)).toEqual([99, null, null, null, id, null, null, null, null, null]);
@@ -460,7 +544,9 @@ describe('partial cable Excel imports', () => {
 
   it('round-trips a filtered ID/Tag export and updates only the included cable and field', async () => {
     mocks.ensureProjectExists.mockResolvedValue({ id, project_number: 'P1' });
-    mocks.query.mockResolvedValue({ rows: [existingCable] });
+    // Only the export's cable SELECT returns this row. Auxiliary routing-control
+    // and automatic-length reads use the default empty results.
+    mocks.query.mockResolvedValueOnce({ rows: [existingCable] });
     const exportHandler = (cablesRouter as unknown as { stack: Layer[] }).stack.find(
       (layer) => layer.route?.path === '/export' && layer.route.methods.get,
     )!.route!.stack.at(-1)!.handle;
@@ -482,7 +568,7 @@ describe('partial cable Excel imports', () => {
     const result = await importBuffer(cablesRouter, Buffer.from(await workbook.xlsx.writeBuffer()));
     expect(result.status).not.toHaveBeenCalled();
     expect(cableUpdates()).toHaveLength(1);
-    expect(cableUpdates()[0][1]).toEqual(['Edited in Excel', 'existing-cable']);
+    expect(cableUpdates()[0][1]).toEqual(['Edited in Excel', existingCableId]);
     const selected = client.query.mock.calls.find(([sql]) => sql.includes('c.cable_id = ANY'));
     expect(selected?.[1]).toEqual([id, [42]]);
   });
