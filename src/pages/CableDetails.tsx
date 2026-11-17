@@ -1437,6 +1437,16 @@ export const CableDetails = () => {
               <Body1>{formatNumeric(details.cable.designLength)}</Body1>
             </div>
           </div>
+          <div className={styles.field}>
+            <Caption1 className={styles.label}>Remarks</Caption1>
+            <Body1 style={{ whiteSpace: 'pre-wrap' }}>
+              <CableObstacleRemarks
+                projectId={details.cable.projectId}
+                cableId={details.cable.id}
+                remarks={details.cable.remarks}
+              />
+            </Body1>
+          </div>
         </Card>
 
         <Card appearance="outline" className={styles.card}>
@@ -1481,10 +1491,6 @@ export const CableDetails = () => {
         </div>
         <Caption1 className={styles.label}>Used route</Caption1>
         <CableRoutingValue cable={details.cable} />
-        <div className={styles.field}>
-          <Caption1 className={styles.label}>Remarks</Caption1>
-          <Body1 style={{ whiteSpace: 'pre-wrap' }}><CableObstacleRemarks projectId={details.cable.projectId} cableId={details.cable.id} remarks={details.cable.remarks} /></Body1>
-        </div>
         <div className={styles.field}>
           <Caption1 className={styles.label}>Manual route</Caption1>
           <Body1 className={styles.routingText}>
