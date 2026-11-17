@@ -147,6 +147,20 @@ describe('ordinary Viewer published routing bindings', () => {
   it('retains audited disjoint multiple roots as one logical route', async () => {
     const f = fixture({ roots: 3 }); expect((await readViewerRoutingBindings(f.client, f.input)).bindings).toEqual([{ routeName: '/A105', rootObjectIds: ['dbid:2', 'dbid:4', 'dbid:6'] }]);
   });
+  it('retains valid tray ownership when endpoint registry revisions advance before preparation', async () => {
+    const f = fixture();
+    f.plan.locationRegistryRevision = '2756'; f.aggregate.sourceLocationRegistryRevision = '2756'; f.aggregate.locationRegistryRevision = '2757';
+    f.decisions[0].scope = { ...f.decisions[0].scope, locationRegistryRevision: '2750', resolutionRevision: '0' }; f.rehash();
+    expect((await readViewerRoutingBindings(f.client, f.input)).bindings).toEqual([{ routeName: '/A105', rootObjectIds: ['dbid:2'] }]);
+  });
+  it.each(['modelVersionId', 'contentFingerprint', 'selectionRevision', 'catalogRevision', 'routingContentSha256', 'routingPolicyRevision', 'routingPolicySha256'] as const)(
+    'rejects a tray ownership decision with changed %s despite an older endpoint registry revision', async key => {
+      const f = fixture();
+      f.plan.locationRegistryRevision = '2756'; f.aggregate.sourceLocationRegistryRevision = '2756'; f.aggregate.locationRegistryRevision = '2757'; f.rehash();
+      f.decisions[0].scope = { ...f.decisions[0].scope, locationRegistryRevision: '2750',
+        [key]: key === 'modelVersionId' ? id(99) : key.endsWith('Sha256') || key === 'contentFingerprint' ? '0'.repeat(64) : '99' };
+      await expect(readViewerRoutingBindings(f.client, f.input)).rejects.toMatchObject({ code: 'ROUTING_BINDINGS_INVALID' });
+    });
   it('returns an explicit empty projection when there is no current publication', async () => {
     const f = fixture(); f.row.current_aggregate_id = null;
     expect(await readViewerRoutingBindings(f.client, f.input)).toMatchObject({ aggregateId: null, bindings: [], selectionRevision: '1' }); expect(f.query).toHaveBeenCalledTimes(1);

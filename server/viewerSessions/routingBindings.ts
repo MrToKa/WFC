@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import { preparationAggregateSchema, preparationPlanSchema, preparationPlanHashInput, preparationResolutionSchema, PREPARATION_LIMITS } from '../../shared/pathfinderPreparation.js';
+import { preparationAggregateSchema, preparationPlanSchema, preparationPlanHashInput, preparationResolutionMatchesScope, preparationResolutionSchema, PREPARATION_LIMITS } from '../../shared/pathfinderPreparation.js';
 import { canonicalPurposeJson, catalogRoutingHashInput, normalizeCatalogKey, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { normalizeRoutingKey } from '../../viewer-runtime/protocol.mjs';
 import { projectRoutingCatalogRows } from '../pathfinder/catalog.js';
@@ -187,8 +187,7 @@ export async function readViewerRoutingBindings(client: PoolClient, input: { pro
       const decision = parsed.data, tray = explicit.find(item => item.ownershipDecisionId === decision.id);
       if (!tray || ids.has(decision.id) || decision.mode !== 'roots' || decision.projectTrayId !== tray.projectTrayId || !same(decision.rootObjectIds, tray.orderedRootObjectIds)) return corrupt();
       ids.add(decision.id);
-      for (const key of ['modelVersionId', 'contentFingerprint', 'selectionRevision', 'catalogRevision', 'routingContentSha256', 'routingPolicyRevision', 'routingPolicySha256', 'locationRegistryRevision'] as const)
-        if (decision.scope[key] !== plan[key]) return corrupt();
+      if (!preparationResolutionMatchesScope(decision.scope, plan)) return corrupt();
     }
   }
   // Take only state latches, after reading row data, in the publisher's order.
