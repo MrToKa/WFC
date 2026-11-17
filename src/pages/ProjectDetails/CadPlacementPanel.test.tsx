@@ -755,6 +755,7 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Begin new tray' }));
     const list = screen.getByRole('list', { name: 'Placed tray components' });
+    expect(screen.getByRole('button', { name: 'New section' })).toBeEnabled();
     expect(within(list).getByRole('button', { name: /FREE-PART/ })).toBeInTheDocument();
     expect(within(list).queryByText(/A-PART|B-PART/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(`Include component ${instanceId}`)).not.toBeInTheDocument();
@@ -767,6 +768,16 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
       expect(screen.getByLabelText(`Include component ${fixture.newId}`)).toBeChecked(),
     );
     expect(screen.getByLabelText(`Include component ${fixture.freeId}`)).not.toBeChecked();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New section' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'New section' }));
+    expect(screen.queryByRole('button', { name: 'Update saved position' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Catalogue component')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('Catalogue component'), {
+      target: { value: catalogId },
+    });
+    expect(screen.getByRole('button', { name: 'Save new component' })).toBeEnabled();
+    expect(screen.getByLabelText('x')).toHaveValue(0);
+    expect(screen.getByLabelText(`Include component ${fixture.newId}`)).toBeChecked();
     fireEvent.change(screen.getByLabelText('Route name'), { target: { value: 'NEW-ROUTE' } });
     fireEvent.change(screen.getByLabelText('Route purpose'), {
       target: { value: 'Low voltage cable tray' },

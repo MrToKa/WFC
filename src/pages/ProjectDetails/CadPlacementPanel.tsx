@@ -872,15 +872,19 @@ export function CadPlacementPanel({
         before delivery.
       </Caption1>
       {loading ? <Spinner size="tiny" label="Reading proposal…" /> : null}
-      {selectedRoute ? (
+      {selectedRoute || newTrayMode ? (
         <div>
-          <Caption1 block>Selected route: {selectedRoute.name}</Caption1>
+          {selectedRoute ? <Caption1 block>Selected route: {selectedRoute.name}</Caption1> : null}
           <Button
             disabled={
-              busy || routeBusy || externalBusy || routeDirty || selectedRoute.status !== 'draft'
+              busy ||
+              routeBusy ||
+              externalBusy ||
+              routeDirty ||
+              Boolean(selectedRoute && selectedRoute.status !== 'draft')
             }
             onClick={() => {
-              setNewSection(true);
+              setNewSection(Boolean(selectedRoute));
               setEditingId('');
               setSelectedId('');
               setLengthMm('6000');
