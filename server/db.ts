@@ -973,6 +973,11 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE material_trays
+    ADD COLUMN IF NOT EXISTS order_number TEXT;
+  `);
+
+  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS material_trays_type_lower_idx
       ON material_trays (LOWER(tray_type));
   `);

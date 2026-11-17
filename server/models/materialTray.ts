@@ -2,6 +2,7 @@ export type MaterialTrayRow = {
   id: string;
   tray_type: string;
   manufacturer: string | null;
+  order_number?: string | null;
   height_mm: string | number | null;
   rung_height_mm: string | number | null;
   width_mm: string | number | null;
@@ -36,6 +37,7 @@ export type PublicMaterialTray = {
   id: string;
   type: string;
   manufacturer: string | null;
+  orderNumber: string | null;
   heightMm: number | null;
   rungHeightMm: number | null;
   widthMm: number | null;
@@ -58,6 +60,7 @@ export const mapMaterialTrayRow = (row: MaterialTrayRow): PublicMaterialTray => 
   id: row.id,
   type: row.tray_type,
   manufacturer: row.manufacturer ?? null,
+  orderNumber: row.order_number ?? null,
   heightMm: toNumberOrNull(row.height_mm),
   rungHeightMm: toNumberOrNull(row.rung_height_mm),
   widthMm: toNumberOrNull(row.width_mm),

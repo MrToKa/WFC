@@ -74,6 +74,7 @@ const catalogItems = Array.from({ length: 24 }, (_, index) => {
     id: `material-${number}`,
     name,
     type: name,
+    orderNumber: null,
     purpose: number % 2 === 0 ? 'Control' : 'Power',
     manufacturer: number % 2 === 0 ? 'ACME' : 'Other manufacturer',
     material: 'Steel',

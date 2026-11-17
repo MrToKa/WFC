@@ -6,6 +6,7 @@ import { TraysTable } from './TraysTable';
 
 const tray: MaterialTray = {
   id: 'tray-1',
+  orderNumber: '00123-KL',
   type: 'KL-300',
   manufacturer: 'Niedax',
   heightMm: 60,
@@ -29,7 +30,7 @@ function show(status?: 'ready' | 'loading' | 'error') {
   render(
     <FluentProvider theme={webLightTheme}>
       <TraysTable
-        trays={[tray, { ...tray, id: 'tray-2', type: 'KL-600' }]}
+        trays={[tray, { ...tray, id: 'tray-2', type: 'KL-600', orderNumber: null }]}
         isLoading={false}
         error={null}
         isAdmin={false}
@@ -67,6 +68,12 @@ function show(status?: 'ready' | 'loading' | 'error') {
 }
 
 describe('tray STEP status', () => {
+  it('shows order numbers as text and a placeholder for missing numbers', () => {
+    show();
+    expect(screen.getByRole('columnheader', { name: 'Order number' })).toBeInTheDocument();
+    expect(within(screen.getByText('KL-300').closest('tr')!).getByText('00123-KL')).toBeInTheDocument();
+    expect(within(screen.getByText('KL-600').closest('tr')!).getByText('-')).toBeInTheDocument();
+  });
   it('identifies attached and missing STEP files by tray ID and opens the matching row', () => {
     const onStep = show('ready');
     const row = screen.getByText('KL-300').closest('tr')!;
