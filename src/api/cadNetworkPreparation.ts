@@ -27,11 +27,17 @@ export async function prepareAssignedCadNetwork(projectId: string, token: string
       headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
-    const value: unknown = await response.json();
+    let value: unknown;
+    try { value = await response.json(); }
+    catch {
+      throw new PreparationApiError('CAD_NETWORK_RESPONSE_UNREADABLE', response.status,
+        'The server returned an unreadable response while preparing the CAD network' + (response.status ? ' (HTTP ' + response.status + ').' : '.'),
+        'unknown');
+    }
     if (!response.ok) {
       const error = z.object({ code: z.string(), message: z.string() }).safeParse(value);
       throw new PreparationApiError(error.success ? error.data.code : 'CAD_NETWORK_FAILED', response.status,
-        error.success ? error.data.message : 'The saved CAD routes could not be added to the current network.',
+        error.success ? error.data.message : `The saved CAD routes could not be added to the current network (HTTP ${response.status}).`,
         response.status >= 400 && response.status < 500 ? 'refused' : 'unknown');
     }
     return value;

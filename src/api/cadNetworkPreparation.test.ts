@@ -31,6 +31,12 @@ describe('assigned CAD network preparation', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response({ designs: [design] })).mockResolvedValueOnce(response({ code: 'CAD_ROUTE_BASE_CHANGED', message: 'The current network changed.' }, 409)));
     await expect(prepareAssignedCadNetwork(projectId, 'login', modelId, artifactId, snapshot)).rejects.toMatchObject({ code: 'CAD_ROUTE_BASE_CHANGED', outcome: 'refused', message: 'The current network changed.' });
   });
+  it('retains an unreadable gateway failure as an uncertain command with its HTTP status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response({ designs: [design] }))
+      .mockResolvedValueOnce(new Response('<html>Bad gateway</html>', { status: 502 })));
+    await expect(prepareAssignedCadNetwork(projectId, 'login', modelId, artifactId, snapshot))
+      .rejects.toMatchObject({ code: 'CAD_NETWORK_RESPONSE_UNREADABLE', status: 502, outcome: 'unknown', message: expect.stringContaining('HTTP 502') });
+  });
   it('honors cancellation before starting any request', async () => {
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     const abort = new AbortController(); abort.abort();

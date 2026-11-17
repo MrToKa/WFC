@@ -196,6 +196,12 @@ describe('saved CAD network preparation with verified composite and CAS publicat
   it('refuses excluded published geometry instead of silently retaining its stale overlay', async () => {
     rules.set('Control',[]);await expect(prepare()).rejects.toMatchObject({code:'CAD_ROUTE_PURPOSE_EXCLUDED'});expect(mocks.execute).not.toHaveBeenCalled();
   });
+  it('prepares actual PostgreSQL-shaped rows without hashing their Date metadata', async () => {
+    for (const group of groups) Object.assign(group, { created_at:new Date('2026-11-17T00:00:00Z'),updated_at:new Date('2026-11-17T00:00:00Z') });
+    for (const rows of instances.values()) for (const row of rows) Object.assign(row, {created_at:new Date('2026-11-17T00:00:00Z'),updated_at:new Date('2026-11-17T00:00:00Z')});
+    await expect(prepare()).resolves.toMatchObject({publishedCount:1,revalidatedCount:1});
+    expect(history).toHaveLength(2);
+  });
   it('retains a previously withdrawn proof in history when a linked saved route is added again', async () => {
     groups[1].publication={withdrawnAt:'2026-11-17T00:00:00Z',baseArtifactId:id(555)};
     await prepare();expect(JSON.parse(String(history[1][6]))).toEqual({withdrawnAt:'2026-11-17T00:00:00Z',baseArtifactId:id(555)});

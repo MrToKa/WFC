@@ -737,15 +737,22 @@ describe('automatic tray workflow', () => {
     }
     expect(f.capture).not.toHaveBeenCalled(); expect(api.createPreparation).not.toHaveBeenCalled();
   });
-  it('replays the exact uncertain CAD batch without recapturing its already saved base', async () => {
+  it.each(['transport', 'server'] as const)('replays the exact uncertain CAD batch without recapturing its already saved base (%s)', async failure => {
     const f = automaticSetup();
     f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
       reason: 'Saved model tray selection', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.store.context.scope } }];
     f.store.context.trays.push({ ...f.context.trays[0], projectTrayId: crypto.randomUUID(), geometrySource: 'saved-cad-route', inNetwork: false });
-    vi.mocked(prepareAssignedCadNetwork).mockRejectedValue(new TypeError('CAD batch response was lost'));
+    vi.mocked(prepareAssignedCadNetwork).mockRejectedValue(failure === 'server'
+      ? new api.PreparationApiError('CAD_NETWORK_FAILED', 500, 'CAD network server failure (HTTP 500).', 'unknown')
+      : new TypeError('CAD batch response was lost'));
     const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
     await act(() => result.current.generateNetwork());
     expect(result.current.unknown).toBe(true); expect(result.current.networkReady).toBe(false);
+    if (failure === 'server') {
+      expect(result.current.error).toContain('CAD network preparation:');
+      expect(result.current.error).toContain('HTTP 500');
+      expect(result.current.error).toContain('CAD_NETWORK_FAILED');
+    }
     const original = vi.mocked(prepareAssignedCadNetwork).mock.calls[0];
     expect(vi.mocked(prepareAssignedCadNetwork).mock.calls).toHaveLength(3);
     vi.mocked(prepareAssignedCadNetwork).mockImplementation(async (_project, _token, _model, artifactId, snapshotSha256) => {

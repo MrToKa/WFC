@@ -35,6 +35,7 @@ function fixture(options = {}) {
     setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
     showLocationPoint: options.showLocationPoint ?? (async (point, _signal, beforeCommit) => { await beforeCommit(); facts.locationPoint = point; }),
     showLocation: options.showLocation ?? (async (sdkObjectId, _signal, beforeCommit) => { await beforeCommit(); facts.location = sdkObjectId; }),
+    showCadTray: options.showCadTray ?? (async (ids, _signal, beforeCommit) => { await beforeCommit(); facts.cadTray = [...ids]; }),
     showTray: options.showTray ?? (async (sdkObjectIds, _signal, beforeCommit) => { await beforeCommit(); facts.tray = [...sdkObjectIds]; }),
     startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
     readModelCapture: options.readModelCapture ?? (async ({ captureId, index }) => ({ captureId, index, done: true, eventJson: JSON.stringify({ type: 'complete', captureId }) })),
@@ -1301,4 +1302,16 @@ test('source tray Properties assignments replace and clear only the authorized l
   assert.equal(f.messages('ERROR').at(-1).payload.code, 'TRAY_ASSIGNMENTS_UNAVAILABLE');
   assert.equal(f.states.at(-1).phase, 'loaded');
   f.bridge.dispose();
+});
+
+test('CAD tray Ghost request keeps all component UUIDs and rechecks authority at commit', async () => {
+ const f=fixture(); await f.loaded();
+ const command=f.send('SHOW_TRAY',{cadComponentIds:[uuid(201),uuid(202)]}); await turn();
+ assert.deepEqual(f.facts.cadTray,[uuid(201),uuid(202)]);
+ assert.deepEqual(f.messages('TRAY_SHOWN').at(-1),{...command,type:'TRAY_SHOWN'});
+ f.bridge.dispose();
+ let calls=0,displayed=0;const wait=deferred();
+ const rejected=fixture({fetchImpl:async url=>url.endsWith('/pathfinder-authorization')?++calls===1?Response.json({authorized:true,loadId:uuid(4)}):new Response(null,{status:403}):descriptorResponse(),showCadTray:async (_ids,_signal,beforeCommit)=>{await wait.promise;await beforeCommit();displayed++;}});
+ await rejected.loaded();rejected.send('SHOW_TRAY',{cadComponentIds:[uuid(201)]});await turn();wait.resolve();await turn();
+ assert.equal(displayed,0);assert.equal(rejected.messages('ERROR').at(-1).payload.code,'ACCESS_REVOKED');rejected.bridge.dispose();
 });

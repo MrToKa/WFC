@@ -1,7 +1,7 @@
 import { validateCadProperties, type CadSectionMetadata, type CadSectionRoute } from '../../viewer-runtime/cad-properties.mjs';
 import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
-import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isCanonicalPoint, validateEnvelope, validateTrayAssignments, type ViewerTrayAssignment, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
+import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isUuid, isCanonicalPoint, validateEnvelope, validateTrayAssignments, type ViewerTrayAssignment, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateBarrierFrameObservation, barrierFrameObservationHashInput, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
 import { validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl,
@@ -395,7 +395,7 @@ export class ViewerController {
       || JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds))) {
       pending.reject?.(new Error('Location acknowledgement mismatch')); return;
     }
-    if (message.type === 'TRAY_SHOWN' && JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds)) {
+    if (message.type === 'TRAY_SHOWN' && JSON.stringify(message.payload) !== JSON.stringify(pending.envelope.payload)) {
       pending.reject?.(new Error('Tray acknowledgement mismatch')); return;
     }
     pending.resolve?.({ type: message.type, payload: message.payload, requestId: message.requestId, identity });
@@ -817,6 +817,26 @@ export class ViewerController {
     routeGeneration = this.routeGeneration;
     this.trayDisplayGeneration = routeGeneration;
     await this.sendAsync('SHOW_TRAY', { sdkObjectIds: ids }, 'TRAY_SHOWN');
+    current();
+  }
+
+  async showCadTray(componentIds: string[]): Promise<void> {
+    if (!Array.isArray(componentIds) || !componentIds.length || componentIds.length > 200 || new Set(componentIds).size !== componentIds.length || !componentIds.every(isUuid)) throw new Error('Invalid CAD tray.');
+    const ids = [...componentIds];
+    const { instanceId, modelVersionId, loadId, selectionRevision, generation } = this;
+    let routeGeneration = this.routeGeneration;
+    const current = () => {
+      if (this.disposed || !this.loaded || !modelVersionId || !loadId || this.instanceId !== instanceId || this.modelVersionId !== modelVersionId
+        || this.loadId !== loadId || this.selectionRevision !== selectionRevision || this.generation !== generation || this.routeGeneration !== routeGeneration)
+        throw new DOMException('Tray display cancelled.', 'AbortError');
+    };
+    current();
+    if (!await this.checkSelection()) throw new Error('Model is not ready');
+    current();
+    this.resetRouteRequests();
+    routeGeneration = this.routeGeneration;
+    this.trayDisplayGeneration = routeGeneration;
+    await this.sendAsync('SHOW_TRAY', { cadComponentIds: ids }, 'TRAY_SHOWN');
     current();
   }
 
