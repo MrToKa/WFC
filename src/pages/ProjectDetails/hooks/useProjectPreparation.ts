@@ -379,7 +379,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             unknown: true,
             error:
               'The command outcome is unknown. Retry the same command before making further changes.'
-                + (error instanceof GeometryTraceApiError ? ` (${error.code})` : ''),
+                + (error instanceof GeometryTraceApiError ? ` (${error.code})` : error instanceof PreparationApiError
+                  ? ` ${pending.current?.kind === 'cad-network' ? 'CAD network preparation: ' : ''}${error.message} (${error.code})` : ''),
           }));
         else {
           let refreshedRefusal = false;

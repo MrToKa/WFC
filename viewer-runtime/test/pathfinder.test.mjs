@@ -949,3 +949,23 @@ test('complete capture envelopes keep escaped non-ASCII text below 64KiB without
   assert.equal(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { captureId: uuid(6), index: 1, done: false, eventJson: 'x'.repeat(24577) })), null);
   assert.equal(validateEnvelope(envelope('READ_MODEL_CAPTURE', { captureId: uuid(6), index: 3000 })), null);
 });
+
+ test('CAD tray ghosting hides all source foreground and Clear restores the exact visibility and fade baseline', () => {
+  const f = fixture();
+  f.model.visibilityManager.states = [[2, false]];
+  f.controller.showCadTray();
+  assert.equal(f.model.visibilityManager.defaultVisible, false);
+  assert.equal(f.viewer.impl.showGhosting, true);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.025);
+  assert.equal(f.meshes.length, 0);
+  f.controller.clear({ preserveSelection: true });
+  assert.equal(f.model.visibilityManager.defaultVisible, true);
+  assert.deepEqual(f.model.visibilityManager.states, [[2, false]]);
+  assert.equal(f.viewer.impl.showGhosting, false);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15);
+ });
+ test('CAD tray protocol is bounded, exclusive, and acknowledges every component', () => {
+  assert.ok(validateEnvelope(envelope('SHOW_TRAY',{cadComponentIds:[uuid(10),uuid(11)]}),'parent-to-frame'));
+  assert.ok(validateEnvelope(envelope('TRAY_SHOWN',{cadComponentIds:[uuid(10),uuid(11)]}),'frame-to-parent'));
+  for(const payload of [{cadComponentIds:[]},{cadComponentIds:[uuid(10),uuid(10)]},{cadComponentIds:['bad']},{cadComponentIds:[uuid(10)],sdkObjectIds:[1]}]) assert.equal(validateEnvelope(envelope('SHOW_TRAY',payload),'parent-to-frame'),null);
+ });

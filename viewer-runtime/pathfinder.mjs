@@ -200,6 +200,17 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       throw error;
     }
   }
+  function showCadTray() {
+    active();
+    const visibility = model.visibilityManager;
+    if (typeof visibility?.setAllVisibility !== 'function' || typeof visibility?.getDefaultVisibility !== 'function' || typeof visibility?.getVisibility !== 'function' || typeof visibility?.setVisibility !== 'function' || typeof viewer.setGhosting !== 'function' || typeof viewer.impl?.toggleGhosting !== 'function') throw fail('SDK_UNSUPPORTED');
+    clear({ preserveSelection: true });
+    try {
+      captureGhost(); visibility.setAllVisibility(false);
+      viewer.setGhosting(true); captureGhost(); viewer.impl.toggleGhosting(true);
+      viewer.impl.invalidate(true, true, true);
+    } catch (error) { try { clear({ preserveSelection: true }); } catch (cleanup) { throw restoreFailure(cleanup); } throw error; }
+  }
   function showPath({ points, objectIds }) {
     active();
     const coordinates = modelCoordinates(model);
@@ -633,5 +644,5 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       signal?.addEventListener('abort', abort, { once: true }); operationSignal?.addEventListener('abort', abort, { once: true });
     });
   }
-  return { showPath, showTray, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
+  return { showPath, showTray, showCadTray, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
 }

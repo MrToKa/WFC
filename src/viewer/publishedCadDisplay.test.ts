@@ -25,7 +25,7 @@ function fixture() {
     routes: [route()], instances: [instance(20)],
   };
   const viewer = {
-    focusCadComponent: vi.fn().mockResolvedValue(undefined),
+    showCadTray: vi.fn().mockResolvedValue(undefined),
     setCadComponentVisibility: vi.fn().mockResolvedValue(undefined),
     showCadComponent: vi.fn().mockResolvedValue(undefined),
     removeCadComponent: vi.fn().mockResolvedValue(undefined),
@@ -58,8 +58,8 @@ describe('published CAD geometry in Path Finder', () => {
     expect(f.viewer.showCadComponent.mock.calls.map(call => call[0])).toEqual([id(20), id(21)]);
     expect(await f.display.showTray(id(11), id(10))).toBe(true);
     expect(f.viewer.showCadComponent.mock.calls.map(call => call[0])).toEqual([id(20), id(21)]);
-    expect(f.viewer.setCadComponentVisibility).toHaveBeenCalledWith(id(21), true);
-    expect(f.viewer.focusCadComponent).toHaveBeenCalledWith(id(20));
+    expect(f.viewer.setCadComponentVisibility).not.toHaveBeenCalled();
+    expect(f.viewer.showCadTray).toHaveBeenCalledWith([id(20), id(21)]);
     expect(await f.display.hideTray()).toBe(true);
     expect(f.viewer.removeCadComponent).not.toHaveBeenCalled();
     f.display.dispose();
@@ -78,7 +78,7 @@ describe('published CAD geometry in Path Finder', () => {
     f.fetcher.mockImplementation((url, init) => String(url).endsWith('/mesh')
       ? Promise.resolve(new Response('', { status: 503 })) : normal(url, init));
     expect(await f.display.showTray(id(11))).toBe(false);
-    expect(f.viewer.focusCadComponent).not.toHaveBeenCalled();
+    expect(f.viewer.showCadTray).not.toHaveBeenCalled();
     f.display.dispose();
   });
   it('rejects showing cached geometry after a failed route refresh', async () => {
@@ -86,7 +86,7 @@ describe('published CAD geometry in Path Finder', () => {
     await f.display.refresh();
     f.fetcher.mockImplementationOnce(async () => new Response('', { status: 503 }));
     expect(await f.display.showTray(id(11))).toBe(false);
-    expect(f.viewer.focusCadComponent).not.toHaveBeenCalled();
+    expect(f.viewer.showCadTray).not.toHaveBeenCalled();
     f.display.dispose();
   });
   it('shows a healthy tray even when another saved route has a failed mesh', async () => {
@@ -97,7 +97,7 @@ describe('published CAD geometry in Path Finder', () => {
     f.fetcher.mockImplementation((url, init) => String(url).endsWith(`/catalog/${id(121)}/mesh`)
       ? Promise.resolve(new Response('', { status: 503 })) : normal(url, init));
     expect(await f.display.showTray(id(11))).toBe(true);
-    expect(f.viewer.focusCadComponent).toHaveBeenCalledWith(id(20));
+    expect(f.viewer.showCadTray).toHaveBeenCalledWith([id(20)]);
     expect(f.onError).toHaveBeenCalled();
     f.display.dispose();
   });
@@ -114,7 +114,7 @@ describe('published CAD geometry in Path Finder', () => {
     gate.resolve(Response.json({ mesh: 'saved' }));
     expect(await shown).toBe(false);
     expect(await hidden).toBe(true);
-    expect(f.viewer.focusCadComponent).not.toHaveBeenCalled();
+    expect(f.viewer.showCadTray).not.toHaveBeenCalled();
     f.display.dispose();
   });
   it('cancels a Show waiting for an automatic refresh when Hide supersedes it', async () => {
@@ -127,7 +127,7 @@ describe('published CAD geometry in Path Finder', () => {
     await automatic;
     expect(await shown).toBe(false);
     expect(await hidden).toBe(true);
-    expect(f.viewer.focusCadComponent).not.toHaveBeenCalled();
+    expect(f.viewer.showCadTray).not.toHaveBeenCalled();
     f.display.dispose();
   });
   it('keeps the newest Show when both await an automatic refresh', async () => {
@@ -142,7 +142,7 @@ describe('published CAD geometry in Path Finder', () => {
     await automatic;
     expect(await oldShow).toBe(false);
     expect(await newShow).toBe(true);
-    expect(f.viewer.focusCadComponent).toHaveBeenCalledExactlyOnceWith(id(21));
+    expect(f.viewer.showCadTray).toHaveBeenCalledExactlyOnceWith([id(21)]);
     f.display.dispose();
   });
   it('keeps failed draft preview cleanup retryable', async () => {

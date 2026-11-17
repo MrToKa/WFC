@@ -11,7 +11,7 @@ type Instance = {
   metadata?: CadSectionMetadata; route?: CadSectionRoute;
 };
 type Options = {
-  viewer: Pick<ViewerController, 'showCadComponent' | 'removeCadComponent' | 'setCadComponentColor' | 'setCadComponentProperties' | 'setCadComponentVisibility' | 'focusCadComponent'>;
+  viewer: Pick<ViewerController, 'showCadComponent' | 'removeCadComponent' | 'setCadComponentColor' | 'setCadComponentProperties' | 'setCadComponentVisibility' | 'showCadTray'>;
   projectId: string; token: string; modelVersionId: string;
   isCurrent: () => boolean; onError: (error: unknown) => void;
 };
@@ -119,12 +119,8 @@ export function createPublishedCadDisplay({ viewer, projectId, token, modelVersi
       if (!synchronized || !current() || preview !== request || !route?.instanceIds.length
         || route.instanceIds.some(id => !displayed.get(id))) return false;
       try {
-        for (const id of route.instanceIds) {
-          if (!current() || preview !== request) return false;
-          await viewer.setCadComponentVisibility(id, true);
-        }
         if (!current() || preview !== request) return false;
-        await viewer.focusCadComponent(route.instanceIds[0]);
+        await viewer.showCadTray([...route.instanceIds]);
         return current() && preview === request;
       } catch (error) { if (current()) onError(error); return false; }
     },

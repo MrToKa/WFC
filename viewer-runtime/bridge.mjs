@@ -325,15 +325,13 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         if (!live()) return;
         if (!emit(command, 'TRAY_ASSIGNMENTS_UPDATED', {})) throw failure('INVALID_MESSAGE');
       } else if (command.type === 'SHOW_TRAY') {
-        await handle.showTray(command.payload.sdkObjectIds, signal, async () => {
+        const beforeCommit = async () => {
           await requirePathFinder(command, signal);
           if (!live()) throw failure('INVALID_STATE');
-          // The tray peek replaces route appearance. Retire stale route and
-          // transparency commands before the current, authorized peek commits.
-          // The adapter restores the old appearance while retaining the model
-          // selection needed by the adjacent tray-assignment action.
           stopRoute(command.requestId, false);
-        });
+        };
+        if (command.payload.cadComponentIds) await handle.showCadTray(command.payload.cadComponentIds, signal, beforeCommit);
+        else await handle.showTray(command.payload.sdkObjectIds, signal, beforeCommit);
         if (!live()) return;
         if (!emit(command, 'TRAY_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');
       } else if (command.type === 'READ_OBJECT_GUID') {

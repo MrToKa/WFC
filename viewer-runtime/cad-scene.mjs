@@ -26,6 +26,8 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   let dynamicModel = null;
   const registry = new Map();
   const colors = new Map();
+  const materials = new Map();
+  let peekIds = null, peekVisibility = new Map();
   const properties = new Map();
   const positions = new Map();
   let propertyPanel;
@@ -144,6 +146,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     const instanceId = instances.add(geometry, material, matrix(transform));
     if (instanceId < 0) throw new Error('The Viewer rejected CAD geometry.');
     registry.set(componentId, instanceId);
+    materials.set(componentId, material);
     if (savedColor != null) colors.set(componentId, savedColor);
     positions.set(componentId, { ...transform.positionMm });
     if (savedProperties)
@@ -151,6 +154,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     tree.upsert(componentId, instanceId, properties.get(componentId));
     if (savedHidden) setVisibility(componentId, false);
     if (routeFilter !== null) applyRouteVisibility(componentId);
+    applyPeek(componentId);
     restoreOwnedSelection(selection);
     viewer.refresh(true);
   }
@@ -208,6 +212,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     const selection = clearOwnedSelection();
     dynamicModel.getInstances().remove(id);
     registry.delete(componentId);
+    materials.delete(componentId);
     colors.delete(componentId);
     properties.delete(componentId);
     positions.delete(componentId);
@@ -229,6 +234,8 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     if (dynamicModel.getInstances().setMaterial(id, material) === false)
       throw new Error('The Viewer rejected the CAD material.');
     colors.set(componentId, color);
+    materials.set(componentId, material);
+    applyPeek(componentId);
     viewer.refresh(true);
   }
 
@@ -277,6 +284,30 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     if (failure) throw failure;
   }
 
+  function validateTray(ids) {
+    if (!Array.isArray(ids) || !ids.length || ids.length > 200 || new Set(ids).size !== ids.length || ids.some(id => !registry.has(id))) throw new Error('Unknown CAD tray.');
+  }
+  function applyPeek(id) {
+    const material = materials.get(id); if (!material) return;
+    const faded = peekIds !== null && !peekIds.has(id);
+    Object.assign(material, { opacity: faded ? 0.025 : 1, transparent: faded, depthWrite: !faded, needsUpdate: true });
+  }
+  function setTrayPeek(ids) {
+    if (ids !== null) validateTray(ids);
+    tree?.flush();
+    if (ids !== null && peekIds === null) {
+      peekVisibility = new Map([...registry.keys()].map(id => [id, !dynamicModel.getObjectTree().isNodeHidden(tree.objectId(id))]));
+    }
+    peekIds = ids === null ? null : new Set(ids);
+    for (const id of registry.keys()) {
+      applyPeek(id);
+      if (peekIds?.has(id)) setVisibility(id, true);
+      else if (ids === null && peekVisibility.has(id)) setVisibility(id, peekVisibility.get(id));
+    }
+    if (ids === null) peekVisibility.clear();
+    viewer.refresh(true);
+  }
+  function focusTray(ids) { validateTray(ids); tree.flush(); viewer.fitToView(ids.map(id => tree.objectId(id)), dynamicModel); }
   function focus(componentId) {
     const id = registry.get(componentId);
     if (disposed || id === undefined || !dynamicModel) throw new Error('Unknown CAD instance.');
@@ -339,6 +370,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     update,
     remove,
     focus,
+    validateTray, setTrayPeek, focusTray,
     setColor,
     setVisibility,
     setRouteVisibility,
@@ -347,6 +379,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     dispose() {
       disposed = true;
       registry.clear();
+      materials.clear(); peekVisibility.clear(); peekIds = null;
       sourceAssignments.clear();
       colors.clear();
       properties.clear();

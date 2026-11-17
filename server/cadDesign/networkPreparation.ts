@@ -17,6 +17,7 @@ import { cadOverlayPayloadSchema } from '../../shared/pathfinderCadOverlay.js';
 import { canonicalPurposeJson, normalizeCatalogKey } from '../../shared/pathfinderPurposePolicy.js';
 import { groupInputs, resolveCadRouteMaterial, routePort, PublicationError } from './routePublication.js';
 import { cadTrayProjection, compatibleCadTrayExport } from './routeTrayExports.js';
+import type { PublicationInstance } from './routePublication.js';
 import type { TrayRow } from '../models/tray.js';
 
 const uuid = z.string().uuid();
@@ -27,6 +28,16 @@ export const cadNetworkPreparationInputSchema = z.object({
 type Input = z.infer<typeof cadNetworkPreparationInputSchema>;
 const digest = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 const refuse = (code: string, message: string): never => { throw new PathFinderError(code, 409, message); };
+
+// PostgreSQL row timestamps are Date objects and are not computational source facts.
+// Hash only the geometry/material fields consumed by CAD preparation.
+const sourceInstance = (row: PublicationInstance) => ({
+  id:row.id,catalogItemId:row.catalog_item_id,assetId:row.material_asset_id,revision:row.revision,
+  partNumber:row.part_number,materialTrayId:row.material_tray_id ?? null,materialTrayType:row.material_tray_type ?? null,
+  widthMm:row.material_width_mm ?? null,heightMm:row.material_height_mm ?? null,originalFilename:row.original_filename,
+  sourceSha256:row.source_sha256,componentKind:row.component_kind,lengthMm:row.cut_length_mm,
+  positionMm:[row.x_mm,row.y_mm,row.z_mm],rotation:[row.qx,row.qy,row.qz,row.qw],
+});
 
 async function freeze(client: PoolClient, projectId: string, designId: string, input: Input) {
   const model = (await client.query<{model_version_id:string;selection_revision:string;content_fingerprint:string}>(
@@ -115,7 +126,7 @@ async function freeze(client: PoolClient, projectId: string, designId: string, i
       ports:chain.endpoints.map(endpoint => routePort(chain.instances.get(endpoint.instanceId)!,endpoint.portName))};
     const overlay = cadOverlayPayloadSchema.parse({schemaVersion:'wfc.pf.cad-overlay-payload.v3',projectId,
       modelVersionId:model.model_version_id,baseSnapshotSha256:base.snapshot_sha256,segments:[segment]});
-    const sourceSha256 = digest({identity:{id:group.id,name:group.name,tag:group.tag,purpose:group.purpose},instances,
+    const sourceSha256 = digest({identity:{id:group.id,name:group.name,tag:group.tag,purpose:group.purpose},instances:instances.map(sourceInstance),
       chain:{points:chain.points,endpoints:chain.endpoints,lengthMetres:chain.lengthMetres},transitions,material,
       tray:cadTrayProjection(tray),exportSourceSha256:exported?.sourceSha256 ?? null});
     const previous = group.publication as {baseArtifactId?:string;overlay?:unknown;networkPreparationSourceSha256?:string} | null;
@@ -127,7 +138,8 @@ async function freeze(client: PoolClient, projectId: string, designId: string, i
   const overlay = routes.length ? encodeCadOverlay({schemaVersion:'wfc.pf.cad-overlay-payload.v3',projectId,
     modelVersionId:model.model_version_id,baseSnapshotSha256:base.snapshot_sha256,segments:routes.flatMap(route => route.overlay.segments)}) : null;
   const fingerprint = digest({model,aggregate,trace:trace.data,prepared,current,
-    routes:routes.map(({group,sourceSha256,traySnapshot,overlay}) => ({group,sourceSha256,traySnapshot,overlay}))});
+    routes:routes.map(({group,sourceSha256,traySnapshot,overlay}) => ({group:{id:group.id,name:group.name,tag:group.tag,purpose:group.purpose,status:group.status,
+      revision:group.revision,projectTrayId:group.project_tray_id,publication:group.publication},sourceSha256,traySnapshot,overlay}))});
   return {base,model,aggregate,trace:trace.data,routes,overlay,fingerprint,duplicate:routes.every(route => route.unchanged)};
 }
 

@@ -727,3 +727,19 @@ test('source group assignment is inherited by members, replaced, cleared and sco
   scene.dispose();
   assert.throws(() => scene.setSourceTrayAssignments([]), /disposed/);
 });
+
+test('CAD tray peek keeps every member solid, ghosts other CAD, fits the whole route and restores hidden state', () => {
+ const f=fixture(), scene=createCadSceneController(f.viewer,{window:f.window,sourceModel:f.sourceModel});
+ for(const id of ['a','b','other']) scene.add(id,f.mesh,f.transform);
+ scene.setVisibility('a',false);
+ const model=f.viewer.shown[0], rows=[...model.instances.records.values()];
+ scene.setTrayPeek(['a','b']); scene.focusTray(['a','b']);
+ assert.equal(rows[0].material.opacity,1);assert.equal(rows[1].material.opacity,1);
+ assert.equal(rows[2].material.opacity,0.025);assert.equal(rows[2].material.transparent,true);
+ assert.equal(f.viewer.focused.at(-1).ids.length,2);
+ scene.add('late',f.mesh,f.transform);
+ assert.equal([...model.instances.records.values()].at(-1).material.opacity,0.025);
+ scene.setTrayPeek(null);
+ assert.ok([...model.instances.records.values()].every(row=>row.material.opacity===1));
+ assert.equal(model.getObjectTree().isNodeHidden(f.viewer.focused.at(-1).ids[0]),true);
+});

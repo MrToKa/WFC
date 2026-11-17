@@ -94,6 +94,19 @@ describe('PathFinder protected Viewer capabilities', () => {
     return { ...s, identity };
   }
 
+  it('shows every CAD tray member through the protected Ghost lifecycle and rejects mismatched acknowledgement', async () => {
+    const s = await loaded(), ids = [generateId(), generateId()];
+    s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_TRAY') s.message('TRAY_SHOWN', {cadComponentIds: ids}, value.requestId, s.identity);
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+    });
+    await s.c.showCadTray(ids);
+    expect(s.send.mock.calls.find(call => call[0].type === 'SHOW_TRAY')![0].payload).toEqual({cadComponentIds:ids});
+    await s.c.hideTray();
+    expect(s.send.mock.calls.some(call => call[0].type === 'CLEAR_ROUTE')).toBe(true);
+    s.send.mockImplementation(value => { if(value.type === 'SHOW_TRAY') s.message('TRAY_SHOWN',{cadComponentIds:[ids[1],ids[0]]},value.requestId,s.identity); });
+    await expect(s.c.showCadTray(ids)).rejects.toThrow('Tray acknowledgement mismatch');
+  });
   it('serializes source tray snapshots and coalesces queued updates to the newest assignment', async () => {
     const s = await loaded();
     const first = s.c.setTrayAssignments([{ name: 'A', objectIds: [23] }]);
