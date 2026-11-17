@@ -334,6 +334,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         cadFocus: componentId => ensureCadScene().focus(componentId),
         cadVisibility: (componentId, visible) => ensureCadScene().setVisibility(componentId, visible),
         cadColor: (componentId, color) => ensureCadScene().setColor(componentId, color),
+        cadRoute: (componentId, routeName) => ensureCadScene().setRoute(componentId, routeName),
         async cadProperties(componentId, metadata, route) {
           if (!viewer.getExtension('Autodesk.PropertiesManager')) await viewer.loadExtension('Autodesk.PropertiesManager');
           ensureCadScene().setProperties(componentId, metadata, route);

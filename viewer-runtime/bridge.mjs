@@ -516,6 +516,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
           await handle.cadProperties(componentId, command.payload.metadata, command.payload.route);
           if (!handle || phase !== 'loaded' || !identityMatches(command)) throw failure('MODEL_SELECTION_CHANGED');
           phaseResult = 'properties'; break;
+        case 'CAD_ROUTE':
+          handle.cadRoute(componentId, command.payload.routeName);
+          phaseResult = 'route'; break;
         case 'CAD_COLOR':
           handle.cadColor(componentId, command.payload.color);
           phaseResult = 'colored'; break;
@@ -557,7 +560,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       case 'READ_BARRIER_MULTIPART_FRAME': case 'START_BARRIER_MULTIPART': case 'STATUS_BARRIER_MULTIPART': case 'CANCEL_BARRIER_MULTIPART': case 'RECONCILE_BARRIER_MULTIPART':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
-      case 'CAD_BEGIN': case 'CAD_APPEND': case 'CAD_COMMIT': case 'CAD_TRANSFORM': case 'CAD_REMOVE': case 'CAD_FOCUS': case 'CAD_COLOR': case 'CAD_PROPERTIES': case 'CAD_VISIBILITY':
+      case 'CAD_BEGIN': case 'CAD_APPEND': case 'CAD_COMMIT': case 'CAD_TRANSFORM': case 'CAD_REMOVE': case 'CAD_FOCUS': case 'CAD_COLOR': case 'CAD_ROUTE': case 'CAD_PROPERTIES': case 'CAD_VISIBILITY':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         cadCommand(command); break;
       case 'INIT':

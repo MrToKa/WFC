@@ -31,6 +31,7 @@ function fixture() {
     removeCadComponent: vi.fn().mockResolvedValue(undefined),
     setCadComponentColor: vi.fn().mockResolvedValue(undefined),
     setCadComponentProperties: vi.fn().mockResolvedValue(undefined),
+    setCadComponentRoute: vi.fn().mockResolvedValue(undefined),
   };
   const onError = vi.fn();
   const fetcher = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
@@ -50,6 +51,45 @@ function fixture() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('published CAD geometry in Path Finder', () => {
+  it.each(['metadata', 'route', 'both'])('binds route membership when optional %s is missing', async missing => {
+    const f = fixture();
+    if (missing !== 'route') Reflect.deleteProperty(f.state.instances[0], 'metadata');
+    if (missing !== 'metadata') Reflect.deleteProperty(f.state.instances[0], 'route');
+    await f.display.refresh();
+    expect(f.viewer.setCadComponentProperties).not.toHaveBeenCalled();
+    expect(f.viewer.setCadComponentRoute).toHaveBeenCalledExactlyOnceWith(id(20), 'BC901');
+    expect(f.onError).not.toHaveBeenCalled();
+    await f.display.refresh();
+    expect(f.viewer.showCadComponent).toHaveBeenCalledOnce();
+    expect(f.viewer.setCadComponentRoute).toHaveBeenCalledOnce();
+    f.display.dispose();
+  });
+  it('binds current group membership before applying optional route properties', async () => {
+    const f = fixture();
+    f.state.instances[0].route.name = 'OLD';
+    await f.display.refresh();
+    expect(f.viewer.setCadComponentRoute).toHaveBeenCalledExactlyOnceWith(id(20), 'BC901');
+    expect(f.viewer.setCadComponentRoute.mock.invocationCallOrder[0]).toBeLessThan(f.viewer.setCadComponentProperties.mock.invocationCallOrder[0]);
+    f.display.dispose();
+  });
+  it('binds membership even when optional property presentation fails', async () => {
+    const f = fixture();
+    f.viewer.setCadComponentProperties.mockRejectedValueOnce(new Error('Invalid optional properties'));
+    await f.display.refresh();
+    expect(f.viewer.setCadComponentRoute).toHaveBeenCalledExactlyOnceWith(id(20), 'BC901');
+    expect(f.onError).toHaveBeenCalledOnce();
+    f.display.dispose();
+  });
+  it('retries route binding failures instead of caching an unclassified component', async () => {
+    const f = fixture();
+    f.viewer.setCadComponentRoute.mockRejectedValueOnce(new Error('Temporary binding failure'));
+    await f.display.refresh();
+    expect(f.onError).toHaveBeenCalledOnce();
+    await f.display.refresh();
+    expect(f.viewer.setCadComponentRoute).toHaveBeenCalledTimes(2);
+    expect(f.viewer.removeCadComponent).toHaveBeenCalledWith(id(20));
+    f.display.dispose();
+  });
   it('loads all saved draft sections automatically and shows them by authoritative group ID', async () => {
     const f = fixture();
     f.state.routes = [route([id(20), id(21)], 'draft')];

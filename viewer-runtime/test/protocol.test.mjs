@@ -106,6 +106,19 @@ test('tray display carries one bounded unique root set with a detached exact cur
   }
 });
 
+test('CAD route membership is strict, bounded, directional and model bound', () => {
+  const value = { componentId: uuid(801), routeName: 'BC903' };
+  assert.ok(validateEnvelope(envelope('CAD_ROUTE', value), 'parent-to-frame'));
+  assert.ok(validateEnvelope(envelope('CAD_ROUTE', { ...value, routeName: 'x'.repeat(200) })));
+  assert.equal(validateEnvelope(envelope('CAD_ROUTE', value), 'frame-to-parent'), null);
+  assert.equal(validateEnvelope(envelope('CAD_ROUTE', value, { modelVersionId: null, loadId: null })), null);
+  for (const routeName of ['', ' ', null, 3, 'x'.repeat(201), 'BC\n903', 'BC\u0085903'])
+    assert.equal(validateEnvelope(envelope('CAD_ROUTE', { ...value, routeName })), null);
+  for (const extra of [{ token: 'private' }, { metadata: {} }])
+    assert.equal(validateEnvelope(envelope('CAD_ROUTE', { ...value, ...extra })), null);
+  assert.ok(validateEnvelope(envelope('CAD_ACK', { componentId: uuid(801), phase: 'route', received: 0 }), 'frame-to-parent'));
+});
+
 test('computed CAD route names are optional, bounded and copied independently of native IDs', () => {
   const payload = { pathId: uuid(9), pointCount: 1, objectIds: [], routeNames: ['/BC901', '/BC027-1'] };
   const parsed = validateEnvelope(envelope('BEGIN_COMPUTED_PATH', payload), 'parent-to-frame');

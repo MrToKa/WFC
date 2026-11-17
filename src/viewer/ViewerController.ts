@@ -265,6 +265,15 @@ export class ViewerController {
     await this.sendAsync('CAD_PROPERTIES', payload, 'CAD_ACK');
   }
 
+  /** Bind saved group membership independently of optional catalogue metadata. */
+  async setCadComponentRoute(componentId: string, routeName: string): Promise<void> {
+    if (!UUID.test(componentId) || typeof routeName !== 'string' || !routeName.trim() || routeName.length > 200 || /[\u0000-\u001f\u007f-\u009f]/.test(routeName))
+      throw new Error('Invalid CAD route membership.');
+    const payload = structuredClone({ componentId, routeName });
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
+    await this.sendAsync('CAD_ROUTE', payload, 'CAD_ACK');
+  }
+
   /** Replace source-model Properties metadata without changing selection or appearance. */
   setTrayAssignments(assignments: ViewerTrayAssignment[]): Promise<void> {
     if (!validateTrayAssignments(assignments)) return Promise.reject(new Error('Tray assignments exceed the Properties display limit.'));
@@ -373,7 +382,7 @@ export class ViewerController {
     if (message.type === 'CAD_ACK') {
       const expected: Record<string, string> = {
         CAD_BEGIN: 'begun', CAD_APPEND: 'appended', CAD_COMMIT: 'displayed',
-        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused', CAD_COLOR: 'colored', CAD_PROPERTIES: 'properties', CAD_VISIBILITY: 'visibility',
+        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused', CAD_COLOR: 'colored', CAD_ROUTE: 'route', CAD_PROPERTIES: 'properties', CAD_VISIBILITY: 'visibility',
       };
       const phase = expected[pending.envelope.type];
       const payload = pending.envelope.payload;

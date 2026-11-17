@@ -179,6 +179,25 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(s.send.mock.calls.some(call => call[0].type === 'CAD_FOCUS')).toBe(false);
   });
 
+it('binds saved CAD route membership through an acknowledged current-model command without properties', async () => {
+  const s = await loaded(), componentId = generateId();
+  const pending = s.c.setCadComponentRoute(componentId, 'BC903');
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_ROUTE')).toBe(true));
+  const command = s.send.mock.calls.find(call => call[0].type === 'CAD_ROUTE')![0];
+  expect(command.payload).toEqual({ componentId, routeName: 'BC903' });
+  expect(command.modelVersionId).toBe(versionId); expect(command.loadId).toBe(s.identity.loadId);
+  s.message('CAD_ACK', { componentId, phase: 'route', received: 0 }, command.requestId, s.identity);
+  await expect(pending).resolves.toBeUndefined();
+});
+
+it('rejects invalid membership and unavailable access before sending a CAD route', async () => {
+  const s = setup(), componentId = generateId();
+  for (const routeName of ['', ' ', 'x'.repeat(201), 'BC\n903'])
+    await expect(s.c.setCadComponentRoute(componentId, routeName)).rejects.toThrow('Invalid CAD route membership');
+  await expect(s.c.setCadComponentRoute(componentId, 'BC903')).rejects.toThrow('Viewer model access changed');
+  expect(s.send.mock.calls.some(call => call[0].type === 'CAD_ROUTE')).toBe(false);
+});
+
 it('changes CAD visibility through an acknowledged current-model command', async () => {
   const s = await loaded(), componentId = generateId();
   const pending = s.c.setCadComponentVisibility(componentId, false);

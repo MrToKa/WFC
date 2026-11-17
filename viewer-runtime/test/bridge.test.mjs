@@ -67,6 +67,19 @@ function fixture(options = {}) {
   return { bridge, send, sent, messages, init, loaded, facts, fetches, loads, states, listeners, window, handle };
 }
 
+test('CAD route membership dispatches only in the current loaded model without requiring properties', async () => {
+  const f = fixture(), memberships = [];
+  f.handle.cadRoute = (componentId, routeName) => memberships.push({ componentId, routeName });
+  await f.loaded();
+  const command = f.send('CAD_ROUTE', { componentId: uuid(801), routeName: 'BC903' }); await turn();
+  assert.deepEqual(memberships, [{ componentId: uuid(801), routeName: 'BC903' }]);
+  assert.deepEqual(f.messages('CAD_ACK').find(value => value.requestId === command.requestId).payload,
+    { componentId: uuid(801), phase: 'route', received: 0 });
+  f.send('CAD_ROUTE', { componentId: uuid(801), routeName: 'BC027-2' }, { loadId: uuid(999) });
+  f.send('CAD_ROUTE', { componentId: uuid(801), routeName: '' }); await turn();
+  assert.equal(memberships.length, 1); f.bridge.dispose();
+});
+
 test('CAD color dispatches only for the current loaded model and acknowledges the same component', async () => {
   const f = fixture();
   const colors = [];

@@ -15,6 +15,7 @@ export type BridgeDirection = 'parent-to-frame' | 'frame-to-parent';
 /** Color applies only to a registered CAD instance in the owned dynamic model. */
 export interface CadVisibilityPayload { componentId: string; visible: boolean }
 export interface CadColorPayload { componentId: string; color: string }
+export interface CadRoutePayload { componentId: string; routeName: string }
 export interface BridgeEnvelope {
   channel: typeof CHANNEL; protocolVersion: 1; instanceId: string; projectId: string;
   modelVersionId: string | null; loadId: string | null; requestId: string;

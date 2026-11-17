@@ -29,6 +29,8 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   const materials = new Map();
   let peekIds = null, peekVisibility = new Map();
   const properties = new Map();
+  // Membership comes from the saved group even when section metadata is absent.
+  const routeNames = new Map();
   const positions = new Map();
   let propertyPanel;
   let sourceAssignments = new Map();
@@ -128,6 +130,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
       dynamicModel?.getObjectTree()?.isNodeHidden(tree.objectId(componentId));
     const savedColor = colors.get(componentId);
     const savedProperties = properties.get(componentId);
+    const savedRouteName = routeNames.get(componentId);
     validateMesh(mesh);
     const selection = registry.has(componentId) ? remove(componentId, true) : null;
     const instances = ensureScene();
@@ -146,6 +149,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     const instanceId = instances.add(geometry, material, matrix(transform));
     if (instanceId < 0) throw new Error('The Viewer rejected CAD geometry.');
     registry.set(componentId, instanceId);
+    if (savedRouteName !== undefined) routeNames.set(componentId, savedRouteName);
     materials.set(componentId, material);
     if (savedColor != null) colors.set(componentId, savedColor);
     positions.set(componentId, { ...transform.positionMm });
@@ -215,6 +219,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     materials.delete(componentId);
     colors.delete(componentId);
     properties.delete(componentId);
+    routeNames.delete(componentId);
     positions.delete(componentId);
     tree.remove(componentId, keepIdentity);
     if (!keepIdentity) restoreOwnedSelection(selection);
@@ -265,7 +270,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
       if (objectId === objectTree.getRootId()) break;
       objectId = objectTree.getNodeParentId(objectId);
     }
-    if (routeFilter !== null && !routeFilter.has(routeKey(properties.get(componentId)?.route?.name))) visible = false;
+    if (routeFilter !== null && !routeFilter.has(routeKey(routeNames.get(componentId) ?? properties.get(componentId)?.route?.name))) visible = false;
     dynamicModel.setVisibility(registry.get(componentId), visible);
   }
 
@@ -282,6 +287,15 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     }
     viewer.refresh(true);
     if (failure) throw failure;
+  }
+
+  function setRoute(componentId, routeName) {
+    if (disposed || !registry.has(componentId) || !dynamicModel) throw new Error('Unknown CAD instance.');
+    if (typeof routeName !== 'string' || !routeName.trim() || routeName.length > 200 || /[\u0000-\u001f\u007f-\u009f]/.test(routeName))
+      throw new Error('Invalid CAD route membership.');
+    routeNames.set(componentId, routeName);
+    if (routeFilter !== null) applyRouteVisibility(componentId);
+    viewer.refresh(true);
   }
 
   function validateTray(ids) {
@@ -380,6 +394,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     setColor,
     setVisibility,
     setRouteVisibility,
+    setRoute,
     setProperties,
     setSourceTrayAssignments,
     dispose() {
@@ -389,6 +404,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
       sourceAssignments.clear();
       colors.clear();
       properties.clear();
+      routeNames.clear();
       positions.clear();
       propertyPanel?.dispose();
       propertyPanel = undefined;

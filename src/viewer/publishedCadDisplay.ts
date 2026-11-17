@@ -11,7 +11,7 @@ type Instance = {
   metadata?: CadSectionMetadata; route?: CadSectionRoute;
 };
 type Options = {
-  viewer: Pick<ViewerController, 'showCadComponent' | 'removeCadComponent' | 'setCadComponentColor' | 'setCadComponentProperties' | 'setCadComponentVisibility' | 'showCadTray'>;
+  viewer: Pick<ViewerController, 'showCadComponent' | 'removeCadComponent' | 'setCadComponentColor' | 'setCadComponentProperties' | 'setCadComponentRoute' | 'setCadComponentVisibility' | 'showCadTray'>;
   projectId: string; token: string; modelVersionId: string;
   isCurrent: () => boolean; onError: (error: unknown) => void;
 };
@@ -92,6 +92,10 @@ export function createPublishedCadDisplay({ viewer, projectId, token, modelVersi
           displayed.set(id, '');
           if (!current()) return;
           await viewer.setCadComponentColor(id, route.color);
+          if (!current()) return;
+          // Membership is authoritative even when optional section properties
+          // are absent or still describe an earlier route assignment.
+          await viewer.setCadComponentRoute(id, route.name);
           if (!current()) return;
           if (instance.metadata && instance.route) await viewer.setCadComponentProperties(id, instance.metadata, instance.route);
           if (!current()) return;
