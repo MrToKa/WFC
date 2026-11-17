@@ -8,6 +8,8 @@ using PathFinder.Model;
 internal sealed record CadOverlayEnvelope(string SchemaVersion, string Sha256, string PayloadBase64);
 internal static partial class Program
 {
+    private const int MaximumCadOverlaySegments = 256;
+
     private static PreparedModel MergeCadOverlay(PreparedModel prepared, Request request, CancellationToken token)
     {
         if (request.CadOverlay is not { } envelope) return prepared;
@@ -26,7 +28,7 @@ internal static partial class Program
             || root.GetProperty("baseSnapshotSha256").GetString() != request.SnapshotSha256)
             throw new ArgumentException("CAD routing overlay belongs to another base network.");
         var rows = root.GetProperty("segments");
-        if (rows.GetArrayLength() is < 1 or > 32) throw new ArgumentException("CAD overlay segment limit exceeded.");
+        if (rows.GetArrayLength() is < 1 or > MaximumCadOverlaySegments) throw new ArgumentException("CAD overlay segment limit exceeded.");
         var segments = prepared.Segments.ToList(); var ids = new HashSet<string>(segments.Select(segment => segment.Id));
         foreach (var row in rows.EnumerateArray())
         {

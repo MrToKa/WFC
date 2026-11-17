@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cadOverlayPayloadSchema } from './pathfinderCadOverlay.js';
+import { cadOverlayPayloadSchema, MAX_CAD_OVERLAY_SEGMENTS } from './pathfinderCadOverlay.js';
 
 const port=(z:number)=>({pointMetres:[0,.03,z],outward:[0,0,z===0?-1:1],u:[1,0,0],v:[0,1,0],widthMetres:.3,heightMetres:.06});
 const payload={schemaVersion:'wfc.pf.cad-overlay-payload.v1',projectId:'00000000-0000-4000-8000-000000000001',
@@ -8,6 +8,15 @@ const payload={schemaVersion:'wfc.pf.cad-overlay-payload.v1',projectId:'00000000
     pointsMetres:[[0,.03,0],[0,.03,1.2]],ports:[port(0),port(1.2)],
   }]};
 describe('versioned independent CAD overlay admission',()=>{
+  it.each(['wfc.pf.cad-overlay-payload.v1','wfc.pf.cad-overlay-payload.v2','wfc.pf.cad-overlay-payload.v3'])(
+    'bounds split-arm composites to 256 segments without changing version semantics: %s', schemaVersion => {
+      const segments = Array.from({length:MAX_CAD_OVERLAY_SEGMENTS + 1},(_,index)=>({
+        ...payload.segments[0],id:`cad:00000000-0000-4000-8000-${index.toString(16).padStart(12,'0')}`,
+      }));
+      expect(cadOverlayPayloadSchema.safeParse({...payload,schemaVersion,segments:segments.slice(0,MAX_CAD_OVERLAY_SEGMENTS)}).success).toBe(true);
+      expect(cadOverlayPayloadSchema.safeParse({...payload,schemaVersion,segments}).success).toBe(false);
+    },
+  );
   it('preserves historical attached v1 payloads',()=>expect(cadOverlayPayloadSchema.parse(payload)).toEqual(payload));
   it('admits independent v2 with the two real physical ports',()=>{
     const independent={...payload,schemaVersion:'wfc.pf.cad-overlay-payload.v2',segments:[{...payload.segments[0],independent:true}]};

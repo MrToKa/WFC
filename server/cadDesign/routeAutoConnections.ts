@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { requireAdmin } from '../middleware.js';
 import { PathFinderError } from '../pathfinder/errors.js';
 import { getInstanceCadPorts } from '../../shared/cadLengths.js';
-import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
+import { MATE_OPPOSING_FACE, type PocPort } from '../../shared/cadPocPorts.js';
 import { connectorAlignmentIsValid, type RigidTransform } from '../../shared/cadTransforms.js';
 import {
   buildCadChain, groupRawInputs, networkOptions, publicationTransaction, PublicationError,
@@ -13,7 +13,7 @@ import {
 
 export const cadRouteAutoConnectionsRouter=Router({mergeParams:true});
 const input=z.object({expectedRevision:z.number().int().positive()}).strict();
-type PortName='start'|'end';
+type PortName=PocPort['id'];
 type Endpoint={instanceId:string;portName:PortName;pointMetres:[number,number,number]};
 type Connection=PublicationConnection;
 type Port=ReturnType<typeof routePort>;
@@ -21,7 +21,6 @@ type NetworkOption={objectRevisionId:string;objectId:string;portIndex:number;poi
 const fail=(code:string,message:string,diagnostics?:unknown):never=>{throw new PublicationError(code,message,409,diagnostics);};
 const key=(id:string,name:string)=>`${id}:${name}`;
 const world=(row:PublicationInstance):RigidTransform=>({position:{x:row.x_mm,y:row.y_mm,z:row.z_mm},rotation:{x:row.qx,y:row.qy,z:row.qz,w:row.qw}});
-const portNames=['start','end'] as const;
 
 /** Preserve physical mates and separately describe bounded logical installation joins.
  * Neither kind translates or rotates a member or invents a manufacturer fitting. */
@@ -29,12 +28,15 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
   if(instances.length<1||instances.length>32)fail('CAD_ROUTE_PART_LIMIT','Choose 1–32 verified components for automatic connection.');
   const rows=new Map(instances.map(row=>[row.id,row]));
   if(rows.size!==instances.length)fail('CAD_ROUTE_INVALID_MEMBERS','The route contains duplicate component identities.');
-  const ports=instances.flatMap(row=>portNames.map(portName=>({row,portName,frame:routePort(row,portName),
-    local:getInstanceCadPorts(row.original_filename,row.source_sha256,row.cut_length_mm).find(p=>p.id===portName)!.local})));
+  const ports=instances.flatMap(row=>{
+    const available=getInstanceCadPorts(row.original_filename,row.source_sha256,row.cut_length_mm);
+    if(!available.length)fail('CAD_ROUTE_UNSUPPORTED_GEOMETRY','Automatic connection requires verified straight or fitting source geometry.');
+    return available.map(port=>({row,portName:port.id,frame:routePort(row,port.id),local:port.local}));
+  });
   const byKey=new Map(ports.map(port=>[key(port.row.id,port.portName),port]));
   const used=new Set<string>(),parents=new Map(instances.map(row=>[row.id,row.id]));
   const find=(id:string):string=>{while(parents.get(id)!==id)id=parents.get(id)!;return id;};
-  const unite=(a:string,b:string)=>{const first=find(a),last=find(b);if(first===last)fail('CAD_ROUTE_AUTO_CONNECT_LOOP','The route forms a closed loop. Keep an open route chain before publishing.');parents.set(last,first);};
+  const unite=(a:string,b:string)=>{const first=find(a),last=find(b);if(first===last)fail('CAD_ROUTE_AUTO_CONNECT_LOOP','The route forms a closed loop. Keep a connected route without loops before publishing.');parents.set(last,first);};
   const aligned=(first:typeof ports[number],last:typeof ports[number],gap=1)=>
     Math.abs(first.frame.widthMetres-last.frame.widthMetres)<.000001&&
     Math.abs(first.frame.heightMetres-last.frame.heightMetres)<.000001&&
@@ -92,7 +94,7 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
   const components=new Map<string,string[]>();
   for(const row of instances){const id=find(row.id),members=components.get(id)??[];members.push(row.id);components.set(id,members);}
   const connected=components.size===1;
-  // A complete result must satisfy the identical publication chain validator.
+  // A complete result must satisfy the identical publication network validator.
   if(connected)buildCadChain(instances,[...existing,...missing],[...transitions,...missingTransitions]);
   const free=ports.filter(port=>!used.has(key(port.row.id,port.portName)));
   const endpoints:Endpoint[]=free.map(port=>({instanceId:port.row.id,portName:port.portName,pointMetres:port.frame.pointMetres}));
@@ -177,7 +179,7 @@ cadRouteAutoConnectionsRouter.post(`${prefix}/auto-connect`,requireAdmin,safe(as
     const inferred=inferCadConnections(instances,connections,transitions);
     if(inferred.missing.length){
       const portRows=(await client.query<{id:string;catalog_item_id:string;name:string;port_type:string}>(`SELECT id,catalog_item_id,name,port_type FROM cad_catalog_ports
-        WHERE project_id=$1 AND catalog_item_id=ANY($2::uuid[]) AND name IN('start','end') FOR SHARE`,[projectId,[...new Set(instances.map(row=>row.catalog_item_id))]])).rows;
+        WHERE project_id=$1 AND catalog_item_id=ANY($2::uuid[]) AND name IN('start','end','branch') FOR SHARE`,[projectId,[...new Set(instances.map(row=>row.catalog_item_id))]])).rows;
       const rows=new Map(instances.map(row=>[row.id,row]));
       const verified=inferred.missing.map(connection=>{
         const source=rows.get(connection.source_instance_id)!,target=rows.get(connection.target_instance_id)!;

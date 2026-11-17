@@ -72,6 +72,16 @@ const tray = (n:number,name:string):TrayRow => ({id:id(n),project_id:projectId,n
   trefoil_clamp_spacing_mm:500,created_at:'2026-11-17T00:00:00.000Z',updated_at:'2026-11-17T00:00:00.000Z'});
 const snapshot = (row:TrayRow) => ({id:row.id,name:row.name,purpose:row.purpose,trayType:row.tray_type,widthMm:Number(row.width_mm),heightMm:Number(row.height_mm),lengthMm:Number(row.length_mm)});
 const prepare = () => prepareCadDesignNetwork(projectId,designId,who,input);
+const assignedTee = () => {
+  const group = {...groups[1],name:'BC027-1',tag:'BC027-1'};
+  const placed:PublicationInstance = {...instance(91),part_number:'KSLT 60.303 S',component_kind:'tee',cut_length_mm:null,
+    original_filename:'NDX_KLT_60-303_MED_214.step',source_sha256:'d2d9934607cc4a8aac6331e732522541fe23afce08a4c621685092188b5d936f',
+    material_tray_id:null,material_tray_type:null,material_width_mm:null,material_height_mm:null};
+  const row = {...tray(71,group.name),tray_type:placed.part_number,length_mm:buildCadChain([placed],[]).lengthMetres*1000};
+  groups=[group];instances=new Map([[group.id,[placed]]]);trays=new Map([[row.id,row]]);
+  links=new Map([[group.id,{row,sourceSha256:'e'.repeat(64),projection:cadTrayProjection(row)}]]);
+  return {group,row,placed};
+};
 
 beforeEach(() => {
   vi.clearAllMocks();query.mockClear();history=[];txDepth=0;
@@ -111,6 +121,39 @@ beforeEach(() => {
 });
 
 describe('saved CAD network preparation with verified composite and CAS publication', () => {
+  it('prepares an assigned tee as three arms while retaining one tray and stable duplicate proof', async () => {
+    const tee=assignedTee();
+    expect(await prepare()).toMatchObject({publishedCount:1,revalidatedCount:0,routeCount:1,duplicate:false});
+    const overlay=JSON.parse(Buffer.from(mocks.execute.mock.calls[0][0].cadOverlay.payloadBase64,'base64').toString('utf8'));
+    expect(overlay.segments).toHaveLength(3);
+    expect(new Set(overlay.segments.map((segment:{id:string})=>segment.id)).size).toBe(3);
+    expect(overlay.segments.some((segment:{id:string})=>segment.id===`cad:${tee.group.id}`)).toBe(true);
+    expect(overlay.segments.every((segment:{name:string;ports:unknown[]})=>segment.name==='/BC027-1'&&segment.ports.length===1)).toBe(true);
+    expect(groups[0].project_tray_id).toBe(tee.row.id);
+    expect(trays.size).toBe(1);expect(history).toHaveLength(1);
+    expect(groups[0].publication).toMatchObject({traySnapshot:{id:tee.row.id,lengthMm:tee.row.length_mm},
+      networkPreparationProof:{segmentCount:fixture.aggregate.counts.physicalLeaves+3}});
+    const before=structuredClone(groups);
+    expect(await prepare()).toMatchObject({publishedCount:0,revalidatedCount:0,routeCount:1,duplicate:true});
+    expect(groups).toEqual(before);expect(history).toHaveLength(1);expect(mocks.execute).toHaveBeenCalledOnce();
+  });
+  it('rejects a tee proof that counts routes instead of emitted arm segments', async () => {
+    assignedTee();const execute=mocks.execute.getMockImplementation()!;
+    mocks.execute.mockImplementation(async request=>{
+      const proof=await execute(request);proof.prepared.segmentCount=fixture.aggregate.counts.physicalLeaves+1;return proof;
+    });
+    await expect(prepare()).rejects.toMatchObject({code:'CAD_ROUTE_ENGINE_PROOF_REQUIRED'});
+    expect(groups[0].status).toBe('draft');expect(history).toEqual([]);expect(mocks.dirty).not.toHaveBeenCalled();
+  });
+  it('refuses a tee source revision change between three-arm verification and publication', async () => {
+    const tee=assignedTee(),execute=mocks.execute.getMockImplementation()!;
+    mocks.execute.mockImplementation(async request=>{
+      const proof=await execute(request);instances.get(tee.group.id)![0].revision++;return proof;
+    });
+    await expect(prepare()).rejects.toMatchObject({code:'CAD_ROUTE_CHANGED_DURING_PROOF'});
+    expect(groups[0].status).toBe('draft');expect(groups[0].revision).toBe(7);
+    expect(history).toEqual([]);expect(mocks.dirty).not.toHaveBeenCalled();
+  });
   it('verifies the current base plus published and exported draft routes before publishing exact existing tray ids', async () => {
     const old=structuredClone(groups[0].publication);
     const result=await prepare();

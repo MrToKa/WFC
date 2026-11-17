@@ -13,8 +13,9 @@ import { geometryObjectRevisionSchema } from '../../shared/pathfinderGeometryTra
 import { canonicalPurposeJson, normalizeCatalogKey } from '../../shared/pathfinderPurposePolicy.js';
 import { getInstanceCadPorts, supportsStraightCut } from '../../shared/cadLengths.js';
 import { getStraightSource } from '../../shared/cadStraightSources.js';
+import { FITTING_SOURCES } from '../../shared/cadFittingSources.js';
 import { composeTransform, rotateVector, connectorAlignmentIsValid, type RigidTransform } from '../../shared/cadTransforms.js';
-import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
+import { MATE_OPPOSING_FACE, type PocPort } from '../../shared/cadPocPorts.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
 import type { TrayRow } from '../models/tray.js';
 import { encodeCadOverlay } from '../pathfinder/cadOverlay.js';
@@ -24,11 +25,14 @@ import { markRecalculationDirty } from '../pathfinder/recalculationSchema.js';
 export const cadRoutePublicationRouter = Router({ mergeParams:true });
 const uuid = z.string().uuid();
 const revision = z.number().int().positive();
-const attachmentInput = z.object({instanceId:uuid,portName:z.enum(['start','end']),targetObjectRevisionId:uuid,targetPortIndex:z.number().int().min(0).max(1)}).strict();
-const attachedPublishInput=z.object({expectedRevision:revision,attachments:z.array(attachmentInput).min(1).max(2)}).strict();
+const attachmentInput = z.object({instanceId:uuid,portName:z.enum(['start','end','branch']),targetObjectRevisionId:uuid,targetPortIndex:z.number().int().min(0).max(1)}).strict();
+const attachedPublishInput=z.object({expectedRevision:revision,attachments:z.array(attachmentInput).min(1).max(64)}).strict();
 const publishInput=z.union([z.object({schemaVersion:z.literal('wfc.cad.route-publication.write.v3'),expectedRevision:revision}).strict(),attachedPublishInput,z.object({schemaVersion:z.literal('wfc.cad.route-publication.write.v2'),mode:z.literal('independent'),expectedRevision:revision,attachments:z.array(attachmentInput).length(0)}).strict()]);
 const withdrawInput = z.object({expectedRevision:revision}).strict();
 type Point = [number,number,number];
+export type CadRoutePath={key:string;points:Point[];ports:CadOverlaySegment['ports']};
+export type CadRouteGeometry={endpoints:{instanceId:string;portName:PocPort['id'];pointMetres:Point}[];
+  points:Point[];lengthMetres:number;instances:Map<string,PublicationInstance>;paths?:CadRoutePath[]};
 export type PublicationInstance = {id:string;catalog_item_id:string;material_asset_id:string;revision:number;
   part_number:string;
   material_tray_id?:string|null;material_tray_type?:string|null;material_width_mm?:number|string|null;material_height_mm?:number|string|null;
@@ -63,15 +67,17 @@ export function validateCadAttachment(source:CadOverlaySegment['ports'][number],
     'Align the route end with a matching network profile and port orientation before publishing.',409,
     {gapMetres:gap,outwardDot,widthMetres:target.widthMetres,heightMetres:target.heightMetres,profileMatches:profile});
 }
+const fittingSource=(row:PublicationInstance)=>FITTING_SOURCES.find(source=>
+  source.filename.toUpperCase()===row.original_filename.trim().toUpperCase()&&source.sha256===row.source_sha256);
+const teeSource=(row:PublicationInstance)=>fittingSource(row)?.ports.length===3;
 function ports(row:PublicationInstance) {
   const available=getInstanceCadPorts(row.original_filename,row.source_sha256,row.cut_length_mm);
-  if (available.length!==2 || !((row.component_kind==='straight'&&supportsStraightCut(row.original_filename,row.source_sha256)) ||
-      (row.component_kind==='bend'&&row.cut_length_mm==null&&row.source_sha256==='7a5cf4947a9ea5fa213ceef84ba952fe2a9a63dee752f0c23a598320802c0014')))
-    refuse('CAD_ROUTE_UNSUPPORTED_GEOMETRY','Publish only the verified straight and bend STEP samples. Other components need verified routing centerlines.');
-  // Physical fitting snaps can have a branch. Publication still requires a
-  // measured two-ended routing centerline and must not infer one from a tee.
-  const chainPorts=available.filter((port):port is typeof port & {id:'start'|'end'}=>port.id!=='branch');
-  return chainPorts.map(port => ({...port,world:composeTransform(world(row),port.local)}));
+  const fitting=fittingSource(row);
+  const supported=fitting ? row.cut_length_mm===null&&available.length===fitting.ports.length :
+    available.length===2&&((row.component_kind==='straight'&&supportsStraightCut(row.original_filename,row.source_sha256)) ||
+      (row.component_kind==='bend'&&row.cut_length_mm==null&&row.source_sha256==='7a5cf4947a9ea5fa213ceef84ba952fe2a9a63dee752f0c23a598320802c0014'));
+  if(!supported)refuse('CAD_ROUTE_UNSUPPORTED_GEOMETRY','Use verified straight and bend STEP samples or supported tee revisions. Other components need verified routing centerlines.');
+  return available.map(port => ({...port,world:composeTransform(world(row),port.local)}));
 }
 export function routePort(row:PublicationInstance,name:string) {
   const selected=ports(row).find(port=>port.id===name);
@@ -83,6 +89,15 @@ export function routePort(row:PublicationInstance,name:string) {
 /** Approved source-specific centerlines; never replace a bend by its shorter chord. */
 function centerline(row:PublicationInstance):Point[] {
   const available=ports(row);
+  const fitting=fittingSource(row);
+  if(teeSource(row))return refuse('CAD_ROUTE_BRANCHED_GEOMETRY','A tee requires its three routing arms.');
+  if(fitting){
+    // KLBG: measured coaxial R900/R1200 walls, nominal R1050, 145 mm legs.
+    const local=[{x:150,y:30,z:0},...Array.from({length:257},(_,index)=>{
+      const angle=index*Math.PI/512;return {x:-900+1050*Math.cos(angle),y:30,z:-145-1050*Math.sin(angle)};
+    }),{x:-1045,y:30,z:-1195}];
+    return local.map(position=>metres(composeTransform(world(row),{position,rotation:{x:0,y:0,z:0,w:1}}).position));
+  }
   // The hash-pinned STEP's 500/800 mm coaxial surfaces establish R650,
   // center (-500,-145), with 145 mm straight legs at both ends.
   const local = row.component_kind==='straight' ? available.map(port=>port.local.position) :
@@ -90,7 +105,11 @@ function centerline(row:PublicationInstance):Point[] {
   return local.map(position=>metres(composeTransform(world(row),{position,rotation:{x:0,y:0,z:0,w:1}}).position));
 }
 export function resolveCadRouteMaterial(instances:PublicationInstance[]) {
-  const material=instances.find(row=>row.component_kind==='straight'&&row.material_tray_id&&row.material_tray_type);
+  const material=instances.find(row=>row.component_kind==='straight'&&supportsStraightCut(row.original_filename,row.source_sha256)&&row.material_tray_id&&row.material_tray_type);
+  if(!material){
+    const fitting=instances.find(row=>fittingSource(row));
+    if(fitting){const profile=routePort(fitting,'start');return {trayType:fitting.part_number,widthMm:profile.widthMetres*1000,heightMm:profile.heightMetres*1000};}
+  }
   if(!material)return refuse('CAD_ROUTE_MATERIAL_REQUIRED','Publishing requires a straight component linked to the Materials tray catalog. Bend-only groups can remain saved drafts.');
   const source=getStraightSource(material.original_filename,material.source_sha256);
   if(!source||Number(material.material_width_mm)!==source.widthMm||Number(material.material_height_mm)!==source.heightMm||
@@ -98,9 +117,10 @@ export function resolveCadRouteMaterial(instances:PublicationInstance[]) {
     return refuse('CAD_ROUTE_MATERIAL_PROFILE_CHANGED','The straight Materials identity or dimensions no longer match the verified STEP source. Select its current catalog reference.');
   return {trayType:material.part_number,widthMm:source.widthMm,heightMm:source.heightMm};
 }
-export function buildCadChain(instances:PublicationInstance[],connections:PublicationConnection[],transitions:PublicationTransition[]=[]) {
+export function buildCadChain(instances:PublicationInstance[],connections:PublicationConnection[],transitions:PublicationTransition[]=[]):CadRouteGeometry {
   if (!instances.length||instances.length>32) return refuse('CAD_ROUTE_PART_LIMIT','A published route must contain 1–32 verified components.');
   const rows=new Map(instances.map(row=>[row.id,row]));
+  if(rows.size!==instances.length)return refuse('CAD_ROUTE_INVALID_MEMBERS','The route contains duplicate component identities.');
   const used=new Set<string>();const adjacency=new Map<string,Array<{other:string;name:string;otherName:string}>>();
   for (const row of instances) {ports(row);adjacency.set(row.id,[]);}
   const edges=[...connections.map(connection=>({...connection,kind:'physical' as const})),...transitions];
@@ -123,6 +143,34 @@ export function buildCadChain(instances:PublicationInstance[],connections:Public
     adjacency.get(target.id)!.push({other:source.id,name:b.id,otherName:a.id});
   }
   const endpoints=instances.flatMap(row=>ports(row).filter(p=>!used.has(`${row.id}:${p.id}`)).map(p=>({instanceId:row.id,portName:p.id,pointMetres:metres(p.world.position)})));
+  if(instances.some(teeSource)){
+    const visited=new Set<string>(),pending=[instances[0].id];
+    while(pending.length){const id=pending.pop()!;if(visited.has(id))continue;visited.add(id);pending.push(...adjacency.get(id)!.map(edge=>edge.other));}
+    if(edges.length!==instances.length-1||visited.size!==instances.length)
+      return refuse('CAD_ROUTE_NOT_CHAIN','The group must be one connected open tree. Snap and connect every component first.');
+    const paths:CadRoutePath[]=[];
+    for(const row of [...instances].sort((a,b)=>a.id.localeCompare(b.id))){
+      if(teeSource(row)){
+        // Nominal terminal center axes meet inside the verified clear corridor.
+        // This is a T-axis graph, not an assumed cable bend-radius fillet.
+        const junction=metres(composeTransform(world(row),{position:{x:-795,y:30,z:0},rotation:{x:0,y:0,z:0,w:1}}).position);
+        for(const port of ports(row))paths.push({key:`${row.id}:${port.id}`,points:[metres(port.world.position),junction],ports:[routePort(row,port.id)]});
+      }else paths.push({key:`${row.id}:body`,points:centerline(row),ports:ports(row).map(port=>routePort(row,port.id))});
+    }
+    // Keep admitted nonzero physical/installation gaps in the network length.
+    // Bridge end frames oppose the measured component frames at the same points.
+    const reverse=(port:CadOverlaySegment['ports'][number])=>({...port,u:port.u.map(value=>-value) as Point,outward:port.outward.map(value=>-value) as Point});
+    for(const edge of edges){
+      const a=routePort(rows.get(edge.source_instance_id)!,edge.source_name),b=routePort(rows.get(edge.target_instance_id)!,edge.target_name);
+      if(distance(a.pointMetres,b.pointMetres)>1e-9){
+        const key=[`${edge.source_instance_id}:${edge.source_name}`,`${edge.target_instance_id}:${edge.target_name}`].sort().join('|');
+        paths.push({key:`join:${key}`,points:[a.pointMetres,b.pointMetres],ports:[reverse(a),reverse(b)]});
+      }
+    }
+    paths.sort((a,b)=>a.key.localeCompare(b.key));
+    const lengthMetres=paths.reduce((sum,path)=>sum+path.points.slice(1).reduce((length,point,index)=>length+distance(point,path.points[index]),0),0);
+    return {endpoints,points:[],paths,lengthMetres,instances:rows};
+  }
   if (edges.length!==instances.length-1||endpoints.length!==2||[...adjacency.values()].some(edges=>edges.length>2))
     return refuse('CAD_ROUTE_NOT_CHAIN','The group must be one connected open chain. Snap and connect every component first.');
   const points:Point[]=[];const visited=new Set<string>();let cursor=endpoints[0].instanceId,entry=endpoints[0].portName;
@@ -132,11 +180,24 @@ export function buildCadChain(instances:PublicationInstance[],connections:Public
     // numerically identical join point, never a distinct component endpoint.
     points.push(...(points.length&&distance(points[points.length-1],line[0])<1e-9?line.slice(1):line));
     const next=adjacency.get(cursor)!.find(edge=>edge.name!==entry);
-    if (!next) break;cursor=next.other;entry=next.otherName as 'start'|'end';
+    if (!next) break;cursor=next.other;entry=next.otherName as PocPort['id'];
   }
   if (visited.size!==instances.length) return refuse('CAD_ROUTE_NOT_CHAIN','The route contains disconnected components or a loop.');
   const lengthMetres=points.slice(1).reduce((sum,p,index)=>sum+distance(p,points[index]),0);
   return {endpoints,points,lengthMetres,instances:rows};
+}
+
+/** Keep legacy single-chain identities; a branched route owns several segments
+ * under one route code and one Trays row. One segment retains the group UUID. */
+export function cadRouteSegments(group:{id:string;tag:string},geometry:CadRouteGeometry):CadOverlaySegment[]{
+  if(!geometry.paths)return [{id:`cad:${group.id}`,name:`/${group.tag}`,allowedCategoryMask:7,pointsMetres:geometry.points,
+    ports:geometry.endpoints.map(endpoint=>routePort(geometry.instances.get(endpoint.instanceId)!,endpoint.portName))}];
+  return geometry.paths.map((path,index)=>{
+    const bytes=createHash('sha256').update(`wfc.cad.route-arm.v1:${group.id}:${path.key}`).digest();
+    bytes[6]=(bytes[6]&15)|0x50;bytes[8]=(bytes[8]&63)|0x80;
+    const hex=bytes.subarray(0,16).toString('hex'),derived=`${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+    return {id:`cad:${index===0?group.id:derived}`,name:`/${group.tag}`,allowedCategoryMask:7,pointsMetres:path.points,ports:path.ports};
+  });
 }
 
 export async function groupRawInputs(client:PoolClient,projectId:string,designId:string,routeId:string) {
@@ -241,16 +302,15 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     // As in preparationPlans.ts, current policy values are cable purposes,
     // not engine classes. Per-calculation allowedRouteCodes enforces purpose.
     const mask=7;
-    const segment:CadOverlaySegment={id:`cad:${group.id}`,name:`/${group.tag}`,allowedCategoryMask:mask,pointsMetres:chain.points,
-      ports:chain.endpoints.map(endpoint=>routePort(chain.instances.get(endpoint.instanceId)!,endpoint.portName))};
-    const overlay=cadOverlayPayloadSchema.parse({schemaVersion:'wfc.pf.cad-overlay-payload.v3',projectId,modelVersionId:model.model_version_id,baseSnapshotSha256:artifact.snapshot_sha256,segments:[segment]});
+    const segments=cadRouteSegments(group,chain).map(segment=>({...segment,allowedCategoryMask:mask}));
+    const overlay=cadOverlayPayloadSchema.parse({schemaVersion:'wfc.pf.cad-overlay-payload.v3',projectId,modelVersionId:model.model_version_id,baseSnapshotSha256:artifact.snapshot_sha256,segments});
     const previous=routing.cadOverlay?cadOverlayPayloadSchema.parse(JSON.parse(Buffer.from(routing.cadOverlay.payloadBase64,'base64').toString('utf8'))).segments:[];
     const compositeSegments=[...previous,...overlay.segments];
     const verifiedOverlay=encodeCadOverlay({...overlay,segments:compositeSegments});
     const fingerprint=createHash('sha256').update(canonicalPurposeJson({group:{id:group.id,revision:group.revision,tag:group.tag,purpose:group.purpose},material,routing,transitions,
       trayExport:trayExport?{trayId:trayExport.row.id,sourceSha256:trayExport.sourceSha256,projection:trayExport.projection}:null,
       artifactId:artifact.id,verifiedOverlay,sources:instances.map(row=>({id:row.id,revision:row.revision,assetId:row.material_asset_id,sha256:row.source_sha256,lengthMm:row.cut_length_mm}))})).digest('hex');
-    return {group,chain,instances,transitions,material,trayExport,artifact,overlay,verifiedOverlay,modelId:model.model_version_id,expectedSegments:segmentCount+previous.length+1,fingerprint};
+    return {group,chain,instances,transitions,material,trayExport,artifact,overlay,verifiedOverlay,modelId:model.model_version_id,expectedSegments:segmentCount+previous.length+segments.length,fingerprint};
   };
   // Release all database locks while the private worker validates geometry.
   // A running calculation may itself need the project mutex to finish.

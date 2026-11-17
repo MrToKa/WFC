@@ -17,9 +17,11 @@ const verifiedStraight=(filename:string):PublicationInstance=>{
   return {...straight,original_filename:source.filename,source_sha256:source.sha256};
 };
 describe('server-derived publishable CAD chains',()=>{
-  it.each(FITTING_SOURCES)('does not treat fitting snap frames as a routing centerline: $filename',source=>{
+  it.each(FITTING_SOURCES)('admits the source-derived routing geometry: $filename',source=>{
     const fitting={...straight,original_filename:source.filename,source_sha256:source.sha256,cut_length_mm:null};
-    expect(()=>buildCadChain([fitting],[])).toThrow('verified straight and bend');
+    const result=buildCadChain([fitting],[]);
+    if(source.ports.length===3){expect(result.paths).toHaveLength(3);expect(result.endpoints).toHaveLength(3);expect(result.lengthMetres).toBeCloseTo(2.385,8);}
+    else{expect(result.points).toHaveLength(259);expect(result.endpoints).toHaveLength(2);expect(result.lengthMetres).toBeCloseTo(.290+1.050*Math.PI/2,5);}
   });
   it('derives a trimmed straight in canonical metres without changing the saved manufacturer source',()=>{
     const result=buildCadChain([straight],[]);

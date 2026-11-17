@@ -21,6 +21,7 @@ import {
   cadNetworkPortTransform,
   computeCadRouteAlignment,
   cadRouteAlignmentRouter,
+  cadRouteAlignmentInputSchema,
 } from './routeAlignment.js';
 
 const mocks = vi.hoisted(() => ({
@@ -108,6 +109,20 @@ const localPorts = getInstanceCadPorts(
 );
 
 describe('whole-route rigid alignment geometry', () => {
+  it('accepts a tee branch attachment and aligns its measured frame without changing the source', () => {
+    const tee = { ...first, component_kind: 'tee', cut_length_mm: null,
+      original_filename: 'NDX_KLT_60-303_MED_214.step',
+      source_sha256: 'd2d9934607cc4a8aac6331e732522541fe23afce08a4c621685092188b5d936f',
+      qx: Math.SQRT1_2, qw: Math.SQRT1_2,
+    };
+    expect(cadRouteAlignmentInputSchema.parse({ ...body, attachment: { ...attachment, portName: 'branch' } }).attachment.portName).toBe('branch');
+    const before = structuredClone(tee);
+    const [moved] = computeCadRouteAlignment([tee], { instanceId: tee.id, portName: 'branch' }, target);
+    const branch = getInstanceCadPorts(tee.original_filename, tee.source_sha256).find(port => port.id === 'branch')!;
+    expect(connectorAlignmentIsValid(moved.transform, branch.local, cadNetworkPortTransform(target),
+      { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } }, MATE_OPPOSING_FACE)).toBe(true);
+    expect(tee).toEqual(before);
+  });
   it('applies a quarter turn and translation while preserving distances, internal mating and source pins', () => {
     const before = structuredClone(members);
     const moved = computeCadRouteAlignment(

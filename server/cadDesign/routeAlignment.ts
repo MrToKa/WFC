@@ -4,7 +4,7 @@ import { requireAdmin } from '../middleware.js';
 import { PathFinderError } from '../pathfinder/errors.js';
 import { fittedTracePortSchema } from '../../shared/pathfinderGeometryTrace.js';
 import { getInstanceCadPorts } from '../../shared/cadLengths.js';
-import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
+import { MATE_OPPOSING_FACE, type PocPort } from '../../shared/cadPocPorts.js';
 import {
   composeTransform,
   invertTransform,
@@ -27,7 +27,7 @@ const uuid = z.string().uuid();
 const attachmentSchema = z
   .object({
     instanceId: uuid,
-    portName: z.enum(['start', 'end']),
+    portName: z.enum(['start', 'end', 'branch']),
     targetObjectRevisionId: uuid,
     targetPortIndex: z.number().int().min(0).max(1),
   })
@@ -39,7 +39,7 @@ export const cadRouteAlignmentInputSchema = z
   })
   .strict();
 type TargetPort = z.infer<typeof fittedTracePortSchema>;
-type Endpoint = { instanceId: string; portName: 'start' | 'end' };
+type Endpoint = { instanceId: string; portName: PocPort['id'] };
 const refuse = (code: string, message: string, status = 409): never => {
   throw new PathFinderError(code, status, message);
 };

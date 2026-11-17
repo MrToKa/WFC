@@ -2,8 +2,10 @@
 import express from 'express';
 import type { Server } from 'node:http';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { STRAIGHT_SOURCE_SHA256 } from '../../shared/cadLengths.js';
+import { STRAIGHT_SOURCE_SHA256, getInstanceCadPorts } from '../../shared/cadLengths.js';
 import { STRAIGHT_SOURCES } from '../../shared/cadStraightSources.js';
+import { alignConnectorPorts } from '../../shared/cadTransforms.js';
+import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
 import type { PublicationConnection, PublicationInstance } from './routePublication.js';
 
 const mocks=vi.hoisted(()=>({raw:vi.fn(),network:vi.fn(),query:vi.fn(),transaction:vi.fn()}));
@@ -23,11 +25,39 @@ const projectId=id(1),designId=id(2),routeId=id(3),catalogId=id(4);
 const row=(n:number,z_mm=0):PublicationInstance=>({id:id(n),catalog_item_id:catalogId,material_asset_id:id(5),revision:1,part_number:'KL 60.303 F',
   original_filename:'NDX_KL_60-303_F_MED_214.step',source_sha256:STRAIGHT_SOURCE_SHA256,component_kind:'straight',cut_length_mm:1500,
   x_mm:0,y_mm:0,z_mm,qx:0,qy:0,qz:0,qw:1});
+const teeBranchPair=()=>{
+  const tee={...row(10),catalog_item_id:id(50),part_number:'KSLT 60.303 S',component_kind:'tee',cut_length_mm:null,
+    original_filename:'NDX_KLT_60-303_MED_214.step',source_sha256:'d2d9934607cc4a8aac6331e732522541fe23afce08a4c621685092188b5d936f'};
+  const branch=getInstanceCadPorts(tee.original_filename,tee.source_sha256).find(port=>port.id==='branch')!;
+  const straight=row(11),start=getInstanceCadPorts(straight.original_filename,straight.source_sha256,straight.cut_length_mm)[0];
+  const mate=alignConnectorPorts({position:{x:tee.x_mm,y:tee.y_mm,z:tee.z_mm},rotation:{x:tee.qx,y:tee.qy,z:tee.qz,w:tee.qw}},branch.local,start.local,MATE_OPPOSING_FACE);
+  return [tee,{...straight,x_mm:mate.position.x,y_mm:mate.position.y,z_mm:mate.position.z,
+    qx:mate.rotation.x,qy:mate.rotation.y,qz:mate.rotation.z,qw:mate.rotation.w}];
+};
 const pair=(first=10,last=11):PublicationConnection=>({source_instance_id:id(first),source_name:'end',target_instance_id:id(last),target_name:'start'});
 const networkPort=(n:number,point:[number,number,number]=[0,.03,0])=>({objectRevisionId:id(n),objectId:`dbid:${n}`,portIndex:0,pointMetres:point,routeCode:`/BASE${n}`,
   port:{pointMetres:point,outward:[0,0,1] as [number,number,number],u:[1,0,0] as [number,number,number],v:[0,1,0] as [number,number,number],widthMetres:.3,heightMetres:.06}});
 
 describe('physical CAD internal connection inference',()=>{
+  it('infers a physical tee branch mate and retains all three free tree ends',()=>{
+    const instances=teeBranchPair(),before=JSON.stringify(instances);
+    const result=inferCadConnections(instances,[]);
+    expect(result.missing).toEqual([{source_instance_id:id(10),source_name:'branch',target_instance_id:id(11),target_name:'start'}]);
+    expect(result.connected).toBe(true);expect(result.endpoints).toHaveLength(3);
+    expect(result.endpoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({instanceId:id(10),portName:'start'}),
+      expect.objectContaining({instanceId:id(10),portName:'end'}),
+      expect.objectContaining({instanceId:id(11),portName:'end'}),
+    ]));
+    expect(JSON.stringify(instances)).toBe(before);
+  });
+  it('admits a bounded logical transition from the branch without moving the tee',()=>{
+    const instances=teeBranchPair();instances[1].x_mm+=171;
+    const result=inferCadConnections(instances,[]);
+    expect(result.missing).toEqual([]);expect(result.connected).toBe(true);
+    expect(result.missingTransitions).toEqual([{kind:'routing-transition',source_instance_id:id(10),source_name:'branch',target_instance_id:id(11),target_name:'start'}]);
+    expect(result.endpoints).toHaveLength(3);
+  });
   it('infers only a coincident, opposing verified pair and leaves member poses untouched',()=>{
     const instances=[row(10),row(11,1500)],before=JSON.stringify(instances);
     const result=inferCadConnections(instances,[]);
@@ -164,6 +194,23 @@ beforeEach(()=>{
 const connect=(body:unknown={expectedRevision:3},admin=true)=>fetch(`${base}/auto-connect`,{method:'POST',headers:{'Content-Type':'application/json','x-test-admin':admin?'yes':'no'},body:JSON.stringify(body)});
 const writes=()=>mocks.query.mock.calls.filter(([sql])=>/^INSERT|^UPDATE|^DELETE/.test(String(sql)));
 describe('automatic connection endpoints',()=>{
+  it('loads persisted branch port identities before saving an inferred tee connection',async()=>{
+    mocks.raw.mockResolvedValue({group:{id:routeId,revision:3,status:'draft'},instances:teeBranchPair(),connections:[],transitions:[]});
+    mocks.query.mockImplementation(async(sql:string)=>{
+      if(sql.startsWith('SELECT instance_id FROM'))return {rows:[{instance_id:id(10)},{instance_id:id(11)}]};
+      if(sql.includes('FROM cad_catalog_ports'))return {rows:[
+        {id:id(30),catalog_item_id:catalogId,name:'start',port_type:'cable-ladder-60x300'},
+        {id:id(32),catalog_item_id:id(50),name:'branch',port_type:'cable-ladder-60x300'},
+      ]};
+      if(sql.startsWith('SELECT model_version_id'))return {rows:[{model_version_id:id(40)}]};
+      return {rows:[]};
+    });
+    const response=await connect();expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({connectionsCreated:1,connected:true});
+    expect(mocks.query.mock.calls.find(([sql])=>String(sql).includes('FROM cad_catalog_ports'))?.[0]).toContain("name IN('start','end','branch')");
+    const inserted=writes().find(([sql])=>String(sql).includes('INSERT INTO cad_design_connections'));
+    expect(inserted?.[1].slice(1)).toEqual([projectId,designId,id(10),id(50),id(32),id(11),catalogId,id(30)]);
+  });
   it('requires admin access before opening a transaction',async()=>{expect((await connect(undefined,false)).status).toBe(403);expect(mocks.transaction).not.toHaveBeenCalled();});
   it('requires a strict saved revision before any database access',async()=>{
     expect((await connect({expectedRevision:3,move:true})).status).toBe(400);expect(mocks.transaction).not.toHaveBeenCalled();

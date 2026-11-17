@@ -53,7 +53,7 @@ type Props = {
 };
 type AutoAttachment = {
   instanceId: string;
-  portName: 'start' | 'end';
+  portName: 'start' | 'end' | 'branch';
   targetObjectRevisionId: string;
   targetPortIndex: number;
   targetRouteCode?: string;

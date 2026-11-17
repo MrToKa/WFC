@@ -99,6 +99,24 @@ describe('server-derived route-list source and projection',()=>{
   });
 });
 describe('Add CAD route to ordinary project Trays list',()=>{
+  it('exports a three-arm tee into one ordinary row and reuses its exact graph source proof',async()=>{
+    group.name='BC027-1';
+    instances=[{...instance(),part_number:'KSLT 60.303 S',component_kind:'tee',cut_length_mm:null,
+      original_filename:'NDX_KLT_60-303_MED_214.step',source_sha256:'d2d9934607cc4a8aac6331e732522541fe23afce08a4c621685092188b5d936f'}];
+    const response=await save();expect(response.status).toBe(200);
+    const result=await response.json();
+    expect(result).toMatchObject({name:'BC027-1',type:'KSLT 60.303 S',elementCount:1,created:true,reused:false});
+    expect(result.lengthMm).toBeCloseTo(2385,8);
+    expect(row).toMatchObject({name:'BC027-1',width_mm:300,height_mm:60});
+    expect(Number(row!.length_mm)).toBeCloseTo(2385,8);
+    const source=(link!.source_proof as {source:{schemaVersion:string;centerlineGraph:unknown[];centerlineMetres:unknown[]}}).source;
+    expect(source.schemaVersion).toBe('wfc.cad.route-tray-source.v2');
+    expect(source.centerlineGraph).toHaveLength(3);expect(source.centerlineMetres).toEqual([]);
+    expect(writes().filter(([sql])=>String(sql).startsWith('INSERT INTO trays'))).toHaveLength(1);
+    const savedId=row!.id,savedProof=structuredClone(link);mocks.query.mockClear();
+    expect(await(await save()).json()).toMatchObject({trayId:savedId,lengthMm:result.lengthMm,created:false,reused:true});
+    expect(writes()).toEqual([]);expect(link).toEqual(savedProof);expect(group.status).toBe('draft');
+  });
   it('requires authority and a strict current revision before any transaction',async()=>{
     expect((await save(undefined,false)).status).toBe(403);
     expect((await save({expectedRevision:7,source:'cad-route',trayId:id(999)})).status).toBe(400);

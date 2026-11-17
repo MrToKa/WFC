@@ -8,14 +8,14 @@ import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 import { trayLengthCalculationSchema } from '../../shared/trayAutoLength.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
 import type { TrayRow } from '../models/tray.js';
-import { groupInputs, publicationTransaction, PublicationError, routePort, type PublicationInstance, type PublicationTransition } from './routePublication.js';
+import { groupInputs, publicationTransaction, PublicationError, routePort, resolveCadRouteMaterial, type CadRoutePath, type PublicationInstance, type PublicationTransition } from './routePublication.js';
 
 export const cadRouteTrayExportsRouter=Router({mergeParams:true});
 const input=z.object({expectedRevision:z.number().int().positive()}).strict();
 const hash=(value:unknown)=>createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 const fail=(code:string,message:string):never=>{throw new PublicationError(code,message);};
 type Group={id:string;name:string;purpose:string;revision:number;status?:string;project_tray_id?:string|null;publication?:unknown};
-type Chain={points:[number,number,number][];lengthMetres:number};
+type Chain={points:[number,number,number][];lengthMetres:number;paths?:CadRoutePath[]};
 type ExportLink={project_id:string;design_id:string;route_group_id:string;tray_id:string;source_sha256:string;source_proof:unknown;projection:unknown};
 type Projection={name:string;purpose:string|null;trayType:string|null;widthMm:number|null;heightMm:number|null;lengthMm:number|null;lengthSource:string;lengthCalculation:unknown};
 const numeric=(value:unknown):number|null=>value==null||!Number.isFinite(Number(value))?null:Number(value);
@@ -27,9 +27,11 @@ export function deriveCadTrayExport(projectId:string,designId:string,group:Group
   const first=instances.find(row=>row.component_kind==='straight')??instances[0];
   if(!first)return fail('CAD_ROUTE_PART_LIMIT','Connect at least one component before adding the route to the Trays list.');
   const profile=routePort(first,'start');
-  const centerlineSha256=hash(chain.points),lengthMm=chain.lengthMetres*1000;
-  const fields={name:group.name,purpose:group.purpose,trayType:first.part_number,widthMm:profile.widthMetres*1000,heightMm:profile.heightMetres*1000,lengthMm};
-  const source={schemaVersion:'wfc.cad.route-tray-source.v1',projectId,designId,routeId:group.id,...fields,centerlineSha256,centerlineMetres:chain.points,
+  const centerlineSha256=hash(chain.paths??chain.points),lengthMm=chain.lengthMetres*1000;
+  const material=chain.paths?resolveCadRouteMaterial(instances):{trayType:first.part_number,widthMm:profile.widthMetres*1000,heightMm:profile.heightMetres*1000};
+  const fields={name:group.name,purpose:group.purpose,...material,lengthMm};
+  const source={schemaVersion:chain.paths?'wfc.cad.route-tray-source.v2':'wfc.cad.route-tray-source.v1',projectId,designId,routeId:group.id,...fields,centerlineSha256,centerlineMetres:chain.points,
+    ...(chain.paths?{centerlineGraph:chain.paths}:{}),
     elements:instances.map(row=>({instanceId:row.id,instanceRevision:row.revision,catalogItemId:row.catalog_item_id,assetId:row.material_asset_id,
       sourceSha256:row.source_sha256,originalFilename:row.original_filename,componentKind:row.component_kind,partNumber:row.part_number,lengthMm:row.cut_length_mm,
       positionMm:[row.x_mm,row.y_mm,row.z_mm],rotation:[row.qx,row.qy,row.qz,row.qw]})),

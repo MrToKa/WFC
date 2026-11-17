@@ -15,6 +15,7 @@ const postgres = process.env.WFC_CAD_TRANSITIONS_POSTGRES_TESTS === '1' ? descri
 const container = `wfc-cad-transition-pg-${randomUUID()}`;
 let started = false;
 let trayExportInitializationSql = '';
+let transitionInitializationSql = '';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const docker = (args: string[], input?: string) =>
   execFileSync('docker', args, {
@@ -120,7 +121,9 @@ postgres('installation transition migration and lifecycle in isolated PostgreSQL
     const pool = { query, connect: async () => ({ query, release() {} }) } as unknown as Pool;
     await initializeCadDesignSchema(pool);
     await initializeCadRouteGroupsSchema(pool);
+    const transitionStart = statements.length;
     await initializeCadRouteTransitionsSchema(pool);
+    transitionInitializationSql = statements.slice(transitionStart).filter(text => !['BEGIN', 'COMMIT'].includes(text)).join(';\n');
     await initializeCadRouteTransitionsSchema(pool);
     const exportStart = statements.length;
     await initializeCadRouteTrayExportsSchema(pool);
@@ -160,6 +163,20 @@ postgres('installation transition migration and lifecycle in isolated PostgreSQL
   it('retains saved transitions when unchanged group membership is inserted again', () => {
     run(`INSERT INTO cad_route_group_members SELECT * FROM cad_route_group_members WHERE route_group_id='${id(4)}' ON CONFLICT DO NOTHING;
       ${assertSql(`(SELECT count(*) FROM cad_route_transition_links WHERE id='${id(31)}')=1`)}`);
+  });
+  it('migrates legacy two-port checks idempotently and preserves branch occupancy', () => {
+    run(`ALTER TABLE cad_route_transition_links DROP CONSTRAINT cad_route_transition_links_source_port_name_check;
+      ALTER TABLE cad_route_transition_links ADD CONSTRAINT cad_route_transition_links_source_port_name_check CHECK(source_port_name IN ('start','end'));
+      ALTER TABLE cad_route_transition_links DROP CONSTRAINT cad_route_transition_links_target_port_name_check;
+      ALTER TABLE cad_route_transition_links ADD CONSTRAINT cad_route_transition_links_target_port_name_check CHECK(target_port_name IN ('start','end'));
+      SET CONSTRAINTS ALL IMMEDIATE;
+      ${transitionInitializationSql}
+      ${link(32, 13, 'branch', 14, 'branch')}
+      ${assertSql(`(SELECT count(*) FROM cad_route_transition_links WHERE id='${id(32)}' AND source_port_name='branch' AND target_port_name='branch')=1`)}
+      ${rejected(link(33, 13, 'branch', 14, 'start'))}
+      ${rejected(link(34, 13, 'unknown', 14, 'start'))}
+      ${transitionInitializationSql}
+      ${assertSql('(SELECT count(*) FROM cad_route_transition_links)=2')}`);
   });
   it.each([11, 12])(
     'cascades deletion of endpoint membership %s while preserving the other placed parts',

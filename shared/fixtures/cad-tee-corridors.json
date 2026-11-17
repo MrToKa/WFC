@@ -1,0 +1,78 @@
+[
+  {
+    "name": "NDX_KLT_60-303_MED_214.step",
+    "planes": [
+      {
+        "bounds": [
+          -945.0000000000008,
+          -9.184850993605155e-15,
+          -795.0000000000001,
+          -944.9999999999998,
+          59.99999999999999,
+          795.0000000000003
+        ],
+        "normal": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "area": 94590.00000000001
+      }
+    ],
+    "corridors": [
+      {
+        "arm": "branch",
+        "samples": 303,
+        "solidIntersections": []
+      },
+      {
+        "arm": "start",
+        "samples": 303,
+        "solidIntersections": []
+      },
+      {
+        "arm": "end",
+        "samples": 303,
+        "solidIntersections": []
+      }
+    ]
+  },
+  {
+    "name": "NDX_KLT_60-303_F_MED_214.step",
+    "planes": [
+      {
+        "bounds": [
+          -945.0000000000008,
+          -9.184850993605155e-15,
+          -795.0000000000001,
+          -944.9999999999998,
+          59.99999999999999,
+          795.0000000000003
+        ],
+        "normal": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "area": 94590.00000000001
+      }
+    ],
+    "corridors": [
+      {
+        "arm": "branch",
+        "samples": 303,
+        "solidIntersections": []
+      },
+      {
+        "arm": "start",
+        "samples": 303,
+        "solidIntersections": []
+      },
+      {
+        "arm": "end",
+        "samples": 303,
+        "solidIntersections": []
+      }
+    ]
+  }
+]

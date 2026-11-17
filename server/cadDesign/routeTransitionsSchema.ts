@@ -21,9 +21,9 @@ export async function initializeCadRouteTransitionsSchema(pool: Pool): Promise<v
         design_id UUID NOT NULL,
         route_group_id UUID NOT NULL,
         source_instance_id UUID NOT NULL,
-        source_port_name TEXT NOT NULL CHECK (source_port_name IN ('start','end')),
+        source_port_name TEXT NOT NULL CHECK (source_port_name IN ('start','end','branch')),
         target_instance_id UUID NOT NULL,
-        target_port_name TEXT NOT NULL CHECK (target_port_name IN ('start','end')),
+        target_port_name TEXT NOT NULL CHECK (target_port_name IN ('start','end','branch')),
         kind TEXT NOT NULL DEFAULT 'routing-transition' CHECK (kind='routing-transition'),
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         CHECK (source_instance_id<>target_instance_id),
@@ -36,6 +36,14 @@ export async function initializeCadRouteTransitionsSchema(pool: Pool): Promise<v
         FOREIGN KEY (project_id,design_id,route_group_id,target_instance_id)
           REFERENCES cad_route_group_members(project_id,design_id,route_group_id,instance_id) ON DELETE CASCADE
       );
+      -- CREATE TABLE IF NOT EXISTS leaves the earlier two-port checks intact.
+      -- Recreate only these checks; retain all saved topology and port occupancy.
+      ALTER TABLE cad_route_transition_links DROP CONSTRAINT IF EXISTS cad_route_transition_links_source_port_name_check;
+      ALTER TABLE cad_route_transition_links ADD CONSTRAINT cad_route_transition_links_source_port_name_check
+        CHECK (source_port_name IN ('start','end','branch'));
+      ALTER TABLE cad_route_transition_links DROP CONSTRAINT IF EXISTS cad_route_transition_links_target_port_name_check;
+      ALTER TABLE cad_route_transition_links ADD CONSTRAINT cad_route_transition_links_target_port_name_check
+        CHECK (target_port_name IN ('start','end','branch'));
       CREATE INDEX IF NOT EXISTS cad_route_transition_links_group
         ON cad_route_transition_links(project_id,design_id,route_group_id,id);
 

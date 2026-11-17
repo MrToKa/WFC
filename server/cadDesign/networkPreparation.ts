@@ -15,7 +15,7 @@ import { preparationAggregateSchema } from '../../shared/pathfinderPreparation.j
 import { GEOMETRY_TRACE_DERIVATION, geometryTraceManifestSchema } from '../../shared/pathfinderGeometryTrace.js';
 import { cadOverlayPayloadSchema } from '../../shared/pathfinderCadOverlay.js';
 import { canonicalPurposeJson, normalizeCatalogKey } from '../../shared/pathfinderPurposePolicy.js';
-import { groupInputs, resolveCadRouteMaterial, routePort, PublicationError } from './routePublication.js';
+import { groupInputs, resolveCadRouteMaterial, cadRouteSegments, PublicationError } from './routePublication.js';
 import { cadTrayProjection, compatibleCadTrayExport } from './routeTrayExports.js';
 import type { PublicationInstance } from './routePublication.js';
 import type { TrayRow } from '../models/tray.js';
@@ -122,12 +122,10 @@ async function freeze(client: PoolClient, projectId: string, designId: string, i
       || Number(tray.width_mm) !== traySnapshot.widthMm || Number(tray.height_mm) !== traySnapshot.heightMm || Number(tray.length_mm) !== traySnapshot.lengthMm
       || group.status === 'published' && digest((group.publication as {traySnapshot?:unknown})?.traySnapshot ?? null) !== digest(traySnapshot))
       return refuse('CAD_ROUTE_CATALOG_CHANGED', 'The CAD route and its Trays row differ. Refresh the saved route values before generating its network.');
-    const segment = {id:`cad:${group.id}`,name:`/${group.tag}`,allowedCategoryMask:7,pointsMetres:chain.points,
-      ports:chain.endpoints.map(endpoint => routePort(chain.instances.get(endpoint.instanceId)!,endpoint.portName))};
     const overlay = cadOverlayPayloadSchema.parse({schemaVersion:'wfc.pf.cad-overlay-payload.v3',projectId,
-      modelVersionId:model.model_version_id,baseSnapshotSha256:base.snapshot_sha256,segments:[segment]});
+      modelVersionId:model.model_version_id,baseSnapshotSha256:base.snapshot_sha256,segments:cadRouteSegments(group,chain)});
     const sourceSha256 = digest({identity:{id:group.id,name:group.name,tag:group.tag,purpose:group.purpose},instances:instances.map(sourceInstance),
-      chain:{points:chain.points,endpoints:chain.endpoints,lengthMetres:chain.lengthMetres},transitions,material,
+      chain:{points:chain.points,endpoints:chain.endpoints,lengthMetres:chain.lengthMetres,...(chain.paths?{paths:chain.paths}:{})},transitions,material,
       tray:cadTrayProjection(tray),exportSourceSha256:exported?.sourceSha256 ?? null});
     const previous = group.publication as {baseArtifactId?:string;overlay?:unknown;networkPreparationSourceSha256?:string} | null;
     const unchanged = group.status === 'published' && previous?.baseArtifactId === base.id
@@ -164,7 +162,7 @@ export async function prepareCadDesignNetwork(projectId: string, designId: strin
     contentSha256:z.string()}),prepared:z.object({segmentCount:z.number().int().nonnegative(),key:z.string()})}).passthrough().safeParse(proof);
   if (!verified.success || verified.data.requestId !== requestId || verified.data.model.projectId !== projectId
     || verified.data.model.modelVersionId !== frozen.model.model_version_id || verified.data.model.contentSha256 !== frozen.model.content_fingerprint
-    || verified.data.prepared.segmentCount !== frozen.aggregate.counts.physicalLeaves + frozen.routes.length)
+    || verified.data.prepared.segmentCount !== frozen.aggregate.counts.physicalLeaves + frozen.routes.reduce((sum,route)=>sum+route.overlay.segments.length,0))
     return refuse('CAD_ROUTE_ENGINE_PROOF_REQUIRED', 'The routing engine could not verify the complete saved CAD network. No CAD routes were published.');
   return transaction(async client => {
     const current = await freeze(client,projectId,designId,input);

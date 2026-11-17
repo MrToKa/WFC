@@ -272,6 +272,26 @@ afterEach(async () => {
 });
 
 describe('CAD publication HTTP authorization and refusal', () => {
+  it.each([2,4])('requires proof of every tee arm before publication (engine segment count %s)',async segmentCount=>{
+    const tee={...instance,part_number:'KSLT 60.303 S',original_filename:'NDX_KLT_60-303_MED_214.step',
+      source_sha256:'d2d9934607cc4a8aac6331e732522541fe23afce08a4c621685092188b5d936f',component_kind:'tee',cut_length_mm:null};
+    const original=mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async(text:string,values:unknown[]=[])=>{
+      if(text.startsWith('SELECT i.*,c.original_filename'))return {rows:[tee]};
+      if(text.startsWith('INSERT INTO trays'))return {rows:[{id:values[0],project_id:projectId,name:values[2],purpose:values[3],tray_type:values[4],width_mm:values[5],height_mm:values[6],length_mm:values[7]}]};
+      return original(text,values);
+    });
+    mocks.execute.mockResolvedValue({status:'prepared',prepared:{segmentCount}});
+    const response=await post(await start(),'publish',{schemaVersion:'wfc.cad.route-publication.write.v3',expectedRevision:7});
+    if(segmentCount===2){expect(response.status).toBe(409);expect(await response.json()).toMatchObject({code:'CAD_ROUTE_ENGINE_PROOF_REQUIRED'});expect(sql('UPDATE cad_route_groups')).toBeUndefined();}
+    else{
+      expect(response.status).toBe(200);const result=await response.json();expect(result.status).toBe('published');expect(result.lengthMetres).toBeCloseTo(2.385,8);
+      const publication=JSON.parse(String(sql('UPDATE cad_route_groups')?.[1][4]));
+      expect(publication.overlay.segments).toHaveLength(3);
+      expect(publication.overlay.segments.every((segment:{name:string;ports:unknown[]})=>segment.name==='/CAD-01'&&segment.ports.length===1)).toBe(true);
+      expect(publication.traySnapshot).toMatchObject({trayType:'KSLT 60.303 S',widthMm:300,heightMm:60});expect(publication.traySnapshot.lengthMm).toBeCloseTo(2385,5);
+    }
+  });
   it('publishes an automatic component with genuine STEP ports without requiring an existing base attachment',async()=>{
     seedListExport();
     const original=mocks.query.getMockImplementation()!;
