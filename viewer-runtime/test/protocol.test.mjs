@@ -295,3 +295,20 @@ test('saved project point display is finite, exact, direction-bound and tied to 
       assert.equal(validateEnvelope(envelope(type, invalid)), null);
   }
 });
+
+
+test('source tray assignment snapshots and acknowledgements are exact, bounded and load-bound', () => {
+  for (const assignments of [[], [{ name: 'B002', objectIds: [23, 24] }]]) {
+    const command = envelope('SET_TRAY_ASSIGNMENTS', { assignments });
+    assert.ok(validateEnvelope(command, 'parent-to-frame'));
+    assert.equal(validateEnvelope(command, 'frame-to-parent'), null);
+    assert.equal(validateEnvelope({ ...command, modelVersionId: null, loadId: null }), null);
+  }
+  for (const assignments of [[{ name: '', objectIds: [23] }], [{ name: 'B002', objectIds: [] }], [{ name: 'B002', objectIds: [23, 23] }],
+    [{ name: 'B002', objectIds: [-1] }], [{ name: 'B002', objectIds: [23], injected: true }],
+    [{ name: 'B002', objectIds: Array.from({ length: 513 }, (_, index) => index + 1) }]])
+    assert.equal(validateEnvelope(envelope('SET_TRAY_ASSIGNMENTS', { assignments })), null);
+  assert.ok(validateEnvelope(envelope('TRAY_ASSIGNMENTS_UPDATED', {}), 'frame-to-parent'));
+  assert.equal(validateEnvelope(envelope('TRAY_ASSIGNMENTS_UPDATED', {}), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(envelope('TRAY_ASSIGNMENTS_UPDATED', { count: 1 })), null);
+});

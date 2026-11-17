@@ -82,7 +82,7 @@ const bulkJobId = '77777777-7777-4777-8777-777777777777';
 function model() {
   const action = vi.fn(async () => null);
   const matched = { status: 'matched' as const, locationId, candidates: [locationId] }, missing = { status: 'missing' as const, locationId: null, candidates: [] };
-  return { preparationAccess: {projectId:null,loadedProjectId:null,token:null,isAdmin:false}, preparationViewerGeneration:0, runProjectPreparation:vi.fn(async()=>{throw new Error('Not part of this diagnostic fixture');}), loading: false, busy: false, error: null, viewerPhase: 'ready' as const, viewerMessage: 'The active model is ready.',
+  return { setTrayAssignmentContext: vi.fn(async () => {}), preparationAccess: {projectId:null,loadedProjectId:null,token:null,isAdmin:false}, preparationViewerGeneration:0, runProjectPreparation:vi.fn(async()=>{throw new Error('Not part of this diagnostic fixture');}), loading: false, busy: false, error: null, viewerPhase: 'ready' as const, viewerMessage: 'The active model is ready.',
     data: { schemaVersion: 1 as const, projectId, registryRevision: '3', activeModel: { modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) },
       settings: { revision: '1', connectionGap: '1', secondaryTrayLength: '4', endConnectionLength: '2', additionalBendingPercent: '5' }, artifacts: [], jobs: [], proposals: [],
       cables: [{ id: '44444444-4444-4444-8444-444444444444', cableId: 1, tag: '=CABLE-1', fromLocation: 'EQ-001', toLocation: 'EQ-002', mto: 'Control', routing: null, designLength: null, installLength: 123, cableWriteRevision: '0', fromMatch: matched, toMatch: missing },

@@ -1,7 +1,7 @@
 import { validateCadProperties, type CadSectionMetadata, type CadSectionRoute } from '../../viewer-runtime/cad-properties.mjs';
 import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
-import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
+import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isCanonicalPoint, validateEnvelope, validateTrayAssignments, type ViewerTrayAssignment, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateBarrierFrameObservation, barrierFrameObservationHashInput, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
 import { validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl,
@@ -72,6 +72,8 @@ export class ViewerController {
   private loadId: string | null = null;
   private session: ViewerSession | null = null;
   private routeRequestId: string | null = null;
+  private trayAssignmentsSequence = 0;
+  private trayAssignmentsPending: Promise<void> = Promise.resolve();
   private trayDisplayGeneration: number | null = null;
   private activeLoadRequestId: string | null = null;
   private selectionRevision: number | null = null;
@@ -124,6 +126,12 @@ export class ViewerController {
       if (!this.pending.delete(pending.envelope.requestId)) return;
       pending.reject?.(pending.envelope.type === 'READ_TRAY_ROOT_SELECTION'
         ? new ViewerAccessError('TRAY_ROOT_SELECTION_UNAVAILABLE', 0) : new Error('Viewer request timed out'));
+      if (pending.envelope.type === 'SET_TRAY_ASSIGNMENTS') {
+        const cancelId = this.cancel(pending.envelope.requestId), cancellation = this.pending.get(cancelId);
+        if (cancellation) { window.clearTimeout(cancellation.timer); this.pending.delete(cancelId); }
+        this.emit('ERROR', { code: 'TRAY_ASSIGNMENTS_UNAVAILABLE', message: 'Tray assignments could not be displayed in Properties. Refresh Path Finder to retry.', retryable: true, operation: 'SET_TRAY_ASSIGNMENTS' });
+        return;
+      }
       if (pending.envelope.type.includes('BARRIER_MULTIPART')) {
         this.cancel(pending.envelope.requestId);
         this.emit('ERROR', { code: 'BARRIER_MULTIPART_RECONCILE_REQUIRED', message: 'Barrier control timed out. Check the retained capture status before trying another command.', retryable: true, operation: pending.envelope.type });
@@ -255,6 +263,25 @@ export class ViewerController {
     const payload = structuredClone({ componentId, metadata, route });
     if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
     await this.sendAsync('CAD_PROPERTIES', payload, 'CAD_ACK');
+  }
+
+  /** Replace source-model Properties metadata without changing selection or appearance. */
+  setTrayAssignments(assignments: ViewerTrayAssignment[]): Promise<void> {
+    if (!validateTrayAssignments(assignments)) return Promise.reject(new Error('Tray assignments exceed the Properties display limit.'));
+    const saved = structuredClone(assignments), scope = this.getLoadSnapshot(), sequence = ++this.trayAssignmentsSequence;
+    const current = () => {
+      const now = this.getLoadSnapshot();
+      return Boolean(scope?.ready && now?.ready && sequence === this.trayAssignmentsSequence
+        && now.instanceId === scope.instanceId && now.loadId === scope.loadId
+        && now.modelVersionId === scope.modelVersionId && now.selectionRevision === scope.selectionRevision);
+    };
+    const pending = this.trayAssignmentsPending.catch(() => {}).then(async () => {
+      if (!current()) return;
+      if (!await this.checkSelection() || !current()) return;
+      await this.sendAsync('SET_TRAY_ASSIGNMENTS', { assignments: saved }, 'TRAY_ASSIGNMENTS_UPDATED');
+    });
+    this.trayAssignmentsPending = pending;
+    return pending;
   }
 
   private onMessage = (event: MessageEvent): void => {

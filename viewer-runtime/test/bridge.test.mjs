@@ -1282,3 +1282,23 @@ test('CAD visibility acknowledges the owned component and rejects stale loads', 
   assert.equal(calls.length, 1);
   f.bridge.dispose();
 });
+
+test('source tray Properties assignments replace and clear only the authorized loaded model', async () => {
+  const f = fixture(), calls = [];
+  f.handle.setTrayAssignments = async (assignments, signal) => { assert.equal(signal.aborted, false); calls.push(assignments); };
+  await f.loaded();
+  const first = f.send('SET_TRAY_ASSIGNMENTS', { assignments: [{ name: 'B002', objectIds: [23] }] });
+  await turn();
+  assert.deepEqual(calls, [[{ name: 'B002', objectIds: [23] }]]);
+  assert.deepEqual(f.messages('TRAY_ASSIGNMENTS_UPDATED').find(value => value.requestId === first.requestId)?.payload, {});
+  f.send('SET_TRAY_ASSIGNMENTS', { assignments: [] }, { loadId: uuid(999) });
+  await turn(); assert.equal(calls.length, 1);
+  f.send('SET_TRAY_ASSIGNMENTS', { assignments: [] });
+  await turn(); assert.deepEqual(calls[1], []);
+  f.handle.setTrayAssignments = async () => { throw new Error('Properties unavailable'); };
+  f.send('SET_TRAY_ASSIGNMENTS', { assignments: [] });
+  await turn();
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'TRAY_ASSIGNMENTS_UNAVAILABLE');
+  assert.equal(f.states.at(-1).phase, 'loaded');
+  f.bridge.dispose();
+});

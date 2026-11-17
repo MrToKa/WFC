@@ -48,12 +48,13 @@ class PropertySet {
 }
 const sourceSet = (value) =>
   new PropertySet({ __selected_dbIds__: [0], 'Source/Tag': [{ dbId: 0, displayValue: value }] });
-function fixture() {
+function fixture(withAssignments = false) {
   const own = {},
     source = { getData: () => ({}), getPropertySetAsync: async () => sourceSet('SVF') };
   const sections = new Map([
     [0, { metadata: structuredClone(metadata), route: structuredClone(route) }],
   ]);
+  const assignments = new Map();
   const frames = [],
     listeners = [];
   const viewer = {
@@ -179,6 +180,7 @@ function fixture() {
       AGGREGATE_SELECTION_CHANGED_EVENT: 'aggregate',
     },
     (model, sdkId) => (model === own ? (sections.get(sdkId) ?? null) : undefined),
+    withAssignments ? (model, sdkId) => model === source ? assignments.get(sdkId) : undefined : undefined,
   );
   const select = (selections) => {
     viewer.selection = selections;
@@ -202,6 +204,7 @@ function fixture() {
     own,
     source,
     sections,
+    assignments,
     provider,
     select,
     emitSelection,
@@ -490,4 +493,55 @@ test('native group aggregation retains each section saved world coordinates and 
     '__selected_dbIds__',
     'Source/Tag',
   ]);
+});
+
+test('Assigned to appears only on assigned source objects and refreshes an open panel after move and clear', async () => {
+  const f = fixture(true);
+  const original = sourceSet('ORIGINAL');
+  original.map.Name = [{ dbId: 91, displayValue: 'Cable tray section' }];
+  f.source.getPropertySetAsync = async () => original;
+  f.select([{ model: f.source, selection: [91] }]);
+  await turn();
+  const assignment = () => f.viewer.rendered.at(-1).value.map['Assignment/Assigned to'];
+  assert.equal(assignment(), undefined);
+  f.assignments.set(91, 'B002');
+  f.provider.refresh();
+  await turn();
+  assert.equal(assignment()[0].displayValue, 'B002');
+  assert.equal(assignment()[0].displayName, 'Assigned to');
+  assert.equal(assignment()[0].parentName, 'Cable tray section');
+  assert.equal(original.map['Assignment/Assigned to'], undefined);
+  f.assignments.set(91, 'B003');
+  f.provider.refresh();
+  await turn();
+  assert.equal(assignment()[0].displayValue, 'B003');
+  f.assignments.clear();
+  f.provider.refresh();
+  await turn();
+  assert.equal(assignment(), undefined);
+  assert.equal(f.viewer.rendered.at(-1).value.map['Source/Tag'][0].displayValue, 'ORIGINAL');
+});
+
+test('assignment refresh preserves a manually closed panel and supersedes pending old property reads', async () => {
+  const f = fixture(true), pending = deferred();
+  f.assignments.set(91, 'B002');
+  f.source.getPropertySetAsync = () => pending.promise;
+  f.select([{ model: f.source, selection: [91] }]);
+  f.source.getPropertySetAsync = async () => sourceSet('CURRENT');
+  f.assignments.set(91, 'B004');
+  f.provider.refresh();
+  await turn();
+  pending.resolve(sourceSet('STALE'));
+  await turn();
+  assert.equal(f.viewer.rendered.at(-1).value.map['Source/Tag'][0].displayValue, 'CURRENT');
+  f.panel().setVisible(false);
+  const count = f.viewer.rendered.length;
+  f.assignments.clear();
+  f.provider.refresh();
+  await turn();
+  assert.equal(f.panel().isVisible(), false);
+  assert.equal(f.viewer.rendered.length, count);
+  f.panel().setVisible(true);
+  await turn();
+  assert.equal(f.viewer.rendered.at(-1).value.map['Assignment/Assigned to'], undefined);
 });

@@ -94,6 +94,21 @@ describe('PathFinder protected Viewer capabilities', () => {
     return { ...s, identity };
   }
 
+  it('serializes source tray snapshots and coalesces queued updates to the newest assignment', async () => {
+    const s = await loaded();
+    const first = s.c.setTrayAssignments([{ name: 'A', objectIds: [23] }]);
+    await vi.waitFor(() => expect(s.send.mock.calls.filter(call => call[0].type === 'SET_TRAY_ASSIGNMENTS')).toHaveLength(1));
+    const second = s.c.setTrayAssignments([{ name: 'B', objectIds: [23] }]);
+    const newest = s.c.setTrayAssignments([{ name: 'A', objectIds: [23] }]);
+    const commands = () => s.send.mock.calls.filter(call => call[0].type === 'SET_TRAY_ASSIGNMENTS').map(call => call[0]);
+    s.message('TRAY_ASSIGNMENTS_UPDATED', {}, commands()[0].requestId, s.identity);
+    await first;
+    await vi.waitFor(() => expect(commands()).toHaveLength(2));
+    expect(commands()[1].payload.assignments).toEqual([{ name: 'A', objectIds: [23] }]);
+    s.message('TRAY_ASSIGNMENTS_UPDATED', {}, commands()[1].requestId, s.identity);
+    await Promise.all([second, newest]);
+  });
+
   it('never cleans up an old CAD upload in a replacement model with the same component ID', async () => {
     const s = await loaded(), componentId = generateId();
     const transform = { positionMm: { x: 1, y: 2, z: 3 }, rotation: { x: 0, y: 0, z: 0, w: 1 } };

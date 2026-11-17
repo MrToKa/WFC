@@ -180,6 +180,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
     });
     let finished = false, routes, pathfinder, locationPoint, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
     let capture, multipart, cadScene;
+    let trayAssignmentGeneration = 0;
     const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; clearTimeout(old.deadline); old.controller.abort(); if (old.iterator) void old.iterator.return().catch(() => {}); };
     const runtimeError = () => { if (!finished) onRuntimeError(safeError()); };
     const finish = () => {
@@ -332,6 +333,14 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         async cadProperties(componentId, metadata, route) {
           if (!viewer.getExtension('Autodesk.PropertiesManager')) await viewer.loadExtension('Autodesk.PropertiesManager');
           ensureCadScene().setProperties(componentId, metadata, route);
+        },
+        async setTrayAssignments(assignments, operationSignal) {
+          const generation = ++trayAssignmentGeneration;
+          active(operationSignal);
+          if (!viewer.getExtension('Autodesk.PropertiesManager')) await viewer.loadExtension('Autodesk.PropertiesManager');
+          active(operationSignal);
+          if (finished || generation !== trayAssignmentGeneration) throw interrupted();
+          ensureCadScene().setSourceTrayAssignments(assignments);
         },
         readBarrierMultipartFrame: (request, operationSignal) => multipart.readFrame(request, operationSignal),
         startBarrierMultipart: (request, transport, operationSignal) => multipart.start(request, transport, operationSignal),

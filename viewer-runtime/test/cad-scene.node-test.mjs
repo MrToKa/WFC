@@ -670,3 +670,60 @@ test('CAD route focus follows route metadata arriving after its mesh and retries
   fail = false; scene.setRouteVisibility(null); assert.equal(row.visible, true);
   scene.dispose();
 });
+
+test('source group assignment is inherited by members, replaced, cleared and scoped to the source model', async () => {
+  const f = fixture();
+  f.sourceModel.getData = () => ({});
+  f.sourceModel.getInstanceTree = () => ({ getNodeParentId: id => ({ 12: 10, 10: 1, 1: 1 })[id] });
+  class PropertySet {
+    constructor(map) { this.map = map; }
+    getVisibleKeys() { return Object.keys(this.map).filter(key => key !== '__selected_dbIds__'); }
+    getValidIds() { return []; }
+  }
+  const sourceRows = { __selected_dbIds__: [12], 'Item/Type': [{ dbId: 12, displayValue: 'Solid' }] };
+  f.sourceModel.getPropertySetAsync = async () => new PropertySet(sourceRows);
+  f.viewer.currentSelection = [{ model: f.sourceModel, selection: [12] }];
+  let panel = { isVisible: () => true };
+  class NativePanel {
+    constructor(viewer) {
+      this.viewer = viewer;
+      this.currentSelections = viewer.getAggregateSelection();
+      this.currentModel = this.currentSelections[0]?.model;
+      this.visible = true;
+    }
+    requestProperties() { if (this.visible) this.requestAggregatedNodeProperties(this.currentSelections); }
+    setVisible(value) { this.visible = value; this.requestProperties(); }
+    isVisible() { return this.visible; }
+    setAggregatedPropertiesIntoUI(result) { this.result = result; }
+    onPropError() { this.result = null; }
+    uninitialize() { this.viewer = null; }
+  }
+  const manager = { getPanel: () => panel, setPanel(next) { panel = next; return true; }, setDefaultPanel() {} };
+  f.viewer.getExtension = () => manager;
+  f.viewer.addEventListener = () => {};
+  f.viewer.removeEventListener = () => {};
+  f.window.Autodesk.Viewing.Extensions = { ViewerPropertyPanel: NativePanel };
+  f.window.Autodesk.Viewing.PropertySet = PropertySet;
+  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  scene.setSourceTrayAssignments([{ name: 'B002', objectIds: [10] }]);
+  await flush();
+  assert.equal(panel.result.map['Assignment/Assigned to'][0].displayValue, 'B002');
+  assert.equal(sourceRows['Assignment/Assigned to'], undefined);
+  assert.equal(f.viewer.shown.length, 0, 'source properties need no dynamic geometry');
+  scene.setSourceTrayAssignments([{ name: 'B003', objectIds: [10] }, { name: 'B004', objectIds: [12] }]);
+  await flush();
+  assert.equal(panel.result.map['Assignment/Assigned to'][0].displayValue, 'B004');
+  const other = { getData: () => ({}), getPropertySetAsync: f.sourceModel.getPropertySetAsync };
+  panel.currentSelections = [{ model: other, selection: [12] }];
+  scene.setSourceTrayAssignments([{ name: 'B003', objectIds: [10] }]);
+  await flush();
+  assert.equal(panel.result.map['Assignment/Assigned to'], undefined);
+  panel.currentSelections = [{ model: f.sourceModel, selection: [12] }];
+  scene.setSourceTrayAssignments([]);
+  await flush();
+  assert.equal(panel.result.map['Assignment/Assigned to'], undefined);
+  assert.equal(panel.result.map['Item/Type'][0].displayValue, 'Solid');
+  scene.dispose();
+  assert.throws(() => scene.setSourceTrayAssignments([]), /disposed/);
+});

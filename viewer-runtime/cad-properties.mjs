@@ -113,7 +113,7 @@ export function cadPropertyRows(metadata, route, dbId, positionMm) {
 }
 
 /** Use the existing SDK Properties toolbar/dock and its native source behavior. */
-export function installCadPropertyPanel(viewer, av, lookup) {
+export function installCadPropertyPanel(viewer, av, lookup, assignedTo) {
   const manager = viewer.getExtension?.('Autodesk.PropertiesManager');
   const NativePanel = av.Extensions?.ViewerPropertyPanel;
   if (!manager?.setPanel || !NativePanel || !av.PropertySet)
@@ -198,6 +198,18 @@ export function installCadPropertyPanel(viewer, av, lookup) {
         if (!(selection.selection ?? []).some((id) => lookup(selection.model, id) !== undefined))
           return selection.model.getPropertySetAsync(selection.selection, {
             needsExternalId: selection.model.getData()?.loadOptions?.needsExternalId,
+          }).then((set) => {
+            // Keep the SDK's cached property rows untouched.
+            const map = { ...set.map };
+            const rows = (selection.selection ?? []).flatMap((id) => {
+              const name = assignedTo?.(selection.model, id);
+              const parentName = set.map.Name?.find((row) => row.dbId === id)?.displayValue ?? `Object ${id}`;
+              return name ? [{ displayName: 'Assigned to', displayValue: name,
+                displayCategory: 'Assignment', attributeName: 'Assigned to',
+                type: 20, units: null, hidden: false, dbId: id, parentName }] : [];
+            });
+            if (rows.length) map['Assignment/Assigned to'] = rows;
+            return new av.PropertySet(map);
           });
         const map = { __selected_dbIds__: own.map((entry) => entry.id) };
         for (const { id, section } of own) {
@@ -251,8 +263,9 @@ export function installCadPropertyPanel(viewer, av, lookup) {
       }
     }
     refreshCadProperties() {
+      if (!this.currentSelections?.length && !this.cadActive) return;
       if (
-        !this.cadActive &&
+        !assignedTo && !this.cadActive &&
         !this.currentSelections?.some((selection) =>
           (selection.selection ?? []).some((id) => lookup(selection.model, id) !== undefined),
         )

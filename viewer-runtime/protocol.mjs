@@ -16,8 +16,8 @@ export const MAX_MESSAGE_BYTES = 65536;
 // Geometry still arrives through the existing small capture events.
 export const MAX_BARRIER_SELECTION_MESSAGE_BYTES = 4 * 1024 ** 2;
 export const FRAME_PATH = '/viewer-runtime/7.130.0/index.html';
-export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE', 'READ_BARRIER_MULTIPART_FRAME', 'START_BARRIER_MULTIPART', 'STATUS_BARRIER_MULTIPART', 'CANCEL_BARRIER_MULTIPART', 'RECONCILE_BARRIER_MULTIPART', 'CAD_BEGIN', 'CAD_APPEND', 'CAD_COMMIT', 'CAD_TRANSFORM', 'CAD_REMOVE', 'CAD_FOCUS', 'CAD_COLOR', 'CAD_PROPERTIES', 'CAD_VISIBILITY']);
-export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'PREPARATION_PROGRESS', 'TRAY_IDENTITIES', 'MODEL_SELECTION', 'TRAY_ROOT_SELECTION', 'OBJECT_GUID', 'LOCATION_SHOWN', 'LOCATION_POINT_SHOWN', 'TRAY_SHOWN', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'BARRIER_CAPTURE_EVENT', 'BARRIER_CAPTURE_PROGRESS', 'BARRIER_MULTIPART_FRAME', 'BARRIER_MULTIPART_STATUS', 'CAD_ACK']);
+export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'SET_TRAY_ASSIGNMENTS', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE', 'READ_BARRIER_MULTIPART_FRAME', 'START_BARRIER_MULTIPART', 'STATUS_BARRIER_MULTIPART', 'CANCEL_BARRIER_MULTIPART', 'RECONCILE_BARRIER_MULTIPART', 'CAD_BEGIN', 'CAD_APPEND', 'CAD_COMMIT', 'CAD_TRANSFORM', 'CAD_REMOVE', 'CAD_FOCUS', 'CAD_COLOR', 'CAD_PROPERTIES', 'CAD_VISIBILITY']);
+export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'PREPARATION_PROGRESS', 'TRAY_IDENTITIES', 'MODEL_SELECTION', 'TRAY_ROOT_SELECTION', 'OBJECT_GUID', 'LOCATION_SHOWN', 'LOCATION_POINT_SHOWN', 'TRAY_SHOWN', 'TRAY_ASSIGNMENTS_UPDATED', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'BARRIER_CAPTURE_EVENT', 'BARRIER_CAPTURE_PROGRESS', 'BARRIER_MULTIPART_FRAME', 'BARRIER_MULTIPART_STATUS', 'CAD_ACK']);
 export const MAX_PATH_POINTS = 20000;
 export const MAX_PATH_CHUNK_POINTS = 128;
 // A physical equipment item may use every raw candidate in one complete match scope.
@@ -73,6 +73,18 @@ export function parseRouting(rawRouting) {
     segmentIndex++;
   }
   return { segments, ignored };
+}
+
+/** A complete display-only snapshot, bounded below the standard envelope limit. */
+export function validateTrayAssignments(value) {
+  try {
+    return Array.isArray(value) && value.length <= 512
+      && value.every(entry => exact(entry, ['name', 'objectIds']) && text(entry.name, 200)
+        && entry.name.trim().length > 0 && Array.isArray(entry.objectIds) && entry.objectIds.length > 0
+        && entry.objectIds.length <= 512 && boundedIds(entry.objectIds))
+      && value.reduce((count, entry) => count + entry.objectIds.length, 0) <= 4096
+      && new TextEncoder().encode(JSON.stringify(value)).byteLength <= 60000;
+  } catch { return false; }
 }
 
 export function validateBootstrap(search) {
@@ -163,6 +175,8 @@ function payload(type, value) {
     case 'SHOW_LOCATION': case 'LOCATION_SHOWN': return (exact(value, ['sdkObjectId']) || exact(value, ['sdkObjectId', 'sdkObjectIds'])
       && boundedIds(value.sdkObjectIds, MAX_LOCATION_OBJECT_IDS) && value.sdkObjectIds.length > 0 && value.sdkObjectIds[0] === value.sdkObjectId
       && value.sdkObjectIds.every((id, at) => at === 0 || id > value.sdkObjectIds[at - 1])) && positiveId(value.sdkObjectId);
+    case 'SET_TRAY_ASSIGNMENTS': return exact(value, ['assignments']) && validateTrayAssignments(value.assignments);
+    case 'TRAY_ASSIGNMENTS_UPDATED': return exact(value, []);
     case 'SHOW_TRAY': case 'TRAY_SHOWN': return exact(value, ['sdkObjectIds']) && Array.isArray(value.sdkObjectIds) && value.sdkObjectIds.length > 0 && value.sdkObjectIds.length <= 512 && boundedIds([...value.sdkObjectIds]);
     case 'MODEL_SELECTION': return exact(value, ['coordinateFrame', 'metresPerDisplayUnit', 'globalOffsetMetres', 'objects']) && payload('MODEL_OBJECTS', { cursor: 0, nextCursor: null, complete: true, query: '', ...value }) && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
     case 'SET_PATH_TRANSPARENCY': case 'PATH_TRANSPARENCY_UPDATED': return exact(value, ['routeRequestId', 'percent']) && isUuid(value.routeRequestId) && integer(value.percent) && value.percent <= 100;
@@ -216,7 +230,7 @@ export function validateEnvelope(value, direction) {
       || value.type === 'BARRIER_MULTIPART_FRAME' && (value.payload.frameObservation.projectId !== value.projectId
         || value.payload.frameObservation.modelVersionId !== value.modelVersionId || value.payload.frameObservation.loadId !== value.loadId))) return null;
     const handshake = ['HELLO', 'INIT', 'RUNTIME_READY'].includes(value.type);
-    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'PREPARATION_PROGRESS', 'RESOLVE_TRAY_IDENTITIES', 'TRAY_IDENTITIES', 'READ_SELECTION', 'MODEL_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'OBJECT_GUID', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'LOCATION_SHOWN', 'LOCATION_POINT_SHOWN', 'SHOW_TRAY', 'TRAY_SHOWN', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'CAD_BEGIN', 'CAD_APPEND', 'CAD_COMMIT', 'CAD_TRANSFORM', 'CAD_REMOVE', 'CAD_FOCUS', 'CAD_COLOR', 'CAD_PROPERTIES', 'CAD_VISIBILITY', 'CAD_ACK'].includes(value.type) && value.modelVersionId === null) return null;
+    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'PREPARATION_PROGRESS', 'RESOLVE_TRAY_IDENTITIES', 'TRAY_IDENTITIES', 'READ_SELECTION', 'MODEL_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'OBJECT_GUID', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'LOCATION_SHOWN', 'LOCATION_POINT_SHOWN', 'SHOW_TRAY', 'TRAY_SHOWN', 'SET_TRAY_ASSIGNMENTS', 'TRAY_ASSIGNMENTS_UPDATED', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'CAD_BEGIN', 'CAD_APPEND', 'CAD_COMMIT', 'CAD_TRANSFORM', 'CAD_REMOVE', 'CAD_FOCUS', 'CAD_COLOR', 'CAD_PROPERTIES', 'CAD_VISIBILITY', 'CAD_ACK'].includes(value.type) && value.modelVersionId === null) return null;
     const serialized = JSON.stringify(value);
     const maximumBytes = value.type === 'START_BARRIER_CAPTURE' ? MAX_BARRIER_SELECTION_MESSAGE_BYTES
       : value.type === 'BEGIN_COMPUTED_PATH' ? MAX_COMPUTED_PATH_MESSAGE_BYTES : MAX_MESSAGE_BYTES;

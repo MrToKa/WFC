@@ -77,3 +77,7 @@ export function normalizeRoutingKey(token: string): string;
 export function validateBootstrap(search: string): { instanceId: string; projectId: string } | null;
 export function validateDescriptor(value: unknown, identity: Pick<ViewerDescriptor, 'projectId' | 'modelVersionId' | 'loadId'>): ViewerDescriptor | null;
 export function validateEnvelope(value: unknown, direction?: BridgeDirection): BridgeEnvelope | null;
+
+/** Complete source-model assignment metadata; [] clears the snapshot. */
+export interface ViewerTrayAssignment { name: string; objectIds: number[] }
+export function validateTrayAssignments(value: unknown): value is ViewerTrayAssignment[];

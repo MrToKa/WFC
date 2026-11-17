@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, parsePathFinderProposal, pathFinderRequest, submitPathFinderCalculation, PathFinderApiError, type PathFinderCalculationSubmission, type PathFinderState, type PathFinderProposal, type PathFinderPreferences, type PathFinderPreviewInput } from '@/api/pathfinder';
+import { fetchPreparationContext } from '@/api/pathfinderPreparation';
+import { trayAssignmentSnapshot } from '@/viewer/trayAssignmentSnapshot';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 import { trayIdentityErrorMessage } from '@/viewer/trayIdentityErrors';
 import type { CanonicalPoint, ComputedPath, PickedPoint, ViewerModelObjectsPage, ViewerTrayRootSelection, ModelCaptureRequest } from '../../../../viewer-runtime/protocol.mjs';
 import type { PreparationDiscoveryRequest, PreparationDiscoveryPage, PreparationDiscoveryProgress } from '../../../../viewer-runtime/preparation-input.mjs';
-import type { PreparationScope } from '../../../../shared/pathfinderPreparation';
+import type { PreparationContext, PreparationScope } from '../../../../shared/pathfinderPreparation';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
 import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 import { AUTOMATIC_PAIR_POLICY } from '../../../../shared/pathfinderAutomaticPair';
@@ -29,7 +31,7 @@ export type ProjectPreparationViewer = {
 
 type Options = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; container: RefObject<HTMLDivElement | null>; automaticStatePolling?: boolean };
 type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string };
-type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; storedRoute: StoredRouteDisplay | null; publishedCad: PublishedCadDisplay | null; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
+type Run = { assignmentsVersion: number; closed: boolean; abort: AbortController; viewer: ViewerController | null; storedRoute: StoredRouteDisplay | null; publishedCad: PublishedCadDisplay | null; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
 // Cosmetic text only. Capture protocol, geometry assembly and terminal/auth
 // updates retain their original delivery; dropping progress needs no timer.
 const CAPTURE_PROGRESS_INTERVAL_MILLISECONDS = 1000;
@@ -87,6 +89,41 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   const accessFailure = useCallback((run: Run, error: unknown) => {
     if (error instanceof PathFinderApiError && [401, 403, 404].includes(error.status)) { run.publishedCad?.dispose(); run.viewer?.dispose('reload'); dataRef.current = null; update(run, { data: null, busy: false, loading: false, error: error.message, viewerPhase: 'error', viewerMessage: error.message }); run.closed = true; run.abort.abort(); }
   }, [update]);
+  const setTrayAssignmentContext = useCallback(async (context: PreparationContext): Promise<void> => {
+    const run = runRef.current, viewer = run?.viewer;
+    if (!run || !viewer || !live(run) || !viewer.getLoadSnapshot()?.ready || context.projectId !== scope.projectId
+      || context.scope.modelVersionId !== run.modelVersionId || context.scope.selectionRevision !== run.selectionRevision
+      || context.scope.contentFingerprint !== run.contentFingerprint) return;
+    const version = ++run.assignmentsVersion;
+    try {
+      let assignments;
+      try { assignments = trayAssignmentSnapshot(context, context.scope); }
+      catch (error) {
+        await viewer.setTrayAssignments([]);
+        throw error;
+      }
+      await viewer.setTrayAssignments(assignments);
+    } catch {
+      if (live(run) && run.viewer === viewer && run.assignmentsVersion === version) {
+
+        update(run, { error: 'Tray assignments could not be displayed in Properties. Refresh Path Finder to retry.' });
+      }
+    }
+  }, [live, scope, update]);
+  const restoreTrayAssignments = useCallback(async (run: Run): Promise<void> => {
+    if (!live(run) || !scope.projectId || !scope.token) return;
+    const version = run.assignmentsVersion;
+    const deadline = pathFinderRequestDeadline(run.abort.signal, STATE_READ_TIMEOUT_MILLISECONDS,
+      () => new Error('Tray assignment display request timed out.'));
+    try {
+      const context = await deadline.wait(() => fetchPreparationContext(scope.projectId!, scope.token!, deadline.signal));
+      // A read started during loading must never overwrite a confirmed later save.
+      if (live(run) && run.assignmentsVersion === version) await setTrayAssignmentContext(context);
+    } catch {
+      if (live(run) && run.assignmentsVersion === version)
+        update(run, { error: 'Tray assignments could not be displayed in Properties. Refresh Path Finder to retry.' });
+    } finally { deadline.dispose(); }
+  }, [live, scope, setTrayAssignmentContext, update]);
   const refresh = useCallback(async (run = runRef.current, afterWrite = false): Promise<PathFinderState | null> => {
     if (!run || !live(run) || !projectId || !token || !isAdmin) return null;
     if (run.stateRead) {
@@ -105,7 +142,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         dataRef.current = data; update(run, { data, loading: false, error: null });
         if (run.modelVersionId !== data.activeModel.modelVersionId || run.selectionRevision !== data.activeModel.selectionRevision) {
           run.publishedCad?.dispose(); run.viewer?.dispose('reload'); setRevision(value => value + 1);
-        } else void run.publishedCad?.refresh();
+        } else { void run.publishedCad?.refresh(); void restoreTrayAssignments(run); }
         return data;
       } catch (error) { if (live(run)) { accessFailure(run, error); update(run, { loading: false, error: message(error) }); } return null; }
       finally { deadline.dispose(); }
@@ -113,9 +150,9 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     run.stateRead = pending;
     try { return await pending; }
     finally { if (run.stateRead === pending) run.stateRead = null; }
-  }, [accessFailure, isAdmin, live, projectId, token, update]);
+  }, [accessFailure, isAdmin, live, projectId, token, update, restoreTrayAssignments]);
   useEffect(() => {
-    const run: Run = { closed: false, abort: new AbortController(), viewer: null, storedRoute: null, publishedCad: null, modelVersionId: null, selectionRevision: null, contentFingerprint:null, generation: revision, captureProgressAt: null, stateRead: null };
+    const run: Run = { assignmentsVersion: 0, closed: false, abort: new AbortController(), viewer: null, storedRoute: null, publishedCad: null, modelVersionId: null, selectionRevision: null, contentFingerprint:null, generation: revision, captureProgressAt: null, stateRead: null };
     runRef.current = run; dataRef.current = null; renderedScope.current = scope; setView(initial);
     if (!projectId || !token || !isAdmin || projectId !== loadedProjectId || !container.current) {
       update(run, { loading: false, viewerPhase: 'error', viewerMessage: 'Current administrator project access is required.', error: 'Path Finder is available only to administrators.' });
@@ -135,10 +172,12 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
           run.storedRoute?.onEvent(event);
           if (event.type === 'RUNTIME_READY' && run.modelVersionId) void run.viewer?.load(run.modelVersionId);
           if (event.type === 'MODEL_LOADING') {
+            run.assignmentsVersion++;
             run.publishedCad?.dispose(); run.publishedCad = null;
             update(run, { viewerPhase: 'loading', viewerMessage: 'Loading the protected model…' });
           }
           if (event.type === 'MODEL_LOADED') {
+            void restoreTrayAssignments(run);
             update(run, { viewerPhase: 'ready', viewerMessage: 'The active model is ready.' });
             run.publishedCad?.dispose();
             const viewer = run.viewer;
@@ -180,7 +219,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       } catch (error) { if (live(run)) { accessFailure(run, error); update(run, { loading: false, viewerPhase: 'error', viewerMessage: 'The active model is unavailable. Refresh to check again.', error: message(error) }); } }
     })();
     return () => { run.storedRoute?.cancel(); run.publishedCad?.dispose(); run.closed = true; run.abort.abort(); run.viewer?.dispose('unmount'); };
-  }, [accessFailure, captureProgress, container, isAdmin, live, loadedProjectId, projectId, refresh, revision, scope, token, update]);
+  }, [accessFailure, captureProgress, container, isAdmin, live, loadedProjectId, projectId, refresh, restoreTrayAssignments, revision, scope, token, update]);
   const perform = useCallback(async <T,>(operation: (data: PathFinderState, run: Run) => Promise<T>, options: { refresh?: boolean } = {}): Promise<T | null> => {
     const run = runRef.current, data = dataRef.current;
     if (!run || !data || !live(run) || !isAdmin || projectPreparationCapture.current) return null;
@@ -484,7 +523,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     return run.storedRoute?.show(rawRouting, cableId, options) ?? Promise.resolve(null);
   }, [isAdmin, live]);
   const clearStoredRoute = useCallback(() => { runRef.current?.storedRoute?.clear(); }, []);
-  return { ...visible, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
+  return { ...visible, setTrayAssignmentContext, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
     readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray, hideTray,

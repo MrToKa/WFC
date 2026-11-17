@@ -1,3 +1,4 @@
+import { fetchPreparationContext, type PreparationContext } from '@/api/pathfinderPreparation';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePathFinder } from './usePathFinder';
@@ -15,18 +16,20 @@ vi.mock('@/viewer/publishedCadDisplay', () => ({ createPublishedCadDisplay: vi.f
   cadDisplays.push(display); return display;
 }) }));
 
-const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), resolveTrayIdentities: vi.fn(), ready: true, showLocationPoint: vi.fn(), showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
+const facts = vi.hoisted(() => ({ setTrayAssignments: vi.fn(), disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), resolveTrayIdentities: vi.fn(), ready: true, showLocationPoint: vi.fn(), showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
   return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn(), submitPathFinderCalculation: vi.fn() };
 });
 vi.mock('@/api/pathfinderEndpointRequalification', () => ({ requalifyStaleCableEndpoints: vi.fn(), hasPendingEndpointRequalification: vi.fn() }));
+vi.mock('@/api/pathfinderPreparation', () => ({ fetchPreparationContext: vi.fn() }));
 vi.mock('@/api/projectModels', () => ({ fetchProjectModels: vi.fn() }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) { facts.instances++; facts.events.push(options.onEvent); } dispose = facts.disposed; load = facts.load;
   readSelection = facts.readSelection; readTrayRootSelection = facts.readTrayRootSelection; showLocation = facts.showLocation; showLocationPoint = facts.showLocationPoint; showTray = facts.showTray; hideTray = facts.hideTray; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
   captureModel = facts.capture; getLoadSnapshot = () => ({ ready: facts.ready });
   captureBarriers = facts.barrierCapture; publishBarriers = facts.barrierPublish;
+  setTrayAssignments = facts.setTrayAssignments;
   resolveTrayIdentities = facts.resolveTrayIdentities;
 } }));
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', locationId = '33333333-3333-4333-8333-333333333333';
@@ -43,6 +46,8 @@ function state(): PathFinderState { return { schemaVersion: 1, projectId, regist
 let container: { current: HTMLDivElement };
 beforeEach(() => {
   vi.clearAllMocks(); cadDisplays.length = 0; sessionStorage.clear(); vi.mocked(requalifyStaleCableEndpoints).mockResolvedValue(true); vi.mocked(hasPendingEndpointRequalification).mockResolvedValue(false); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.resolveTrayIdentities.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); facts.hideTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
+  facts.setTrayAssignments.mockReset().mockResolvedValue(undefined);
+  vi.mocked(fetchPreparationContext).mockReset().mockResolvedValue({ projectId, scope: preparationModelScope, trays: [], resolutions: [] } as unknown as PreparationContext);
   vi.mocked(fetchPathFinderState).mockResolvedValue(state()); vi.mocked(pathFinderRequest).mockResolvedValue({ locationId });
   vi.mocked(submitPathFinderCalculation).mockReset().mockResolvedValue({ kind: 'acknowledged', jobId: locationId, registryRevision: '8', duplicate: false });
   vi.mocked(fetchPathFinderProposal).mockReset(); vi.mocked(fetchPathFinderJob).mockReset();
@@ -1158,4 +1163,44 @@ it('shows a saved project point only in its current ready model without route or
   expect(facts.showLocationPoint).toHaveBeenCalledExactlyOnceWith([1, 2, 3]);
   expect(facts.showLocation).not.toHaveBeenCalled(); expect(facts.clear).not.toHaveBeenCalled(); expect(facts.readSelection).not.toHaveBeenCalled();
   expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
+});
+
+
+describe('source model tray assignment Properties', () => {
+  const mount = () => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false }));
+  const assigned = (name: string) => ({ projectId, scope: preparationModelScope, trays: [{ projectTrayId: locationId, rawName: name }],
+    resolutions: [{ projectTrayId: locationId, mode: 'roots', rootObjectIds: ['dbid:23'], scope: preparationModelScope }] }) as unknown as PreparationContext;
+  it('restores saved assignments after model load without opening Routes', async () => {
+    vi.mocked(fetchPreparationContext).mockResolvedValue(assigned('B002'));
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    await waitFor(() => expect(facts.setTrayAssignments).toHaveBeenCalledWith([{ name: 'B002', objectIds: [23] }]));
+    view.unmount();
+  });
+  it('submits A again when B is in flight, and retries identical snapshots after failure', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    await act(async () => { await view.result.current.setTrayAssignmentContext(assigned('A')); });
+    let resolveB!: () => void;
+    facts.setTrayAssignments.mockImplementationOnce(() => new Promise<void>(yes => { resolveB = yes; }));
+    let pendingB!: Promise<void>;
+    act(() => { pendingB = view.result.current.setTrayAssignmentContext(assigned('B')); });
+    await act(async () => { await view.result.current.setTrayAssignmentContext(assigned('A')); });
+    expect(facts.setTrayAssignments.mock.calls.slice(-2).map(call => call[0][0].name)).toEqual(['B', 'A']);
+    await act(async () => { resolveB(); await pendingB; });
+    facts.setTrayAssignments.mockRejectedValueOnce(new Error('temporary display failure'));
+    await act(async () => { await view.result.current.setTrayAssignmentContext(assigned('A')); });
+    await act(async () => { await view.result.current.setTrayAssignmentContext(assigned('A')); });
+    expect(facts.setTrayAssignments).toHaveBeenCalledTimes(5);
+    view.unmount();
+  });
+  it('does not let a load-time read overwrite a newer confirmed assignment', async () => {
+    let resolveRead!: (value: PreparationContext) => void;
+    vi.mocked(fetchPreparationContext).mockImplementationOnce(() => new Promise(yes => { resolveRead = yes; }));
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    await act(async () => { await view.result.current.setTrayAssignmentContext(assigned('B002')); });
+    await act(async () => { resolveRead(assigned('B001')); });
+    expect(facts.setTrayAssignments.mock.calls.map(call => call[0][0]?.name)).toEqual(['B002']);
+    view.unmount();
+  });
 });

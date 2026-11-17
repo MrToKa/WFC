@@ -29,6 +29,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   const properties = new Map();
   const positions = new Map();
   let propertyPanel;
+  let sourceAssignments = new Map();
   let tree;
   let disposed = false;
   let routeFilter = null;
@@ -285,6 +286,38 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     viewer.select?.([objectId], dynamicModel);
   }
 
+  function assignedTo(model, objectId) {
+    if (model !== sourceModel) return undefined;
+    const sourceTree = model.getInstanceTree?.();
+    const seen = new Set();
+    // A selected member inherits its closest assigned Model tree ancestor.
+    while (Number.isSafeInteger(objectId) && objectId >= 0 && !seen.has(objectId)) {
+      if (sourceAssignments.has(objectId)) return sourceAssignments.get(objectId);
+      if (!sourceTree || seen.size >= 256) return undefined;
+      seen.add(objectId);
+      objectId = sourceTree.getNodeParentId(objectId);
+    }
+    return undefined;
+  }
+
+  function ensurePropertyPanel() {
+    if (!propertyPanel)
+      propertyPanel = installCadPropertyPanel(viewer, av, (model, instanceId) => {
+        if (model !== dynamicModel) return undefined;
+        return tree.lookup(instanceId, properties);
+      }, assignedTo);
+  }
+
+  function setSourceTrayAssignments(assignments) {
+    if (disposed) throw new Error('CAD scene is disposed.');
+    const next = new Map();
+    for (const { name, objectIds } of assignments)
+      for (const id of objectIds) next.set(id, name);
+    sourceAssignments = next;
+    ensurePropertyPanel();
+    propertyPanel.refresh();
+  }
+
   function setProperties(componentId, metadata, route) {
     if (disposed || !registry.has(componentId) || !dynamicModel)
       throw new Error('Unknown CAD instance.');
@@ -297,11 +330,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     });
     tree.setProperties(componentId, properties.get(componentId));
     if (routeFilter !== null) applyRouteVisibility(componentId);
-    if (!propertyPanel)
-      propertyPanel = installCadPropertyPanel(viewer, av, (model, instanceId) => {
-        if (model !== dynamicModel) return undefined;
-        return tree.lookup(instanceId, properties);
-      });
+    ensurePropertyPanel();
     propertyPanel.refresh();
   }
 
@@ -314,9 +343,11 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     setVisibility,
     setRouteVisibility,
     setProperties,
+    setSourceTrayAssignments,
     dispose() {
       disposed = true;
       registry.clear();
+      sourceAssignments.clear();
       colors.clear();
       properties.clear();
       positions.clear();

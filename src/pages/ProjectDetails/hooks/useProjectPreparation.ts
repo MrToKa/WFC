@@ -1337,6 +1337,10 @@ export function useProjectPreparation(pf: PF, active: boolean) {
   const view = state.identity === identity && enabled
     ? staleModelDisplay || staleArtifactDisplay ? { ...state, context: null, session: null, discovery: null, networkTrace: null, notice: null, progress: null } : state
     : initial(identity);
+  const assignmentContext = view.context;
+  useEffect(() => {
+    if (assignmentContext) void pf.setTrayAssignmentContext?.(assignmentContext);
+  }, [assignmentContext, pf.setTrayAssignmentContext, pf.preparationViewerGeneration]);
   const canMutate = enabled && active && !view.busy && !view.unknown && !view.conflict;
   const networkReady = Boolean(!view.unknown && !view.conflict && view.context && networkTraceMatches(view.context, view.networkTrace));
   const networkStorageStatus: PreparationNetworkStorageStatus = !view.context
