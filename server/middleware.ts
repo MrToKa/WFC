@@ -110,7 +110,7 @@ const basicProjectReadPaths = [
   /^\/model-imports\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i,
   /^\/model-versions\/[0-9a-f-]{36}\/viewer-sessions\/[0-9a-f-]{36}\/(descriptor|resources\/.+)$/i,
   /^\/cable-types\/[0-9a-f-]+\/details\/?$/i,
-  /^\/cables\/[0-9a-f-]+\/(details|versions)\/?$/i,
+  /^\/cables\/[0-9a-f-]+\/(details|versions|obstacle-links)\/?$/i,
   /^\/trays\/[0-9a-f-]+\/?$/i,
   /^\/trays\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/auto-length\/?$/i,
   /^\/trays\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/drawing-snapshot\/?$/i,

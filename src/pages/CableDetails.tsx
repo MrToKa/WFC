@@ -1,6 +1,7 @@
 import { routingDiagnosticText } from '../../shared/cableRoutingLabels';
 import { CableAutoCalculatedLength } from '@/components/pathfinder/CableAutoCalculatedLength';
 import { CableRoutingValue } from '@/components/pathfinder/CableRoutingValue';
+import { CableObstacleRemarks } from '@/components/pathfinder/ObstacleModelLink';
 import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject, canExportChangeLogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -1482,7 +1483,7 @@ export const CableDetails = () => {
         <CableRoutingValue cable={details.cable} />
         <div className={styles.field}>
           <Caption1 className={styles.label}>Remarks</Caption1>
-          <Body1 style={{ whiteSpace: 'pre-wrap' }}>{formatOptionalText(details.cable.remarks ?? null)}</Body1>
+          <Body1 style={{ whiteSpace: 'pre-wrap' }}><CableObstacleRemarks projectId={details.cable.projectId} cableId={details.cable.id} remarks={details.cable.remarks} /></Body1>
         </div>
         <div className={styles.field}>
           <Caption1 className={styles.label}>Manual route</Caption1>

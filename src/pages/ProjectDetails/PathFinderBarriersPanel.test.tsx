@@ -42,6 +42,28 @@ function installSavedSelection(f: ReturnType<typeof fixture>, manifest = savedMa
 }
 
 describe('administrator barrier authoring panel', () => {
+  it('does not restore an old panel display after another viewer owner takes over', async () => {
+    const f = fixture(); installSavedSelection(f); let owner = 0;
+    f.props.claimViewer = vi.fn(() => { const current = ++owner; return () => owner === current; });
+    const view = render(<PathFinderBarriersPanel {...f.props} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show Saved civil source group' })[0]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Hide' })).toBeEnabled());
+    expect(f.props.claimViewer).toHaveBeenCalledTimes(1);
+    owner++; view.rerender(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull();
+    view.unmount(); expect(f.props.pf.hideTray).not.toHaveBeenCalled();
+  });
+  it('ignores a late Show after another owner without hiding its newer appearance', async () => {
+    const f = fixture(); installSavedSelection(f); let owner = 0, finish!: (value: boolean) => void;
+    f.props.claimViewer = vi.fn(() => { const current = ++owner; return () => owner === current; });
+    vi.mocked(f.props.pf.showTray).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<PathFinderBarriersPanel {...f.props} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show Saved civil source group' })[0]);
+    owner++; finish(true);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Show Saved civil source group' })[0]).toBeEnabled());
+    expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull();
+    view.unmount(); expect(f.props.pf.hideTray).not.toHaveBeenCalled();
+  });
   it('uses the same model object number in saved and draft lists after reordering', () => {
     const f = fixture(), manifest = savedManifest(), first = manifest.selectedParents[0];
     manifest.selectedParents.push({ ...first, selectionId: id(19), objectId: 'dbid:42', dbId: 42 });

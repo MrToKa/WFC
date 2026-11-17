@@ -23,6 +23,8 @@ import { PathFinderBarriersPanel } from './PathFinderBarriersPanel';
 import { createSupportedBarrierAdmissionIntent as createBarrierAdmissionIntent, type AnyBarrierRegistry as BarrierRegistry } from '../../../shared/pathfinderBarrierSupported';
 import { usePathfinderAutoLengthRead, type PathFinderCalculatedItemIdentity } from './hooks/usePathfinderAutoLengthRead';
 import type { PathFinderEndpointForegroundContexts } from './pathFinderEndpointVisibility';
+import type { PathfinderObstacleRequest } from './pathFinderObstacleNavigation';
+import { usePathfinderObstacleDisplay } from './hooks/usePathfinderObstacleDisplay';
 
 const useStyles = makeStyles({
   heading: { margin: 0, fontSize: tokens.fontSizeBase400, fontWeight: tokens.fontWeightSemibold },
@@ -34,7 +36,7 @@ const useStyles = makeStyles({
   candidate: { padding: '0.5rem', border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: tokens.borderRadiusMedium },
   panel: { flexDirection: 'column', gap: '0.75rem', minWidth: 0 },
 });
-type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; accountId?: string | null; controlsVisible?: boolean };
+type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; accountId?: string | null; controlsVisible?: boolean; obstacleRequest?: PathfinderObstacleRequest | null };
 type Draft = { locationId: string | null; name: string };
 const emptyDraft = (): Draft => ({locationId: null, name: ''});
 const normalized = (value: string) => value.normalize('NFC').trim().toUpperCase();
@@ -55,7 +57,7 @@ const pointLabels: Record<CalculationAvailability['status'], string> = {
 export function PathFinderTab(props: Props) {
   return props.isAdmin ? <AdminPathFinderTab {...props} /> : <Body1>Path Finder is available only to administrators.</Body1>;
 }
-function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accountId, controlsVisible = true }: Props) {
+function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accountId, controlsVisible = true, obstacleRequest }: Props) {
   const detached = useControlPanelDetached();
   const cablePurposes = useProjectCablePurposes({ projectId, loadedProjectId, token, isAdmin });
   const styles = useRoutingsViewerStyles(), extra = useStyles();
@@ -80,7 +82,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const barrierReadKey = JSON.stringify([barrierRefreshKey, barrierRefreshRevision]);
   const refreshPathFinder = () => { pf.refresh(); setBarrierRefreshRevision(value => value + 1); };
   const [lookupBusy, setLookupBusy] = useState(false);
-  const displayGeneration = useRef(0), [displayOwner, setDisplayOwner] = useState<'none' | 'proposal' | 'lookup' | 'standalone'>('none');
+  const displayGeneration = useRef(0), [displayOwner, setDisplayOwner] = useState<'none' | 'proposal' | 'lookup' | 'standalone' | 'obstacle' | 'barrier'>('none');
   const [secondaryDistance, setSecondaryDistance] = useState('2'), [preferVertical, setPreferVertical] = useState(true), [transparency, setTransparency] = useState('75');
   const [barrierAuthoring, setBarrierAuthoring] = useState<{ registry: BarrierRegistry | null; dirty: boolean; pending: boolean }>({ registry: null, dirty: false, pending: false });
   const barrierStateChanged = useCallback((value: typeof barrierAuthoring) => setBarrierAuthoring(previous => JSON.stringify(previous) === JSON.stringify(value) ? previous : value), []);
@@ -118,6 +120,16 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   };
   const clearView = () => { claimViewer('none'); pf.cancelOperation(); setNotice(null); };
   const restoreView = () => { clearView(); pf.clear({ preserveCamera: false }); };
+  const obstacleDisplay = usePathfinderObstacleDisplay({ request: obstacleRequest, pf,
+    enabled: Boolean(isAdmin && token && projectId && projectId === loadedProjectId && (controlsVisible || detached)),
+    accessKey: JSON.stringify([projectId, accountId, token]), claimViewer: () => {
+      const owned = claimViewer('obstacle');
+      const host = container.current;
+      // A Remarks action can originate far below the model or in a detached window.
+      try { host?.ownerDocument.defaultView?.focus(); } catch { /* Browser focus is best effort. */ }
+      try { host?.scrollIntoView?.({ block: 'center', inline: 'nearest' }); } catch { /* The model remains available if scrolling is restricted. */ }
+      return owned;
+    } });
   const [search, setSearch] = useState(''), [onlyProblems, setOnlyProblems] = useState(false), [selectedCableId, setSelectedCableId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft), [notice, setNotice] = useState<string | null>(null), [localError, setLocalError] = useState<string | null>(null);
   const [endpointPending, setEndpointPending] = useState(false);
@@ -215,8 +227,11 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={pf.zoom}>Zoom to path</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Restore view</Button>
         </div>
+        {obstacleDisplay.message && (!obstacleDisplay.shown || displayOwner === 'obstacle') ? <Caption1 role="status">{obstacleDisplay.message}</Caption1> : null}
+        {obstacleDisplay.error && (!obstacleDisplay.shown || displayOwner === 'obstacle') ? <Caption1 role="alert">{obstacleDisplay.error}</Caption1> : null}
+        {displayOwner === 'obstacle' && obstacleDisplay.shown ? <Button disabled={obstacleDisplay.working || pf.busy} onClick={() => void obstacleDisplay.hide()}>Hide obstacle</Button> : null}
         <div ref={barrierConfiguration} tabIndex={-1} role="region" aria-label="Routing barrier configuration">
-          <PathFinderBarriersPanel projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} refreshKey={barrierReadKey} />
+          <PathFinderBarriersPanel claimViewer={() => claimViewer('barrier')} projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} refreshKey={barrierReadKey} />
         </div>
         <Checkbox label="Drill through the walls" checked={drillThroughWalls} disabled={pf.busy || barrierAuthoring.pending || !currentBarrierRegistry}
           onChange={(_, value) => setDrillDraft({ owner: barrierOwner, checked: value.checked === true })} />

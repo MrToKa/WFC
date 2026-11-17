@@ -2,6 +2,7 @@ import { Body1, Caption1 } from '@fluentui/react-components';
 import { supportedBarrierExecutionSchema as barrierExecutionSchema, type AnyBarrierExecution as BarrierExecution,
   sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent, type AnyBarrierAdmissionIntent as BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierSupported';
 import { MIXED_BARRIER_POLICY } from '../../../shared/pathfinderBarrierMixed';
+import { ObstacleModelLink } from '@/components/pathfinder/ObstacleModelLink';
 
 type Props = { execution?: BarrierExecution | null; stale?: boolean; currentIntent?: BarrierAdmissionIntent | null };
 const label = (value: BarrierExecution) => {
@@ -68,7 +69,7 @@ export function PathFinderBarrierResult({ execution, stale = false, currentInten
         <h5>Obstacles crossed by this route</h5>
         <ul>{value.obstacleReport.crossedParentSelectionIds.map(selectionId => {
           const parent = value.obstacleReport!.selectedParents.find(item => item.selectionId === selectionId);
-          return <li key={selectionId}>{parent ? `Obstacle #${parent.dbId} · ${parent.name} (${parent.kind})` : `Registered obstacle ${selectionId}`}</li>;
+          return <li key={selectionId}>{parent ? <>Obstacle <ObstacleModelLink dbId={parent.dbId} scope={binding.scope} />{` · ${parent.name} (${parent.kind})`}</> : `Registered obstacle ${selectionId}`}</li>;
         })}</ul>
         <Caption1>Crossings are recorded in the cable Remarks when this route is saved.</Caption1>
       </> : value.obstacleReport.status === 'complete' && value.proof && value.obstacleReport.totalSegments > 0 && value.obstacleReport.checkedSegments === value.obstacleReport.totalSegments ? <Caption1>No registered obstacles intersect this route.</Caption1> : null}
@@ -76,7 +77,7 @@ export function PathFinderBarrierResult({ execution, stale = false, currentInten
         <h5>{value.obstacleReport.blockingAttribution === 'component-membership' ? 'Selected objects associated with blocking geometry' : 'Obstacles blocking checked routing candidates'}</h5>
         <ul>{value.obstacleReport.blockingParentSelectionIds.map(selectionId => {
           const parent = value.obstacleReport!.selectedParents.find(item => item.selectionId === selectionId);
-          return <li key={selectionId}>{parent ? `Obstacle #${parent.dbId} · ${parent.name} (${parent.kind})` : `Registered obstacle ${selectionId}`}</li>;
+          return <li key={selectionId}>{parent ? <>Obstacle <ObstacleModelLink dbId={parent.dbId} scope={binding.scope} />{` · ${parent.name} (${parent.kind})`}</> : `Registered obstacle ${selectionId}`}</li>;
         })}</ul>
         <Caption1>{value.obstacleReport.blockingAttribution === 'component-membership'
           ? 'The blocking geometry was built from these objects. The check cannot identify which individual object was touched. A successful route may avoid this geometry.'

@@ -28,7 +28,7 @@ const numeric = z.union([z.string(), z.number().finite()]).nullable();
 const jobSchema = z.object({ id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup', 'preview']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
 const jobAutomaticUpdateSchema = z.object({ status: z.enum(automaticPairStatuses), receiptId: uuid.nullable(), reasonCode: recalculationReasonSchema.nullable() }).strict()
   .refine(value => ['written', 'already-written'].includes(value.status) === (value.receiptId !== null));
-const jobItemSchema = z.object({ cableId: uuid, status: z.string(), state: z.string(), message: z.string().nullable(), automaticUpdate: jobAutomaticUpdateSchema.optional() });
+const jobItemSchema = z.object({ cableId: uuid, status: z.string(), state: z.string(), message: z.string().nullable(), proposalId: uuid.nullable().optional(), automaticUpdate: jobAutomaticUpdateSchema.optional() });
 const connectionGapSchema = z.string().max(64).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).refine(value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 100);
 const projectSettingsSchema = z.object({ revision, connectionGap: connectionGapSchema, secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() });
 const designSchema = z.object({ lengthBeforePercentageMeters: z.string(), unroundedLengthMeters: z.string(), designLengthMeters: z.string() });
