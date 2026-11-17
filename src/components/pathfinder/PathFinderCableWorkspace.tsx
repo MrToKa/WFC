@@ -242,7 +242,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     const item = job.items?.find(value => value.cableId === cableId);
     const snapshot: CalculationDiagnosticSnapshot = { owner: calculationWatchOwner(current), model: modelScope(current), value: {
       cableId, jobId, jobStatus: job.status, itemStatus: item?.status ?? null, itemState: item?.state ?? null,
-      itemMessage: item?.message ?? null, jobFailure: job.failure,
+      itemMessage: item?.message ?? null, jobFailure: job.failure, proposalId: item?.proposalId ?? null,
       readError: item ? null : 'The exact calculation job did not include an outcome for this cable. Refresh cable status to check it.',
     } };
     calculationDiagnosticsRef.current = snapshot; setCalculationDiagnostics(snapshot);

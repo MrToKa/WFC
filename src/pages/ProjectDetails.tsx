@@ -6,7 +6,8 @@ import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/pe
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Body1, Button, Spinner, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { parseObstacleNavigation } from './ProjectDetails/pathFinderObstacleNavigation';
 
 import { ApiError, updateProject, type CableMtoOption } from '@/api/client';
 import type {
@@ -86,8 +87,10 @@ const ADMIN_TABS: ProjectDetailsTab[] = [
 export const ProjectDetails = () => {
   const styles = useProjectDetailsStyles();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { projectId } = useParams<{ projectId: string }>();
+  const obstacleRequest = parseObstacleNavigation(location.state, projectId);
   const { user, token } = useAuth();
   const { showToast } = useToast();
 
@@ -1422,7 +1425,7 @@ export const ProjectDetails = () => {
         <RoutingsViewerTab controlsVisible={selectedTab === 'routings-viewer'} projectId={projectId ?? null} loadedProjectId={project.id} token={token} canDrawTrays={canEdit} onTraysChanged={() => reloadTrays({ showSpinner: false })} />
       ) : null}
       {modelTab === 'pathfinder' && user?.isAdmin ? (
-        <PathFinderTab controlsVisible={selectedTab === 'pathfinder'} key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} accountId={user.id} />
+        <PathFinderTab obstacleRequest={obstacleRequest} controlsVisible={selectedTab === 'pathfinder'} key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} accountId={user.id} />
       ) : null}
 
       <ControlPanelPart order={2}>

@@ -18,6 +18,19 @@ function data(diameters = [73]): TrayDrawingPlacementData {
 }
 
 describe('project free-space routing evaluator', () => {
+  it('uses the same complete mixed-purpose placements and purpose sides as the drawing', () => {
+    const source = data([20, 12, 6]); source.tray.widthMm = 300;
+    source.trayCables[1].purpose = 'Control'; source.trayCables[2].purpose = 'Plastic tubing';
+    const before = JSON.stringify(source);
+    const purposeModes = { Power: 'left', Control: 'right', 'Plastic tubing': 'left' } as const;
+    const layout = computeTrayDrawing(makeTrayDrawingInput(source, null, DEFAULT_DRAWING_MODES, purposeModes));
+    const expected = Math.max(0, (300 - layout.summary!.occupiedWidthWithBundleSpacingMm) / 300 * 100);
+    const assessment = assessTrayCapacity({ data: source, purposeModes, minimumFreeSpacePercent: 30 });
+    expect(assessment).toMatchObject({ status: 'fits', freeSpacePercent: expected });
+    expect(layout.placements).toHaveLength(3);
+    expect(trayDrawingDiagnostics(source, layout).blocked).toBe(false);
+    expect(JSON.stringify(source)).toBe(before);
+  });
   it('uses the configured minimum minus three percentage points; equality is accepted', () => {
     expect(effectiveTrayCapacityMinimum(30)).toBe(27);
     expect(effectiveTrayCapacityMinimum(45)).toBe(42);
@@ -45,12 +58,12 @@ describe('project free-space routing evaluator', () => {
     expect(freeGaps.freeSpacePercent).toBe(Math.max(0, (100 - layout.summary!.occupiedWidthWithoutBundleSpacingMm) / 100 * 100));
     expect(freeGaps.freeSpacePercent!).toBeGreaterThan(ordinary.freeSpacePercent!);
   });
-  it('keeps missing dimensions, diameters and unknown purposes unavailable', () => {
+  it('keeps missing dimensions, diameters and empty purposes unavailable', () => {
     const width = data(); width.tray.widthMm = null;
     expect(assessTrayCapacity({ data: width, minimumFreeSpacePercent: 30 }).status).toBe('unavailable');
     const diameter = data(); diameter.trayCables[0].diameterMm = null;
     expect(assessTrayCapacity({ data: diameter, minimumFreeSpacePercent: 30 }).diagnosticCodes).toContain('MISSING_CABLE_DIAMETER');
-    const purpose = data(); purpose.trayCables[0].purpose = 'Unrecognized';
+    const purpose = data(); purpose.trayCables[0].purpose = ' ';
     expect(assessTrayCapacity({ data: purpose, minimumFreeSpacePercent: 30 }).diagnosticCodes).toContain('UNKNOWN_DRAWING_CATEGORY');
     expect(assessTrayCapacity({ data: data(), minimumFreeSpacePercent: null })).toMatchObject({ status: 'unavailable', diagnosticCodes: ['CAPACITY_MINIMUM_REQUIRED'] });
   });

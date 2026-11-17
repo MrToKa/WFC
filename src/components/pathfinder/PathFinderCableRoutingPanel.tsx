@@ -10,6 +10,7 @@ import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview } from '@/page
 import { PathFinderCableComparison } from './PathFinderCableComparison';
 import { CableAutoCalculatedLength } from './CableAutoCalculatedLength';
 import { PathFinderBarrierResult } from '@/pages/ProjectDetails/PathFinderBarrierResult';
+import { CalculationObstacleText } from './ObstacleModelLink';
 import type { PathFinderEndpointForegroundContexts } from '@/pages/ProjectDetails/pathFinderEndpointVisibility';
 import { cableEndpointConfirmedDisplaySelectionSchema } from '../../../shared/pathfinderCableEndpoints';
 import type { CanonicalPoint } from '../../../viewer-runtime/protocol.mjs';
@@ -19,6 +20,7 @@ export type PathFinderCalculationDiagnostics = {
   cableId: string; jobId: string; jobStatus: string | null;
   itemStatus: string | null; itemState: string | null; itemMessage: string | null;
   jobFailure: string | null; readError: string | null;
+  proposalId?: string | null;
 };
 export type PathFinderCableRoutingPanelProps = {
   access: Omit<CableEndpointPairSelectionAccess, 'cableId'>;
@@ -163,6 +165,8 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     && cable.calculation.proposalHash === null && !cable.calculation.reviewable && !cable.calculation.acceptedMatchesCurrent;
   const calculationMessage = preparationUpdated ? calculationFeedback?.currentAttempt ? calculationFeedback.message
     : 'Network ready. Calculate routing to create a current route.' : stoppedMessage;
+  const diagnosticText = (text: string) => diagnostics?.proposalId && access.projectId
+    ? <CalculationObstacleText text={text} projectId={access.projectId} cableId={cable.cable.id} jobId={diagnostics.jobId} proposalId={diagnostics.proposalId} token={access.token} /> : text;
   const pairSaved = hasVerifiedSavedCableRoute(cable) && !calculationPending && !unsaved;
   // Stored routes have a separate read-only current-model display. They never
   // supply calculation, barrier acceptance or review authority.
@@ -299,14 +303,14 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         {submittedDrillThroughWalls !== null && submittedDrillThroughWalls !== undefined ? <p className={styles.note}>Submitted calculation: Drill through the walls {submittedDrillThroughWalls ? 'enabled' : 'disabled'}. The next-calculation checkbox does not change this request.</p> : null}
         {calculationFeedback ? calculationFeedback.working
           ? <Spinner size="tiny" label={calculationFeedback.message} />
-          : <p role="status" className={styles.note}>{calculationMessage ?? calculationFeedback.message}</p>
-          : stoppedCalculation ? <p role="status" className={styles.note}>{calculationMessage ?? 'The latest calculation did not produce a current route. Check its calculation diagnostics.'}</p> : null}
+          : <p role="status" className={styles.note}>{diagnosticText(calculationMessage ?? calculationFeedback.message)}</p>
+          : stoppedCalculation ? <p role="status" className={styles.note}>{diagnosticText(calculationMessage ?? 'The latest calculation did not produce a current route. Check its calculation diagnostics.')}</p> : null}
         {stoppedCalculation ? <details><summary>{preparationUpdated ? 'Previous calculation diagnostics' : 'Calculation diagnostics'}</summary>
           {preparationUpdated ? <p className={styles.note}>Previous calculation job: {cable.calculation.jobId}. Its refusal was recorded before the current routing network was prepared.</p>
             : <p className={styles.note}>Latest calculation outcome: {cable.calculation.outcome}. Job: {cable.calculation.jobId}.</p>}
           {diagnostics ? <>
             <p className={styles.note}>{preparationUpdated ? 'Previous job status' : 'Job status'}: {diagnostics.jobStatus ?? 'Unavailable'}; {preparationUpdated ? 'previous cable status' : 'cable status'}: {diagnostics.itemStatus ?? 'Unavailable'}; {preparationUpdated ? 'previous cable state' : 'cable state'}: {diagnostics.itemState ?? 'Unavailable'}.</p>
-            {diagnostics.itemMessage ? <p className={styles.note}>{preparationUpdated ? 'Previous cable diagnostic' : 'Cable diagnostic'}: {diagnostics.itemMessage}</p> : null}
+            {diagnostics.itemMessage ? <p className={styles.note}>{preparationUpdated ? 'Previous cable diagnostic' : 'Cable diagnostic'}: {diagnosticText(diagnostics.itemMessage)}</p> : null}
             {diagnostics.jobFailure ? <p className={styles.note}>{preparationUpdated ? 'Previous job diagnostic' : 'Job diagnostic'}: {diagnostics.jobFailure}</p> : null}
             {diagnostics.readError ? <p role="status" className={styles.note}>{preparationUpdated ? 'Previous diagnostic read: ' : ''}{diagnostics.readError}</p> : null}
           </> : <p className={styles.note}>{preparationUpdated ? 'Reading the previous calculation’s diagnostic…' : 'Reading this cable’s exact calculation diagnostic…'}</p>}

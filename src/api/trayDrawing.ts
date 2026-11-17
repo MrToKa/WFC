@@ -39,7 +39,7 @@ export async function verifyTrayDrawingResponse(value: unknown, projectId: strin
   if (result.snapshot.projectId !== projectId || result.snapshot.projectTrayId !== trayId) throw new TrayDrawingApiError('INVALID_RESPONSE', 502);
   try { parseTrayDrawingLayout(result.layout); } catch { throw new TrayDrawingApiError('INVALID_LAYOUT', 502, 'The shared drawing layout is invalid. Refresh to try again.'); }
   if (await hash(drawingInputHashInput(result.data, result.sourceSha256)) !== result.snapshot.inputSha256 ||
-      await hash(drawingSettingsHashInput(result.override, result.snapshot.categoryModes)) !== result.snapshot.settingsSha256 ||
+      await hash(drawingSettingsHashInput(result.override, result.snapshot.categoryModes, result.snapshot.purposeModes)) !== result.snapshot.settingsSha256 ||
       await hash(drawingContentHashInput(result.snapshot, result.layout)) !== result.snapshot.contentSha256)
     throw new TrayDrawingApiError('DRAWING_SNAPSHOT_MISMATCH', 409, 'The drawing inputs do not match their shared snapshot. Refresh the drawing.');
   return result as TrayDrawingResponse;

@@ -110,17 +110,19 @@ export async function readTrayDrawingSnapshot(c: PoolClient, projectId: string, 
   const row = (await c.query<{ revision: string; value: unknown }>('SELECT revision::text,value FROM pf_tray_drawing_settings WHERE project_id=$1 AND tray_id=$2', [projectId, trayId])).rows[0];
   const override = { revision: row?.revision ?? '0', value: row?.value ?? null };
   const purposeKey = data.tray.purpose == null ? null : normalizeCatalogKey(data.tray.purpose) || null;
-  const categoryModes = policy.rules.find(rule => rule.purposeKey === purposeKey)?.categoryModes ?? { ...DEFAULT_DRAWING_MODES };
+  const rule = policy.rules.find(rule => rule.purposeKey === purposeKey);
+  const categoryModes = rule?.categoryModes ?? { ...DEFAULT_DRAWING_MODES };
+  const purposeModes = rule?.purposeModes;
   // Validate server inputs before the potentially expensive layout calculation.
   const validated = trayDrawingDataSchema.parse(data);
   const settings = trayDrawingOverrideSchema.parse(override);
-  const layout = computeTrayDrawing(makeTrayDrawingInput(validated, settings.value, categoryModes));
+  const layout = computeTrayDrawing(makeTrayDrawingInput(validated, settings.value, categoryModes, purposeModes));
   const { diagnostics, blocked } = drawingDiagnostics(validated, layout);
   const sourceSha256 = drawingDigest(sources);
-  const inputSha256 = drawingDigest(drawingInputHashInput(validated, sourceSha256)), settingsSha256 = drawingDigest(drawingSettingsHashInput(settings, categoryModes));
+  const inputSha256 = drawingDigest(drawingInputHashInput(validated, sourceSha256)), settingsSha256 = drawingDigest(drawingSettingsHashInput(settings, categoryModes, purposeModes));
   const partial = { schemaVersion: 'pathfinder.tray-drawing-snapshot.v1' as const, projectId, projectTrayId: trayId,
     catalogRevision: state.catalogRevision, drawingPolicyRevision: state.drawingPolicyRevision, drawingInputRevision: state.drawingInputRevision,
-    layoutAlgorithmVersion: 'wfc-tray-placement-v2' as const, purposeKey, categoryModes, legacySidePolicyVersion: 'wfc-tray-sides-v1' as const, settingsSha256, inputSha256,
+    layoutAlgorithmVersion: 'wfc-tray-placement-v3' as const, purposeKey, categoryModes, ...(purposeModes === undefined ? {} : { purposeModes }), legacySidePolicyVersion: 'wfc-tray-sides-v1' as const, settingsSha256, inputSha256,
     orderedCableIds: validated.trayCables.map(v => v.id), state: blocked ? 'blocked' as const : diagnostics.length ? 'diagnostic' as const : 'ready' as const, diagnostics };
   const contentSha256 = drawingDigest(drawingContentHashInput(partial, layout));
   const existing = (await c.query<{ id: string; payload: unknown; source_facts: unknown }>('SELECT id,payload,source_facts FROM pf_tray_drawing_snapshots WHERE project_id=$1 AND tray_id=$2 AND content_sha256=$3', [projectId, trayId, contentSha256])).rows[0];
@@ -186,8 +188,9 @@ export async function readProjectDrawingFreeSpace(c: PoolClient, projectId: stri
     const overrideRow = (await c.query<{ value: unknown }>('SELECT value FROM pf_tray_drawing_settings WHERE project_id=$1 AND tray_id=$2', [projectId, row.id])).rows[0];
     const value = trayDrawingOverrideSchema.shape.value.parse(overrideRow?.value ?? null);
     const purpose = data.tray.purpose ? normalizeCatalogKey(data.tray.purpose) : null;
-    const modes = policy.rules.find(v => v.purposeKey === purpose)?.categoryModes ?? { ...DEFAULT_DRAWING_MODES };
-    const layout = computeTrayDrawing(makeTrayDrawingInput(data, value, modes)), { blocked } = drawingDiagnostics(data, layout);
+    const rule = policy.rules.find(v => v.purposeKey === purpose);
+    const modes = rule?.categoryModes ?? { ...DEFAULT_DRAWING_MODES };
+    const layout = computeTrayDrawing(makeTrayDrawingInput(data, value, modes, rule?.purposeModes)), { blocked } = drawingDiagnostics(data, layout);
     commands += layout.commands.length; memberships += data.trayCables.length;
     if (commands > 2_000_000 || memberships > 500_000) return fail('DRAWING_EXPORT_CAPACITY_LIMIT', 413);
     // Retain the existing Type A/MV free-space exclusion in both UI and XLSX.
@@ -198,5 +201,5 @@ export async function readProjectDrawingFreeSpace(c: PoolClient, projectId: stri
     provenance.push({ trayId: row.id, layoutSha256: drawingDigest(layout), inputSha256: drawingDigest(drawingInputHashInput(data, drawingDigest(captured.sources))), state: blocked ? 'blocked' : 'ready' });
   }
   if (!project) { const p = await ensureProjectExists(projectId, c); if (!p) return fail('PROJECT_NOT_FOUND', 404); project = drawingProjectSchema.parse(mapProjectRow(p)); }
-  return { project, trays, freeSpaceByTrayId, provenance, revisions: { catalogRevision: state.catalogRevision, drawingPolicyRevision: state.drawingPolicyRevision, drawingInputRevision: state.drawingInputRevision }, layoutAlgorithmVersion: 'wfc-tray-placement-v2' };
+  return { project, trays, freeSpaceByTrayId, provenance, revisions: { catalogRevision: state.catalogRevision, drawingPolicyRevision: state.drawingPolicyRevision, drawingInputRevision: state.drawingInputRevision }, layoutAlgorithmVersion: 'wfc-tray-placement-v3' };
 }

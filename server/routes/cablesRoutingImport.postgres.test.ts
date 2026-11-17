@@ -340,6 +340,88 @@ describe.skipIf(process.env.WFC_ROUTING_IMPORT_POSTGRES !== '1')(
       expect((await upload(file, {}, basicToken)).status).toBe(403);
       expect(await snapshot()).toEqual(before);
     });
+    it('reads obstacle links through ordinary project permissions without initializing or changing cable data', async () => {
+      const created = await create({ cableId: 103, cableTypeId: typeId, remarks: 'Human note #123' });
+      expect(created.status).toBe(201); const id = created.body.cable.id;
+      const target = `${baseUrl}/api/projects/${projectId}/cables/${id}/obstacle-links`;
+      expect((await fetch(target)).status).toBe(401);
+      expect((await fetch(target, { headers: { Authorization: `Bearer ${basicToken}` } })).status).toBe(403);
+      await pool!.query('INSERT INTO user_project_access(user_id,project_id) VALUES($1,$2)', [basicId, projectId]);
+      const before = await snapshot();
+      const response = await fetch(target, { headers: { Authorization: `Bearer ${basicToken}` } });
+      expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toContain('no-store');
+      expect(await response.json()).toMatchObject({ status: 'none', source: null, scope: null, obstacles: [], remarks: 'Human note #123' });
+      expect(await snapshot()).toEqual(before);
+      expect((await patch(id, { remarks: '[PathFinder obstacles] Crosses obstacles: #123.' })).status).toBe(200);
+      const unverified = await fetch(target, { headers: { Authorization: `Bearer ${basicToken}` } });
+      expect(await unverified.json()).toMatchObject({ status: 'unverified', obstacles: [] });
+    });
+
+    it('links a saved 148-object report through real immutable receipt/review/seal checks, not newer unsaved output', async () => {
+      // Synthetic geometry evidence; actual production SQL initialization,
+      // immutable hashes, receipt review proof, HTTP authorization and resolver.
+      const [{ syntheticBarrierWriteInputs }, revisions, { readBarrierWriteEvidence }, { routeObstacleRemarks }] = await Promise.all([
+        import('../pathfinder/barrierWriteFixtures.js'), import('../pathfinder/revisionResultRepository.js'),
+        import('../pathfinder/barrierWrites.js'), import('../pathfinder/obstacleRemarks.js'),
+      ]);
+      const made = await create({ cableId: 104, cableTypeId: typeId, mto: 'LV', fromLocation: 'FROM', toLocation: 'TO', remarks: 'Human note' });
+      expect(made.status).toBe(201); const cableId = made.body.cable.id;
+      const synthetic = syntheticBarrierWriteInputs();
+      const remap = <T,>(value: T): T => JSON.parse(JSON.stringify(value).replaceAll(synthetic.dependencies.projectId, projectId)
+        .replaceAll(synthetic.dependencies.cableId, cableId).replaceAll(synthetic.dependencies.cableInputs.cableTypeId, typeId));
+      const dependencies = remap(synthetic.dependencies), output = remap(synthetic.result);
+      if (output.schemaVersion !== 'pathfinder.model.response.v3') throw Error('Expected protected fixture.');
+      const parents = Array.from({ length: 148 }, (_, index) => ({ selectionId: randomUUID(), dbId: 24018 + index, name: `Floor ${index}`, kind: 'floor' as const,
+        objectId: `dbid:${24018 + index}`, externalId: null, identityBasis: 'version-local-only' as const, inclusion: 'own-and-all-descendant-fragments' as const }));
+      output.barriers.obstacleReport = { status: 'complete', crossedParentSelectionIds: [parents[0].selectionId, parents[2].selectionId], blockingParentSelectionIds: [],
+        selectedParents: parents, checkedSegments: 1, totalSegments: 1, reasonCode: 'SYNTHETIC_RECORDED_REPORT' };
+      const jobId = randomUUID(), proposalId = randomUUID(), receiptId = randomUUID(), reviewId = randomUUID(), key = randomUUID(), loginId = randomUUID();
+      const client = await pool!.connect();
+      try {
+        await client.query('BEGIN');
+        const snapshotSql = `SELECT to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) value FROM cables c WHERE id=$1`;
+        const before = (await client.query(snapshotSql, [cableId])).rows[0].value;
+        dependencies.cableWriteRevision = before.cable_write_revision;
+        await client.query(`INSERT INTO pf_jobs(id,project_id,requested_by,login_id,login_expires_at,state,total,completed,options,timeout_ms,request_hash)
+          VALUES($1,$2,$3,$4,now()+interval '1 hour','complete',1,1,$5,60000,$6)`, [jobId, projectId, actorId, loginId, dependencies.options, 'a'.repeat(64)]);
+        await revisions.persistRevisionAdmission(client, { projectId, jobId, generation: null, kind: 'manual', inputSha256: 'a'.repeat(64), options: dependencies.options,
+          items: [{ cable: before, dependencies, status: 'ready', message: 'Synthetic read projection fixture.' }], modelRef: dependencies.model });
+        const baseline = await revisions.readRevisionBaseline(client, { projectId, jobId, cableId });
+        const proposalHash = revisions.revisionResultHash({ dependencies, result: output, baselineHash: baseline.baselineHash });
+        await client.query(`INSERT INTO pf_proposals(id,project_id,job_id,cable_id,status,dependencies,dependency_hash,geometry_hash,result,proposal_hash)
+          VALUES($1,$2,$3,$4,'calculated',$5,$6,$7,$8,$9)`, [proposalId, projectId, jobId, cableId, dependencies, revisions.revisionResultHash(dependencies), 'a'.repeat(64), output, proposalHash]);
+        const seal = await revisions.sealRevisionResult(client, { projectId, jobId, cableId, proposalId, dependencyHash: revisions.revisionResultHash(dependencies), dependencies, result: output });
+        await client.query(`INSERT INTO pf_reviews(id,project_id,proposal_id,actor_id,proposal_hash,validation_method,revision_result_sha256,review_login_id,review_dependency_sha256)
+          VALUES($1,$2,$3,$4,$5,'manual-review',$6,$7,$8)`, [reviewId, projectId, proposalId, actorId, proposalHash, seal.revisionResultSha256, loginId, seal.dependencyHash]);
+        await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
+        await client.query('UPDATE cables SET routing=$2,design_length=$3,remarks=$4,updated_at=clock_timestamp() WHERE id=$1', [cableId, output.route!.routeText, output.design!.designLengthMeters, routeObstacleRemarks(before.remarks, output)]);
+        const after = (await client.query(snapshotSql, [cableId])).rows[0].value;
+        const revisionResult = { admissionId: seal.admissionId, revisionResultSha256: seal.revisionResultSha256, baselineHash: seal.baselineHash,
+          engineResultSha256: seal.engineResultSha256, ledgerHash: seal.ledgerHash, dependencyHash: seal.dependencyHash };
+        const provenance = { schemaVersion: 'pathfinder.apply.v3', proposalId, proposalHash, reviewId, dependencies, barrierEvidence: readBarrierWriteEvidence(dependencies, output),
+          validationMethod: 'manual-review', review: { id: reviewId, actorId, loginId, validationMethod: 'manual-review', dependencyHash: seal.dependencyHash, revisionResultSha256: seal.revisionResultSha256 }, revisionResult };
+        await client.query(`INSERT INTO pf_apply_receipts(id,project_id,actor_id,idempotency_key,payload_hash,proposal_id,cable_id,before_snapshot,after_snapshot,provenance)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [receiptId, projectId, actorId, key, revisions.revisionResultHash({ proposalId, idempotencyKey: key, reviewId, expectedCableWriteRevision: before.cable_write_revision }), proposalId, cableId, before, after, provenance]);
+        await client.query('COMMIT');
+      } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+      // A later successful calculation without a write must not own the used
+      // route's Remarks targets, even if it refers to a different obstacle.
+      const laterJob = randomUUID(), laterProposal = randomUUID(), laterOutput = structuredClone(output);
+      laterOutput.barriers.obstacleReport!.crossedParentSelectionIds = [parents[1].selectionId];
+      await pool!.query(`INSERT INTO pf_jobs(id,project_id,requested_by,login_id,login_expires_at,state,total,completed,options,timeout_ms,request_hash)
+        VALUES($1,$2,$3,$4,now()+interval '1 hour','complete',1,1,$5,60000,$6)`, [laterJob, projectId, actorId, loginId, dependencies.options, 'b'.repeat(64)]);
+      await pool!.query(`INSERT INTO pf_proposals(id,project_id,job_id,cable_id,status,dependencies,dependency_hash,geometry_hash,result,proposal_hash)
+        VALUES($1,$2,$3,$4,'calculated',$5,$6,$7,$8,$9)`, [laterProposal, projectId, laterJob, cableId, dependencies, revisions.revisionResultHash(dependencies), 'a'.repeat(64), laterOutput, 'c'.repeat(64)]);
+      const target = `${baseUrl}/api/projects/${projectId}/cables/${cableId}/obstacle-links`, beforeRead = await snapshot();
+      const response = await fetch(target, { headers: { Authorization: `Bearer ${token}` } });
+      expect(response.status).toBe(200); const linked = await response.json() as Record<string, any>;
+      expect(linked).toMatchObject({ status: 'recorded', source: { kind: 'apply-receipt', id: receiptId, proposalId }, scope: dependencies.barriers.binding.scope });
+      expect(linked.obstacles.map((row: { dbId: number }) => row.dbId)).toEqual([24018, 24020]);
+      expect(await snapshot()).toEqual(beforeRead);
+      expect((await patch(cableId, { remarks: '[PathFinder obstacles] Crosses obstacles: #999.' })).status).toBe(200);
+      const modified = await fetch(target, { headers: { Authorization: `Bearer ${token}` } });
+      expect(await modified.json()).toMatchObject({ status: 'unverified', scope: null, obstacles: [] });
+    });
 
     it('persists cable Remarks through authenticated create, edit, history, Excel export and import', async () => {
       const original = 'Монтажна бележка\n[PathFinder obstacles] Crosses obstacles: #123, #456.';

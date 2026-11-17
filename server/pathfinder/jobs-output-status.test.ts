@@ -28,6 +28,11 @@ describe('read-only job output disposition', () => {
     fx.query.mockResolvedValueOnce({ rows: [row(id(5))] }).mockResolvedValueOnce({ rows: [item({ automatic_update_status: null })] });
     expect((await repository().get(id(1), who, id(5))).items).toEqual([{ cableId: id(4), status: 'calculated', state: 'complete', message: 'Route found.' }]);
   });
+  it('retains the exact failed item proposal identity for lazy recorded obstacle details', async () => {
+    fx.query.mockResolvedValueOnce({ rows: [row(id(5))] }).mockResolvedValueOnce({ rows: [item({ status: 'no_path', state: 'complete', proposal_id: id(9) })] });
+    expect((await repository().get(id(1), who, id(5))).items[0]).toMatchObject({ status: 'no_path', proposalId: id(9) });
+    expect(fx.query.mock.calls[1][0]).toContain('p.project_id=i.project_id AND p.job_id=i.job_id AND p.cable_id=i.cable_id');
+  });
   it.each([{ automatic_update_status: 'unknown-status' }, { automatic_update_status: 'written', automatic_update_receipt: null },
     { automatic_update_status: 'refused', automatic_update_reason: 'BAD\nREASON' }])('rejects malformed stored output status without claiming success: %j', async extra => {
     fx.query.mockResolvedValueOnce({ rows: [row(id(5))] }).mockResolvedValueOnce({ rows: [item(extra)] });

@@ -15,6 +15,7 @@ import { PathFinderError } from './errors.js';
 import type { EngineInvocation } from './engineSession.js';
 import type { EngineResponse } from './jobContracts.js';
 import { createManualRoutingNativeFixture } from './manualRoutingNativeFixture.js';
+import { readCableObstacleLinks } from './cableObstacleLinks.js';
 
 // Actual transactions, claims, authority rows, immutable records, invalidation
 // triggers and read verification. Synthetic collection is explicitly injected;
@@ -153,6 +154,14 @@ describe.skipIf(process.env.WFC_ROUTING_CONTROL_POSTGRES!=='1')('manual route wo
     const result=(await pool.query('SELECT record FROM pf_manual_route_results WHERE cable_id=$1',[row.id])).rows[0].record;
     expect(result.response.barriers.obstacleReport.crossedParentSelectionIds).toEqual([parent.selectionId]);
     expect(result.designWrite.status).toBe('written');
+    const client=await pool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const linked=await readCableObstacleLinks(client,row.project_id,row.id);
+      expect(linked).toMatchObject({status:'recorded',source:{kind:'manual-result',id:result.id},
+        scope:result.response.barriers.context.binding.scope,obstacles:[{selectionId:parent.selectionId,dbId:123,name:'Synthetic wall',kind:'wall'}]});
+      await client.query('ROLLBACK');
+    } finally {client.release();}
   });
   it('fences an old completion after A→B→A manual edits',async()=>{
     const row=await seed(),w=fixture(row,{onExecute:async()=>{await put(row,'/B');await put(row,'/A');}});await w.worker.tick();

@@ -855,7 +855,7 @@ export const TrayDetails = () => {
   const verifiedDrawingLayout = useMemo(() => {
     if (!drawingResponse || drawingResponse.snapshot.state === 'blocked') return null;
     try { return localDrawingDraft
-      ? computeTrayDrawing(makeTrayDrawingInput(drawingResponse.data, trayBundleOverrideSchema.parse(bundleOverrides), drawingResponse.snapshot.categoryModes))
+      ? computeTrayDrawing(makeTrayDrawingInput(drawingResponse.data, trayBundleOverrideSchema.parse(bundleOverrides), drawingResponse.snapshot.categoryModes, drawingResponse.snapshot.purposeModes))
       : drawingResponse.layout;
     } catch { return null; }
   }, [drawingResponse, localDrawingDraft, bundleOverrides]);

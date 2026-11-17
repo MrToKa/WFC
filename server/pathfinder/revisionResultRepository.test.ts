@@ -6,6 +6,7 @@ import { defaultOptions, engineResponseSchema, type BarrierDependencySnapshot, t
 import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 import { syntheticBarrierEngineIdentity } from './calculationFixtures.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
+import { routeObstacleRemarks } from './obstacleRemarks.js';
 import { PathFinderError } from './errors.js';
 import { AUTOMATIC_PAIR_LIMITS, AUTOMATIC_PAIR_POLICY, automaticPairMandateHashInput, type AutomaticPairMandate,
   type AutomaticPairOwnership } from '../../shared/pathfinderAutomaticPair.js';
@@ -133,14 +134,23 @@ function fixture() {
   return { client, pool, admissions, baselines, seals, proposals, accepted, events, ownWrites, currentRevisions, calls, input, prepare,dependencyVersions,
     setJob:(state:string,cancel=false)=>{jobState=state;cancelRequested=cancel;},setAdmin: (value: boolean) => { admin = value; }, failJob: () => { failedWithoutOutput = true; }, deleteCable: (cableId: string) => { deletedCables.add(cableId); } };
 }
-async function protectedAcceptedBaselineFixture() {
-  const f = fixture(), { deps, result } = protectedCalculation(), p = await f.prepare(result, deps);
+async function protectedAcceptedBaselineFixture(withObstacleReport = false) {
+  const f = fixture(), { deps, result } = protectedCalculation();
+  if (withObstacleReport && result.schemaVersion === 'pathfinder.model.response.v3') {
+    const parent = { selectionId: id(600), dbId: 24018, name: 'Synthetic floor', kind: 'floor' as const, objectId: 'dbid:24018',
+      externalId: null, identityBasis: 'version-local-only' as const, inclusion: 'own-and-all-descendant-fragments' as const };
+    result.barriers.obstacleReport = { status: 'complete', crossedParentSelectionIds: [parent.selectionId], blockingParentSelectionIds: [],
+      selectedParents: [parent], checkedSegments: 1, totalSegments: 1, reasonCode: 'SYNTHETIC_RECORDED_REPORT' };
+  }
+  const p = await f.prepare(result, deps);
   const seal = await sealRevisionResult(f.client, { projectId: pid, jobId: jid, cableId: id(10), proposalId: p.proposalId,
     dependencyHash: revisionResultHash(deps), result, dependencies: deps }), evidence = readBarrierWriteEvidence(deps, result);
   if (!evidence) throw Error('Expected complete strict protected synthetic calculation.');
   const before = { id: id(10), project_id: pid, tag: 'Synthetic cable', from_location: 'From', to_location: 'To', routing: '/OLD',
-    design_length: '4.0000', install_length: '3.12500', cable_write_revision: '9007199254740993', revision: 'engineering-1', updated_at: '2026-10-21T00:00:00Z' },
-    after = { ...before, routing: '/A', design_length: '7.0000', cable_write_revision: '9007199254740994', updated_at: '2026-10-21T00:01:00Z' };
+    design_length: '4.0000', install_length: '3.12500', cable_write_revision: '9007199254740993', revision: 'engineering-1', updated_at: '2026-10-21T00:00:00Z',
+    ...(withObstacleReport ? { remarks: 'Human note' } : {}) },
+    after = { ...before, routing: '/A', design_length: '7.0000', cable_write_revision: '9007199254740994', updated_at: '2026-10-21T00:01:00Z',
+      ...(withObstacleReport ? { remarks: routeObstacleRemarks(before.remarks, result) } : {}) };
   const provenance = { schemaVersion: 'pathfinder.apply.v3', proposalId: p.proposalId, proposalHash: seal.proposalHash, reviewId: id(120), dependencies: deps,
     validationMethod: 'manual-review', nativeParity: 'not-performed', barrierEvidence: evidence,
     review: { id: id(120), actorId: who.userId, loginId: who.loginId, validationMethod: 'manual-review', dependencyHash: seal.dependencyHash, revisionResultSha256: seal.revisionResultSha256 },
@@ -371,6 +381,14 @@ describe('immutable admission snapshots and revision envelopes', () => {
     expect(sql).toContain("LEFT JOIN pf_reviews v ON v.project_id=r.project_id AND v.id::text=r.provenance->>'reviewId'");
     for (const alias of ['accepted_before', 'accepted_after', 'accepted_provenance', 'accepted_dependencies', 'accepted_result', 'accepted_review_login_id',
       'accepted_review_proposal_hash', 'accepted_review_result_sha256', 'accepted_review_dependency_sha256']) expect(sql).toContain(`AS ${alias}`);
+  });
+  it('accepts only the exact generated obstacle Remarks addition in a saved human Apply receipt', async () => {
+    const value = await protectedAcceptedBaselineFixture(true);
+    expect((await value.run()).acceptedMatchesCurrent).toBe(true);
+    expect(value.after.remarks).toContain('Crosses obstacles: #24018.');
+    const changed = await protectedAcceptedBaselineFixture(true);
+    changed.after.remarks = 'Unexpected replacement';
+    expect((await changed.run()).lastAcceptedApply).toBeNull();
   });
   it.each(['execution-evidence', 'route-evidence', 'policy-evidence', 'profile-evidence', 'context-evidence', 'result-evidence', 'dependency-evidence',
     'retained-result', 'retained-dependencies', 'provenance-dependencies', 'provenance-proposal', 'review-id', 'review-actor', 'review-proposal', 'review-proposal-hash',

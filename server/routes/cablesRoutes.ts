@@ -1,4 +1,5 @@
 import { clearRouteObstacleRemarks } from '../pathfinder/obstacleRemarks.js';
+import { readCableObstacleLinks } from '../pathfinder/cableObstacleLinks.js';
 import { createHash, randomUUID } from 'crypto';
 import type { ProjectChangeLogEntry } from '../models/project.js';
 import { recordCableMaterialChanges } from '../services/cableMaterialChangeLogService.js';
@@ -10,6 +11,7 @@ import { writeExcelWorkbook } from '../utils/excelWorkbook.js';
 import { uploadExcelFile } from '../utils/excelUpload.js';
 import type { PoolClient } from 'pg';
 import * as XLSX from 'xlsx';
+import { z } from 'zod';
 
 // Extend Request type to include params, body, query, and file
 interface Request extends ExpressRequest {
@@ -2891,6 +2893,33 @@ cablesRouter.get('/:cableId/versions', async (req: Request, res: Response): Prom
     console.error('List cable versions error', error);
     res.status(500).json({ error: 'Failed to load cable revisions' });
   }
+});
+
+cablesRouter.get('/:cableId/obstacle-links', async (req: Request, res: Response): Promise<void> => {
+  const parsed = z.object({ projectId: policyUuidSchema, cableId: policyUuidSchema }).safeParse(req.params);
+  if (!parsed.success || Object.keys(req.query).length) { res.status(400).json({ error: 'Invalid cable obstacle request.' }); return; }
+  const { projectId, cableId } = parsed.data;
+  let client: PoolClient | null = null;
+  try {
+    if (!await ensureProjectExists(projectId)) { res.status(404).json({ error: 'Project not found.' }); return; }
+    client = await pool.connect();
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    await client.query("SET LOCAL statement_timeout='3000ms';SET LOCAL idle_in_transaction_session_timeout='15000ms'");
+    const started = Date.now(); let bytes = 0;
+    const reader = Object.create(client) as PoolClient;
+    reader.query = (async (sql: string, values?: unknown[]) => {
+      if (Date.now() - started > 10000 || bytes > 32 * 1024 ** 2) throw new PathFinderError('CABLE_OBSTACLE_READ_LIMIT', 503, 'Saved obstacle links are unavailable. Refresh and try again.');
+      const result = await client!.query(sql, values); bytes += Buffer.byteLength(JSON.stringify(result.rows));
+      if (bytes > 32 * 1024 ** 2) throw new PathFinderError('CABLE_OBSTACLE_READ_LIMIT', 503, 'Saved obstacle links are unavailable. Refresh and try again.');
+      return result;
+    }) as PoolClient['query'];
+    const result = await readCableObstacleLinks(reader, projectId, cableId);
+    await client.query('COMMIT'); res.setHeader('Cache-Control', 'private, no-store'); res.json(result);
+  } catch (error) {
+    await client?.query('ROLLBACK').catch(() => undefined);
+    const failure = error instanceof PathFinderError ? error : new PathFinderError('CABLE_OBSTACLE_LINKS_UNAVAILABLE', 503, 'Saved obstacle links are unavailable. Refresh and try again.');
+    res.status(failure.status).json({ code: failure.code, error: failure.message });
+  } finally { client?.release(); }
 });
 
 cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promise<void> => {

@@ -205,14 +205,16 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
       return principalTransaction(pool,projectId,who,async client => {
         const row = (await client.query<Row>('SELECT * FROM pf_jobs WHERE project_id=$1 AND id=$2',[projectId,jobId])).rows[0];
         if (!row) throw new PathFinderError('JOB_NOT_FOUND',404);
-        const items = await client.query<Row>(`/* job-output-items */ SELECT i.cable_id,i.state,i.status,i.message,
+        const items = await client.query<Row>(`/* job-output-items */ SELECT i.cable_id,i.state,i.status,i.message,p.id AS proposal_id,
           COALESCE(d.status,CASE WHEN a.reason_code IS NOT NULL THEN 'review-required' END) AS automatic_update_status,
           d.receipt_id AS automatic_update_receipt,CASE WHEN d.status IS NOT NULL THEN d.reason_code ELSE a.reason_code END AS automatic_update_reason
           FROM pf_job_items i LEFT JOIN pf_automatic_pair_dispatch d ON d.project_id=i.project_id AND d.job_id=i.job_id AND d.cable_id=i.cable_id
           LEFT JOIN pf_automatic_pair_admission_decisions a ON a.project_id=i.project_id AND a.job_id=i.job_id AND a.cable_id=i.cable_id
+          LEFT JOIN pf_proposals p ON p.project_id=i.project_id AND p.job_id=i.job_id AND p.cable_id=i.cable_id
           WHERE i.project_id=$1 AND i.job_id=$2 ORDER BY i.cable_id`,[projectId,jobId]);
         return {...jobDto(row),items:items.rows.map(item => {
-          const value = {cableId:item.cable_id,status:item.status,state:item.state,message:item.message};
+          const value = {cableId:item.cable_id,status:item.status,state:item.state,message:item.message,
+            ...(item.proposal_id ? {proposalId:z.string().uuid().parse(item.proposal_id)} : {})};
           if (item.automatic_update_status == null) return value;
           const update = jobAutomaticUpdateSchema.safeParse({status:item.automatic_update_status,receiptId:item.automatic_update_receipt??null,reasonCode:item.automatic_update_reason??null});
           if (!update.success) throw new PathFinderError('JOB_AUTOMATIC_UPDATE_INVALID',500);

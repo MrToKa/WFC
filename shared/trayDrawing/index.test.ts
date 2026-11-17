@@ -25,6 +25,45 @@ function dividers(result: ReturnType<typeof computeTrayDrawing>) {
 }
 
 describe('shared pure tray placement', () => {
+  it('places every arbitrary purpose using its real diameter without electrical packing or metadata changes', () => {
+    const cables = [cable(1, 'Power', 20), cable(2, 'Control', 12), cable(3, 'Plastic tubing', 6), cable(4, 'Instrumentation', 10)];
+    const request = input(cables);
+    const before = JSON.stringify(request);
+    const result = computeTrayDrawing(request);
+    expect(new Set(result.placements.map(value => value.cableId))).toEqual(new Set(cables.map(value => value.id)));
+    expect(result.placements).toHaveLength(cables.length);
+    expect(byId(result, 3)).toMatchObject({ category: 'generic', purposeKey: 'Plastic tubing', side: 'right', radiusPx: 3 });
+    expect(byId(result, 4)).toMatchObject({ category: 'generic', purposeKey: 'Instrumentation', radiusPx: 5 });
+    expect(result.summary!.occupiedWidthWithBundleSpacingMm).toBeGreaterThan(computeTrayDrawing(input(cables.slice(0, 2))).summary!.occupiedWidthWithBundleSpacingMm);
+    expect(result.summary!.trefoilClamps).toEqual([]);
+    expect(result.diagnostics).toEqual([]);
+    expect(JSON.stringify(request)).toBe(before);
+  });
+  it('applies exact normalized purpose overrides before legacy family modes, including distinct generic purposes', () => {
+    const cables = [cable(1, 'Power'), cable(2, 'UPS power'), cable(3, ' Plastic tubing ', 6), cable(4, 'plastic tubing', 6), cable(5, 'Cafe\u0301', 6)];
+    const request = input(cables, modes({ power: 'right' }));
+    request.options!.purposeModes = { Power: 'left', 'UPS power': 'use-default', 'Plastic tubing': 'left', 'plastic tubing': 'right', 'Caf\u00e9': 'left' };
+    const result = computeTrayDrawing(request);
+    expect(byId(result, 1).side).toBe('left');
+    expect(byId(result, 2).side).toBe('left'); // Explicit default restores the family's native side.
+    expect(byId(result, 3)).toMatchObject({ purposeKey: 'Plastic tubing', side: 'left' });
+    expect(byId(result, 4)).toMatchObject({ purposeKey: 'plastic tubing', side: 'right' });
+    expect(byId(result, 5)).toMatchObject({ purposeKey: 'Caf\u00e9', side: 'left' });
+    expect(result.placements).toHaveLength(5);
+  });
+  it('keeps ordinary object-property names as valid business purposes', () => {
+    const result = computeTrayDrawing(input([cable(1, 'toString', 6), cable(2, 'constructor', 6), cable(3, '__proto__', 6)]));
+    expect(result.placements).toHaveLength(3);
+    expect(result.placements.every(value => value.side === 'right')).toBe(true);
+  });
+  it('preserves explicit own-key side overrides for prototype-looking purpose names', () => {
+    const request = input([cable(1, '__proto__', 6), cable(2, 'constructor', 6), cable(3, 'toString', 6)]);
+    request.options!.purposeModes = JSON.parse('{"__proto__":"left","constructor":"left","toString":"right"}');
+    const result = computeTrayDrawing(request);
+    expect(byId(result, 1)).toMatchObject({ purposeKey: '__proto__', side: 'left' });
+    expect(byId(result, 2)).toMatchObject({ purposeKey: 'constructor', side: 'left' });
+    expect(byId(result, 3)).toMatchObject({ purposeKey: 'toString', side: 'right' });
+  });
   it('retains signed database ordering IDs while producing positive schedule display numbers', () => {
     const result = computeTrayDrawing(input([cable(7, 'Power'), cable(-2, 'Power')]));
     expect(byId(result, -2).displayNumber).toBe(1);

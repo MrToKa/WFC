@@ -19,6 +19,7 @@ import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.j
 import { createAutomaticPairReceiptProofReader } from './automaticPairReceiptProof.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
 import { registerAutoLengthAdmission } from './autoLengthStore.js';
+import { exactObstacleRemarksTransition } from './obstacleRemarks.js';
 
 type Row = Record<string, unknown>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The immutable cable revision result is unavailable or inconsistent. Refresh the admission and calculate a new proposal when required.'); };
@@ -76,8 +77,8 @@ function protectedManualBaseline(row: Row, dependencies: DependencySnapshot, out
     || typeof after.design_length !== 'string' || !numericEqual(after.design_length, output.design?.designLengthMeters ?? null)
     || row.receipt_payload_hash !== revisionResultHash({ proposalId: row.proposal_id, idempotencyKey: row.receipt_idempotency_key,
       reviewId: row.accepted_review_id, expectedCableWriteRevision: before.cable_write_revision })) return false;
-  const changed = new Set(['routing', 'design_length', 'updated_at', 'cable_write_revision']);
-  return equal(Object.keys(before).sort(), Object.keys(after).sort())
+  const changed = new Set(['routing', 'design_length', 'remarks', 'updated_at', 'cable_write_revision']);
+  return exactObstacleRemarksTransition(before, after, output) && equal(Object.keys(before).sort(), Object.keys(after).sort())
     && Object.keys(before).every(key => changed.has(key) || equal(before[key], after[key]));
 }
 async function acceptedBaselines(client: PoolClient, projectId: string, ids: string[]): Promise<Map<string, RevisionBaseline['lastAcceptedApply']>> {
@@ -153,6 +154,10 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
     }
   }
   return result;
+}
+/** Historical display evidence only; this never renews a prior write mandate. */
+export async function readAcceptedCableApply(client: PoolClient, projectId: string, cableId: string): Promise<RevisionBaseline['lastAcceptedApply']> {
+  return (await acceptedBaselines(client, policyUuidSchema.parse(projectId), [policyUuidSchema.parse(cableId)])).get(cableId) ?? null;
 }
 /** Caller owns the existing project, authority, dependency and sorted cable locks. */
 export async function persistRevisionAdmission(client: PoolClient, input: RevisionAdmissionInput): Promise<string> {

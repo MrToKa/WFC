@@ -34,6 +34,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCableListColumns } from './hooks/useCableListColumns';
 import { CableListColumnsDialog } from './CableListColumnsDialog';
 import { CableAutoCalculatedLength } from '@/components/pathfinder/CableAutoCalculatedLength';
+import { CableObstacleRemarks, obstacleTextParts } from '@/components/pathfinder/ObstacleModelLink';
 import {
   CableRoutingValue,
   routingCellAppearance,
@@ -479,11 +480,13 @@ export const CableListTab = ({
                     {visibleColumns.has('remarks') ? (
                       <td className={styles.tableCell} style={{ whiteSpace: 'pre-wrap' }}>
                         {isInlineEditable && draft ? (
-                          <Textarea value={draft.remarks ?? ''}
+                          <><Textarea value={draft.remarks ?? ''}
                             onChange={(_, data) => onDraftChange(cable.id, 'remarks', data.value)}
                             onBlur={() => onTextFieldBlur(cable, 'remarks')}
                             disabled={isRowUpdating} maxLength={32767} aria-label="Cable remarks" />
-                        ) : cable.remarks ?? '-'}
+                            {(draft.remarks ?? '') === (cable.remarks ?? '') && obstacleTextParts(cable.remarks ?? '', true).some(part => part.dbId !== undefined)
+                              ? <Caption1>Show in 3D: <CableObstacleRemarks projectId={cable.projectId} cableId={cable.id} remarks={cable.remarks} numbersOnly /></Caption1> : null}</>
+                        ) : <CableObstacleRemarks projectId={cable.projectId} cableId={cable.id} remarks={cable.remarks} />}
                       </td>
                     ) : null}
                     {visibleColumns.has('delivery') ? (

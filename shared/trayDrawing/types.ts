@@ -9,11 +9,15 @@ export type DrawingCable = {
 };
 export type DrawingTray = { id?: string; name: string; widthMm?: number | null; heightMm?: number | null; useTrefoilClamps?: boolean };
 export type CategoryKey = 'mv' | 'power' | 'vfd' | 'control';
+/** Physical packing families do not replace the cable's business purpose. */
+export type DrawingCategoryKey = CategoryKey | 'generic';
 export type SideMode = 'use-default' | 'left' | 'right';
 export type CategoryModes = Record<CategoryKey, SideMode>;
+export type PurposeModes = Record<string, SideMode>;
+export const drawingPurposeKey = (purpose: string | null | undefined): string => purpose?.normalize('NFC').trim() ?? '';
 export type CustomBundleRange = { id: string; min: number; max: number; maxRows?: number | null };
 export type DrawingDiagnostic = { code: string; cableIds: string[]; message: string };
-export type CablePlacement = { cableId: string; displayNumber: number; category: CategoryKey; side: 'left' | 'right'; xPx: number; yPx: number; radiusPx: number };
+export type CablePlacement = { cableId: string; displayNumber: number; category: DrawingCategoryKey; purposeKey?: string; side: 'left' | 'right'; xPx: number; yPx: number; radiusPx: number };
 
 /** Deliberately limited Canvas subset, usable by a recorder or a browser context. */
 export interface DrawingContext {
@@ -34,4 +38,5 @@ export interface DrawingContext {
 export interface DrawingCanvas { width: number; height: number; getContext(kind: '2d'): DrawingContext | null }
 
 export const CATEGORY_ORDER: readonly CategoryKey[] = ['mv', 'power', 'vfd', 'control'];
+export const DRAWING_CATEGORY_ORDER: readonly DrawingCategoryKey[] = [...CATEGORY_ORDER, 'generic'];
 export const DEFAULT_CATEGORY_MODES: CategoryModes = { mv: 'use-default', power: 'use-default', vfd: 'use-default', control: 'use-default' };

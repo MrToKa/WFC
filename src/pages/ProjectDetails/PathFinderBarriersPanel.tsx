@@ -3,7 +3,7 @@ import { Button, Caption1, Field, Select, Spinner, Textarea, Tooltip, makeStyles
 import { usePathfinderBarriers, type BarrierAuthoringOptions, type BarrierAuthoringState, type BarrierSelectedParent } from './hooks/usePathfinderBarriers';
 import { BARRIER_LIMITS } from '../../../shared/pathfinderBarriers';
 
-export type PathFinderBarriersPanelProps = BarrierAuthoringOptions & { onStateChange?: (state: BarrierAuthoringState) => void };
+export type PathFinderBarriersPanelProps = BarrierAuthoringOptions & { onStateChange?: (state: BarrierAuthoringState) => void; claimViewer?: () => () => boolean };
 const useStyles = makeStyles({
   panel: { display: 'grid', gap: '0.5rem', minWidth: 0, overflowWrap: 'anywhere', borderTop: `1px solid ${tokens.colorNeutralStroke2}`, paddingTop: '0.75rem' },
   heading: { margin: 0, fontSize: tokens.fontSizeBase400, fontWeight: tokens.fontWeightSemibold },
@@ -57,7 +57,7 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
   useEffect(() => { callback.current?.({ registry: state.registry, dirty: state.dirty, pending: state.pending }); }, [state.registry, state.dirty, state.pending]);
   const [displayBusy, setDisplayBusy] = useState(false), [displayObject, setDisplayObject] = useState<number | null>(null), [displayError, setDisplayError] = useState<string | null>(null);
   const pendingDisplay = useRef<object | null>(null);
-  const ownedDisplay = useRef<{ key: string; restore: () => Promise<boolean> } | null>(null);
+  const ownedDisplay = useRef<{ key: string; restore: () => Promise<boolean>; owns: () => boolean } | null>(null);
   const frozen = state.busy || props.pf.busy || state.pending || displayBusy;
   const disabled = !state.canAuthor || frozen;
   const geometry = state.manifest?.geometry;
@@ -70,32 +70,34 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
     return () => {
       pendingDisplay.current = null;
       const owned = ownedDisplay.current;
-      if (owned?.key === objectScope) { ownedDisplay.current = null; void owned.restore().catch(() => {}); }
+      if (owned?.key === objectScope) { ownedDisplay.current = null; if (owned.owns()) void owned.restore().catch(() => {}); }
     };
   }, [objectScope]);
   const showObject = async (dbId: number) => {
     if (!active?.modelVersionId || !active.contentFingerprint || props.pf.busy || pendingDisplay.current || props.pf.viewerPhase !== 'ready') return false;
     const key = objectScope, ticket = {}, scope = { modelVersionId: active.modelVersionId, contentFingerprint: active.contentFingerprint, selectionRevision: active.selectionRevision };
     pendingDisplay.current = ticket; setDisplayBusy(true); setDisplayError(null);
-    ownedDisplay.current = { key, restore: () => props.pf.hideTray(scope) };
+    const owns = props.claimViewer?.() ?? (() => true);
+    ownedDisplay.current = { key, restore: () => props.pf.hideTray(scope), owns };
     const current = () => latestScope.current === key && pendingDisplay.current === ticket;
     try {
       const shown = await props.pf.showTray(scope, [dbId]);
-      if (!current()) { if (shown) await props.pf.hideTray(scope); return false; }
+      if (!current() || !owns()) { if (shown && owns()) await props.pf.hideTray(scope); return false; }
       // Keep Hide available even after a partial appearance failure.
       setDisplayObject(dbId); return shown;
-    } catch { if (current()) setDisplayObject(dbId); return false; }
+    } catch { if (current() && owns()) setDisplayObject(dbId); return false; }
     finally { if (current()) { pendingDisplay.current = null; setDisplayBusy(false); } }
   };
   const hideObject = async () => {
     const owned = ownedDisplay.current;
     if (!owned || pendingDisplay.current || props.pf.busy || owned.key !== objectScope) return;
+    if (!owned.owns()) { ownedDisplay.current = null; setDisplayObject(null); return; }
     const ticket = {}; pendingDisplay.current = ticket; setDisplayBusy(true); setDisplayError(null);
     const current = () => latestScope.current === owned.key && pendingDisplay.current === ticket;
     try {
       if (await owned.restore()) { if (current()) { ownedDisplay.current = null; setDisplayObject(null); } }
-      else if (current()) setDisplayError('The normal model view could not be restored. Try Hide again.');
-    } catch { if (current()) setDisplayError('The normal model view could not be restored. Try Hide again.'); }
+      else if (current() && owned.owns()) setDisplayError('The normal model view could not be restored. Try Hide again.');
+    } catch { if (current() && owned.owns()) setDisplayError('The normal model view could not be restored. Try Hide again.'); }
     finally { if (current()) { pendingDisplay.current = null; setDisplayBusy(false); } }
   };
   const isCurrentScope = (scope: NonNullable<typeof state.registry>['scope'] | undefined) => Boolean(scope && active
@@ -118,7 +120,7 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
               : state.registry ? `Registry: ${state.registry.state}` : 'No current barrier registry loaded';
   return <section className={styles.panel} aria-label="Barriers">
     <h3 className={styles.heading}>Barriers</h3>
-    {displayObject !== null ? <Button disabled={displayBusy || props.pf.busy} onClick={() => void hideObject()}>Hide</Button> : null}
+    {displayObject !== null && ownedDisplay.current?.owns() ? <Button disabled={displayBusy || props.pf.busy} onClick={() => void hideObject()}>Hide</Button> : null}
     {displayError ? <Caption1 role="alert">{displayError}</Caption1> : null}
     <Caption1>Register walls, partitions, floors, ceilings and other obstacles. Choose Obstacle for pipes, tanks or mixed model groups.</Caption1>
     <Caption1>Obstacle numbers use the model object number and stay the same when the list is reordered. Numbers apply to this model version.</Caption1>
@@ -133,7 +135,7 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
           : saved.status === 'recapture-required' ? 'This saved selection belongs to another model or frame. Select current objects and save a new capture; the old geometry is not ready for calculation.'
             : 'Last saved selection for reference. Current readiness is unavailable.'}</Caption1>
         {saved.manifest.selectedParents.length ? <ul className={styles.list} aria-label="Saved barrier parents">{saved.manifest.selectedParents.map(parent => <li className={styles.item} key={objectScope + parent.selectionId}>
-          <BarrierObject parent={parent} pf={props.pf} displayBusy={displayBusy} shown={displayObject === parent.dbId} onHide={hideObject} onShow={showObject} current={isCurrentScope(saved.manifest.scope)} disabled={disabled} />
+          <BarrierObject parent={parent} pf={props.pf} displayBusy={displayBusy} shown={displayObject === parent.dbId && Boolean(ownedDisplay.current?.owns())} onHide={hideObject} onShow={showObject} current={isCurrentScope(saved.manifest.scope)} disabled={disabled} />
         </li>)}</ul> : saved.manifest.geometry.mode === 'explicit-empty' ? <Caption1>Published empty declaration: {saved.manifest.geometry.reason}</Caption1> : null}
         <details><summary>Saved selection scope</summary>
           <p>Snapshot {saved.manifest.snapshotId}. Model {saved.manifest.scope.modelVersionId}. Frame {saved.manifest.scope.captureFrameId}.</p>
@@ -150,7 +152,7 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
     <Button disabled={disabled} onClick={() => void state.addSelection()}>Add selected objects</Button>
     <Caption1>{state.draftParents.length} / {BARRIER_LIMITS.selectedParents} selected parent objects{selectionSaved ? '' : ' in this draft'}. Repeated objects are added once; overlapping parent geometry is qualified during publication.</Caption1>
     {state.draftParents.length ? <ul className={styles.list} aria-label="Selected barrier parents">{state.draftParents.map(parent => <li className={styles.item} key={objectScope + parent.selectionId}>
-      <BarrierObject parent={parent} pf={props.pf} displayBusy={displayBusy} shown={displayObject === parent.dbId} onHide={hideObject} onShow={showObject} current={isCurrentScope(state.registry?.scope)} disabled={disabled} remove={() => state.removeParent(parent.selectionId)} />
+      <BarrierObject parent={parent} pf={props.pf} displayBusy={displayBusy} shown={displayObject === parent.dbId && Boolean(ownedDisplay.current?.owns())} onHide={hideObject} onShow={showObject} current={isCurrentScope(state.registry?.scope)} disabled={disabled} remove={() => state.removeParent(parent.selectionId)} />
     </li>)}</ul> : <Caption1>{state.registry ? 'No barrier parents selected. This does not declare that the model has no barriers.' : 'The current barrier selection is unavailable until its saved data and model frame can be verified.'}</Caption1>}
     {state.draftParents.length ? <Button appearance={selectionSaved ? 'secondary' : 'primary'} disabled={disabled || selectionSaved} onClick={() => void state.save()}>{saveLabel}</Button> : state.registry ? <>
       <Field label="Explicit empty reason"><Textarea aria-label="Explicit empty reason" value={state.emptyReason} maxLength={2048} disabled={disabled} onChange={(_, data) => state.setEmptyReason(data.value)} /></Field>

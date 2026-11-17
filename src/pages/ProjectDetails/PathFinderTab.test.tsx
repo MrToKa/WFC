@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PathFinderTab } from './PathFinderTab';
+import { createObstacleNavigation } from './pathFinderObstacleNavigation';
 import { ControlPanelWindow } from '@/components/ControlPanelWindow';
 import { FluentProvider, webDarkTheme } from '@fluentui/react-components';
 import { usePathFinder } from './hooks/usePathFinder';
@@ -153,6 +154,32 @@ function preview(id: string, reverse = false): PathFinderPreview { return { id, 
 
 // Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
 describe('admin PathFinder interface', { timeout: 60_000 }, () => {
+  it('shows a scoped obstacle navigation in 3D and restores with Hide obstacle', async () => {
+    const focus = vi.spyOn(window, 'focus').mockImplementation(() => {}); onTestFinished(() => focus.mockRestore());
+    const request = createObstacleNavigation({ projectId, modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64),
+      captureFrameId: '88888888-8888-4888-8888-888888888888', captureFrameSha256: 'c'.repeat(64), coordinateFrame: 'canonical-world-metres' }, 18).state.pathfinderObstacle;
+    render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin obstacleRequest={request} />);
+    await waitFor(() => expect(pf.showTray).toHaveBeenCalledExactlyOnceWith(request, [18]));
+    expect(await screen.findByText('Obstacle #18 shown in the model.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide obstacle' }));
+    await waitFor(() => expect(pf.hideTray).toHaveBeenCalledWith(request));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Hide obstacle' })).not.toBeInTheDocument());
+  });
+  it('reveals the main viewport once for an eligible request and leaves a wrong model alone', async () => {
+    const focus = vi.spyOn(window, 'focus').mockImplementation(() => {}); onTestFinished(() => focus.mockRestore());
+    const request = createObstacleNavigation({ projectId, modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64),
+      captureFrameId: '88888888-8888-4888-8888-888888888888', captureFrameSha256: 'c'.repeat(64), coordinateFrame: 'canonical-world-metres' }, 18).state.pathfinderObstacle;
+    pf.data.activeModel.modelVersionId = '99999999-9999-4999-8999-999999999999';
+    const props = { projectId, loadedProjectId: projectId, token: 'isolated-test-token', accountId, isAdmin: true, obstacleRequest: request };
+    const view = render(<PathFinderTab {...props} />), reveal = vi.fn();
+    screen.getByTestId('pathfinder-model-host').scrollIntoView = reveal;
+    expect(focus).not.toHaveBeenCalled(); expect(pf.showTray).not.toHaveBeenCalled();
+    pf.data.activeModel.modelVersionId = modelId; view.rerender(<PathFinderTab {...props} />);
+    await waitFor(() => expect(pf.showTray).toHaveBeenCalledExactlyOnceWith(request, [18]));
+    expect(focus).toHaveBeenCalledTimes(1); expect(reveal).toHaveBeenCalledExactlyOnceWith({ block: 'center', inline: 'nearest' });
+    view.rerender(<PathFinderTab {...props} />);
+    expect(focus).toHaveBeenCalledTimes(1); expect(reveal).toHaveBeenCalledTimes(1);
+  });
   it('preserves Path Finder selections and unsaved settings through control panel pop-up return and native close', () => {
     const frame = document.createElement('iframe'); document.body.appendChild(frame);
     const popup = frame.contentWindow!;
