@@ -12,6 +12,7 @@ import { barrierCaptureErrorMessage } from './barrier-capture-errors.mjs';
 import { createModelCaptureInputStage, isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 import { SDK_VERSION, MAX_LOCATION_OBJECT_IDS } from './protocol.mjs';
 import { parseRoutingBindings } from './routing-bindings.mjs';
+import { installModelBrowserSearch } from './model-browser-search.mjs';
 
 const interrupted = () => new DOMException('Operation cancelled.', 'AbortError');
 const active = signal => { if (signal?.aborted) throw interrupted(); };
@@ -179,7 +180,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       },
     });
     let finished = false, routes, pathfinder, locationPoint, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
-    let capture, multipart, cadScene;
+    let capture, multipart, cadScene, modelBrowserSearch;
     let trayAssignmentGeneration = 0;
     const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; clearTimeout(old.deadline); old.controller.abort(); if (old.iterator) void old.iterator.return().catch(() => {}); };
     const runtimeError = () => { if (!finished) onRuntimeError(safeError()); };
@@ -188,6 +189,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       finished = true;
       signal?.removeEventListener('abort', finish);
       cancelCapture();
+      modelBrowserSearch?.dispose();
       multipart?.dispose();
       cadScene?.dispose();
       observer?.disconnect();
@@ -202,6 +204,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
     signal?.addEventListener('abort', finish, { once: true });
     try {
       if (viewer.start() !== 0) throw safeError('SDK_UNSUPPORTED');
+      modelBrowserSearch = installModelBrowserSearch(viewer, viewing);
       viewer.setTheme('light-theme');
       await new Promise((resolve, reject) => {
         let settled = false;
