@@ -108,10 +108,16 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     if (matches) return matches.length === 1 && !claimedElsewhere.has(matches[0]);
     return Boolean(plan?.requestedScope.trays.some(item => item.projectTrayId === trayId && item.orderedRootObjectIds.some(root => !claimedElsewhere.has(root))));
   };
-  const modelTrays=context?.trays.filter(tray=>!tray.geometrySource)??[];
-  const found = modelTrays.filter(tray => assigned(tray.projectTrayId)).length;
+  const networkTrays = context?.trays ?? [];
+  const membershipKnown = networkTrays.every(tray => typeof tray.inNetwork === 'boolean');
+  const included = networkTrays.filter(tray => tray.inNetwork === true).length;
   const networkStatus = (() => {
-    if (saved) return `Network saved in the database. Ready for routing calculations. ${found} of ${modelTrays.length} trays assigned${found < modelTrays.length ? `; ${modelTrays.length - found} still need a model selection` : ''}.`;
+    if (saved) {
+      const count = membershipKnown
+        ? `${included} of ${networkTrays.length} trays included in the calculation network.${included < networkTrays.length ? ` ${networkTrays.length - included} ${networkTrays.length - included === 1 ? 'tray is' : 'trays are'} not included.` : ''}`
+        : 'Tray inclusion count is unavailable. Refresh preparation to verify all trays.';
+      return `Network saved in the database. Ready for routing calculations. ${count}`;
+    }
     switch (state.networkStorageStatus) {
       case 'stored-current':
         if (!modelCurrent) return 'A routing network is saved in the database. Load the matching project model to check readiness.';

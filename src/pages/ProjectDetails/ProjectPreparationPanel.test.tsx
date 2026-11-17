@@ -39,6 +39,47 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => {}); });
 
 describe('simple project tray preparation', () => {
+  it.each([true, false])('counts all model and manual trays using verified network membership (all manual included: %s)', allManualIncluded => {
+    const { state, pf } = setup();
+    const template = state.context.trays[0];
+    state.context.trays = Array.from({ length: 96 }, (_, index) => ({
+      ...template,
+      projectTrayId: `85000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      rawName: `BC${String(index + 1).padStart(3, '0')}`,
+      routeName: `/BC${String(index + 1).padStart(3, '0')}`,
+      ...(index >= 89 ? { geometrySource: 'published-cad-route' as const } : {}),
+      inNetwork: allManualIncluded || index !== 95,
+    }));
+    state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent(allManualIncluded
+      ? 'Network saved in the database. Ready for routing calculations. 96 of 96 trays included in the calculation network.'
+      : 'Network saved in the database. Ready for routing calculations. 95 of 96 trays included in the calculation network. 1 tray is not included.');
+    expect(screen.queryByText(/89 of 89 trays assigned/)).toBeNull();
+  });
+  it('does not count a saved model assignment without verified network geometry', () => {
+    const { state, pf, tray } = setup();
+    tray.inNetwork = false;
+    state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(within(screen.getByRole('article', { name: `Tray ${tray.rawName}` })).getByText('Assigned')).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Network saved in the database. Ready for routing calculations. 0 of 1 trays included in the calculation network. 1 tray is not included.',
+    );
+  });
+  it.each([false, true])('shows an unavailable inclusion count when membership flags are missing (mixed flags: %s)', mixedFlags => {
+    const { state, pf } = setup();
+    delete state.context.trays[0].inNetwork;
+    if (mixedFlags) state.context.trays.push({ ...state.context.trays[0],
+      projectTrayId: '85000000-0000-4000-8000-000000000099', rawName: 'BC901',
+      geometrySource: 'published-cad-route', inNetwork: true });
+    state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Network saved in the database. Ready for routing calculations. Tray inclusion count is unavailable. Refresh preparation to verify all trays.',
+    );
+    expect(screen.queryByText(/\d+ of \d+ trays (?:assigned|included)/)).toBeNull();
+  });
   it('marks only trays verified in the calculation network and shows saved CAD routes', () => {
     const { state, pf } = setup();
     state.context.trays = [
@@ -351,12 +392,13 @@ describe('simple project tray preparation', () => {
     view.rerender(<ProjectPreparationPanel pf={pf} active />);
     await act(async () => finish({ objects: [{ objectId: 55 }] })); expect(state.assignTray).not.toHaveBeenCalled();
   });
-  it('shows a ready network even when some trays still need a selection', () => {
-    const { state, pf } = setup(), extra = { ...state.context.trays[0], projectTrayId: '85000000-0000-4000-8000-000000000001', rawName: 'A120' };
+  it('shows a ready network with the actual included count when a tray is outside the network', () => {
+    const { state, pf } = setup(), extra = { ...state.context.trays[0], projectTrayId: '85000000-0000-4000-8000-000000000001', rawName: 'A120', inNetwork: false };
+    state.context.trays[0].inNetwork = true;
     state.context.trays.push(extra);
     state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
     render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations. 1 of 2 trays assigned; 1 still need a model selection.');
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations. 1 of 2 trays included in the calculation network. 1 tray is not included.');
     expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
   });
   it('waits for the verified frame proof before showing ready or refreshing obstacles', () => {
