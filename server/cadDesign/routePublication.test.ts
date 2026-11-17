@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import type { PoolClient } from 'pg';
 import { STRAIGHT_SOURCE_SHA256 } from '../../shared/cadLengths.js';
 import { STRAIGHT_SOURCES } from '../../shared/cadStraightSources.js';
 import { FITTING_SOURCES } from '../../shared/cadFittingSources.js';
 vi.mock('../db.js',()=>({pool:{query:vi.fn(),connect:vi.fn()}}));
 vi.mock('../config.js',()=>({config:{jwtSecret:'test-only',bcryptRounds:4}}));
 vi.mock('../services/objectStorageService.js',()=>({getObjectStream:vi.fn(),getProjectBucket:vi.fn()}));
-import { buildCadChain, cadRouteSegments, resolveCadRouteMaterial, routePort, validateCadAttachment, type PublicationInstance } from './routePublication.js';
+import { buildCadChain, cadRouteSegments, groupInputs, groupRawInputs, resolveCadRouteMaterial, routePort, validateCadAttachment, type PublicationInstance } from './routePublication.js';
 
 const straight:PublicationInstance={id:'00000000-0000-4000-8000-000000000001',catalog_item_id:'catalog',material_asset_id:'asset',revision:1,part_number:'KL 60.303 F',
   original_filename:'NDX_KL_60-303_F_MED_214.step',source_sha256:STRAIGHT_SOURCE_SHA256,component_kind:'straight',cut_length_mm:1500,
@@ -16,6 +17,48 @@ const verifiedStraight=(filename:string):PublicationInstance=>{
   if(!source)throw new Error(`Missing verified STEP fixture: ${filename}`);
   return {...straight,original_filename:source.filename,source_sha256:source.sha256};
 };
+describe('route topology after section reassignment',()=>{
+  it.each([false,true])('keeps boundary mates out of both route chains after a transfer (reversed=%s)',async reversed=>{
+    const first={...straight,id:'first'},moved={...straight,id:'moved',z_mm:1500},last={...straight,id:'last',z_mm:3000};
+    const edges=[
+      {source_instance_id:first.id,target_instance_id:moved.id,source_name:'end',target_name:'start'},
+      {source_instance_id:moved.id,target_instance_id:last.id,source_name:'end',target_name:'start'},
+    ].map(edge=>reversed?{source_instance_id:edge.target_instance_id,target_instance_id:edge.source_instance_id,source_name:edge.target_name,target_name:edge.source_name}:edge);
+    const memberships=new Map([['old',[first,moved,last]],['new',[] as PublicationInstance[]]]);
+    const query=vi.fn(async(sql:string,values:unknown[])=>{
+      const routeId=values[2] as string,members=memberships.get(routeId)??[];
+      if(sql.startsWith('SELECT * FROM cad_route_groups'))return {rows:[{id:routeId,tag:routeId,revision:1,status:'draft'}]};
+      if(sql.startsWith('SELECT i.*'))return {rows:members};
+      if(sql.startsWith('SELECT COUNT(*)'))return {rows:[{member_count:members.length}]};
+      if(sql.includes('FROM cad_design_connections')){
+        const ids=values[2] as string[];
+        return {rows:edges.filter(edge=>ids.includes(edge.source_instance_id)||ids.includes(edge.target_instance_id))};
+      }
+      if(sql.includes('FROM cad_route_transition_links'))return {rows:[]};
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+    const client={query} as unknown as PoolClient;
+    expect((await groupInputs(client,'project','design','old')).chain.lengthMetres).toBe(4.5);
+    // The section assignment changes ownership, never the saved physical mates.
+    memberships.set('old',[first,last]);memberships.set('new',[moved]);
+    for(const [routeId,length,count] of [['old',3,2],['new',1.5,1]] as const){
+      const raw=await groupRawInputs(client,'project','design',routeId);
+      expect(raw.connections).toEqual([]);expect(raw.externalConnections).toEqual(edges);
+      const result=await groupInputs(client,'project','design',routeId);
+      expect(result.chain.lengthMetres).toBe(length);
+      expect(result.chain.endpoints).toHaveLength(count*2);
+      const segments=cadRouteSegments(result.group,result.chain);
+      expect(segments.length).toBe(count);
+    }
+    expect(edges).toHaveLength(2);
+    expect(query.mock.calls.every(([sql])=>sql.startsWith('SELECT'))).toBe(true);
+    // Recombining the sections reuses the same physical mates as internal edges.
+    memberships.set('old',[first,moved,last]);
+    const reunited=await groupRawInputs(client,'project','design','old');
+    expect(reunited.connections).toEqual(edges);expect(reunited.externalConnections).toEqual([]);
+    expect((await groupInputs(client,'project','design','old')).chain.lengthMetres).toBe(4.5);
+  });
+});
 describe('server-derived publishable CAD chains',()=>{
   it.each(FITTING_SOURCES)('admits the source-derived routing geometry: $filename',source=>{
     const fitting={...straight,original_filename:source.filename,source_sha256:source.sha256,cut_length_mm:null};

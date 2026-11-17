@@ -121,6 +121,31 @@ beforeEach(() => {
 });
 
 describe('saved CAD network preparation with verified composite and CAS publication', () => {
+  it('regenerates two separately assigned routes sharing a physical mate without duplicating either section', async () => {
+    const actual=await vi.importActual<typeof import('./routePublication.js')>('./routePublication.js');
+    const first=instances.get(groups[0].id)![0],second=instances.get(groups[1].id)![0];
+    Object.assign(second,{x_mm:first.x_mm,y_mm:first.y_mm,z_mm:first.z_mm+1500});
+    const before=structuredClone(instances);
+    const mate={source_instance_id:first.id,target_instance_id:second.id,source_name:'end',target_name:'start'};
+    mocks.inputs.mockImplementation(async (_client,project:string,design:string,routeId:string)=>{
+      const client={query:async(sql:string,values:unknown[])=>{
+        if(sql.startsWith('SELECT * FROM cad_route_groups'))return {rows:[structuredClone(groups.find(group=>group.id===routeId)!)]};
+        if(sql.startsWith('SELECT i.*'))return {rows:structuredClone(instances.get(routeId)!)};
+        if(sql.startsWith('SELECT COUNT(*)'))return {rows:[{member_count:instances.get(routeId)!.length}]};
+        if(sql.includes('FROM cad_design_connections'))return {rows:[mate]};
+        if(sql.includes('FROM cad_route_transition_links'))return {rows:[]};
+        return query(sql,values);
+      }} as unknown as PoolClient;
+      return actual.groupInputs(client,project,design,routeId);
+    });
+    expect(await prepare()).toMatchObject({publishedCount:1,revalidatedCount:1,routeCount:2,duplicate:false});
+    const overlay=JSON.parse(Buffer.from(mocks.execute.mock.calls[0][0].cadOverlay.payloadBase64,'base64').toString('utf8'));
+    expect(overlay.segments.map((segment:{name:string})=>segment.name)).toEqual(['/BC901','/BC902']);
+    expect(overlay.segments).toHaveLength(2);
+    expect(instances).toEqual(before);expect(history).toHaveLength(2);
+    expect(await prepare()).toMatchObject({routeCount:2,duplicate:true});
+    expect(mocks.execute).toHaveBeenCalledOnce();expect(history).toHaveLength(2);
+  });
   it('prepares an assigned tee as three arms while retaining one tray and stable duplicate proof', async () => {
     const tee=assignedTee();
     expect(await prepare()).toMatchObject({publishedCount:1,revalidatedCount:0,routeCount:1,duplicate:false});
