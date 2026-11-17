@@ -156,6 +156,41 @@ for (const mode of ['input-change', 'clear-without-input-event', 'dispose', 'pan
   });
 }
 
+test('clearing input while search is pending skips property hydration entirely', async t => {
+  const f = fixture(); t.after(() => f.controller.dispose());
+  const hydrated = [];
+  f.delegates[0].model.getBulkProperties2 = ids => { hydrated.push(ids); };
+  f.query('15-VS-52071'); await turn();
+  f.input.value = '';
+  f.input.dispatchEvent(new Event('input'));
+  const updateCount = f.updates.length;
+  f.requests[0].success([3]); await turn();
+  assert.deepEqual(hydrated, []);
+  assert.equal(f.updates.length, updateCount);
+  assert.equal(f.input.getAttribute('aria-busy'), null);
+});
+
+test('changing input while one property batch is pending skips subsequent batches', async t => {
+  const f = fixture(); t.after(() => f.controller.dispose());
+  const hydrated = [], completions = [];
+  f.delegates[0].model.getBulkProperties2 = (ids, _options, success) => {
+    hydrated.push(ids); completions.push(success);
+  };
+  f.query('15-VS-52071'); await turn();
+  const ids = Array.from({ length: 501 }, (_, index) => index + 3);
+  f.requests[0].success(ids); await turn();
+  assert.equal(hydrated.length, 1);
+  assert.equal(hydrated[0].length, 500);
+  f.input.value = 'another-tag';
+  f.input.dispatchEvent(new Event('input'));
+  const updateCount = f.updates.length;
+  completions[0](hydrated[0].map(id => row(id, tag('15-VS-52071'))));
+  await turn();
+  assert.equal(hydrated.length, 1);
+  assert.equal(f.updates.length, updateCount);
+  assert.equal(f.input.getAttribute('aria-busy'), null);
+});
+
 test('unloaded model is excluded when its pending result completes', async t => {
   const f = fixture({ models: 2 }); t.after(() => f.controller.dispose());
   for (const delegate of f.delegates) delegate.model.rows = [row(3, tag('15-VS-52071'))];

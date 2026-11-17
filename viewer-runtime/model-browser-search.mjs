@@ -3,7 +3,7 @@
 const tagProperty = property => [property.attributeName, property.displayName]
   .some(name => typeof name === 'string' && name.toLowerCase() === 'tag');
 
-function searchTags(model, text) {
+function searchTags(model, text, isCurrent) {
   return new Promise((resolve, reject) => {
     // Search all attributes first: the displayed "Tag" may have a different raw
     // attribute name. Verify actual Tag values below, excluding other properties.
@@ -12,11 +12,13 @@ function searchTags(model, text) {
     const matches = new Map(), term = text.toLowerCase();
     const unique = [...new Set(ids)];
     for (let offset = 0; offset < unique.length; offset += 500) {
+      if (!isCurrent()) return matches;
       const rows = await new Promise((resolve, reject) => {
         // Unfiltered properties preserve the distinction between displayName
         // and attributeName and include inherited values shown by Properties.
         model.getBulkProperties2(unique.slice(offset, offset + 500), { ignoreHidden: false }, resolve, reject);
       });
+      if (!isCurrent()) return matches;
       for (const row of rows) {
         const tag = row.properties?.find(property => tagProperty(property)
           && String(property.displayValue ?? '').toLowerCase().includes(term));
@@ -69,7 +71,7 @@ export function installModelBrowserSearch(viewer, viewing) {
       // Native Searchbox sets name results immediately after this function
       // returns. Defer even synchronous SDK callbacks until that has happened.
       void Promise.resolve().then(async () => {
-        const results = await Promise.allSettled(groups.map(delegate => searchTags(delegate.model, text)));
+        const results = await Promise.allSettled(groups.map(delegate => searchTags(delegate.model, text, current)));
         if (!current()) return;
         const merged = [];
         groups.forEach((delegate, index) => {
