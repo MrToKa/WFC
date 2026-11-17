@@ -6,6 +6,7 @@ import { requireAdmin } from '../middleware.js';
 import { PathFinderError } from '../pathfinder/errors.js';
 import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 import { trayLengthCalculationSchema } from '../../shared/trayAutoLength.js';
+import { getInstanceCadPorts } from '../../shared/cadLengths.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
 import type { TrayRow } from '../models/tray.js';
 import { groupInputs, publicationTransaction, PublicationError, routePort, resolveCadRouteMaterial, type CadRoutePath, type PublicationInstance, type PublicationTransition } from './routePublication.js';
@@ -28,7 +29,8 @@ export function deriveCadTrayExport(projectId:string,designId:string,group:Group
   if(!first)return fail('CAD_ROUTE_PART_LIMIT','Connect at least one component before adding the route to the Trays list.');
   const profile=routePort(first,'start');
   const centerlineSha256=hash(chain.paths??chain.points),lengthMm=chain.lengthMetres*1000;
-  const material=chain.paths?resolveCadRouteMaterial(instances):{trayType:first.part_number,widthMm:profile.widthMetres*1000,heightMm:profile.heightMetres*1000};
+  const hasTee=instances.some(row=>getInstanceCadPorts(row.original_filename,row.source_sha256,row.cut_length_mm).length===3);
+  const material=hasTee?resolveCadRouteMaterial(instances):{trayType:first.part_number,widthMm:profile.widthMetres*1000,heightMm:profile.heightMetres*1000};
   const fields={name:group.name,purpose:group.purpose,...material,lengthMm};
   const source={schemaVersion:chain.paths?'wfc.cad.route-tray-source.v2':'wfc.cad.route-tray-source.v1',projectId,designId,routeId:group.id,...fields,centerlineSha256,centerlineMetres:chain.points,
     ...(chain.paths?{centerlineGraph:chain.paths}:{}),

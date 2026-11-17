@@ -137,6 +137,20 @@ describe('Add CAD route to ordinary project Trays list',()=>{
     const response=await save();expect(await response.json()).toMatchObject({trayId:savedId,created:false,reused:true});
     expect(writes()).toEqual([]);expect(link).toEqual(savedProof);expect(row!.length_calculation).toEqual(savedCalculation);
   });
+  it('saves separated sections as one Trays row with the summed cut length and graph proof',async()=>{
+    group.name='BC904';instances=[{...instance(),cut_length_mm:1300,x_mm:10400,y_mm:80350,z_mm:17530},
+      {...instance(11),cut_length_mm:2050,x_mm:10550,y_mm:80130,z_mm:18600}];
+    const positions=structuredClone(instances);
+    const response=await save();expect(response.status).toBe(200);
+    const result=await response.json();expect(result).toMatchObject({name:'BC904',elementCount:2,created:true});
+    expect(result.lengthMm).toBeCloseTo(3350,8);
+    expect(row).toMatchObject({name:'BC904',tray_type:'KL-FIRST'});expect(Number(row!.length_mm)).toBeCloseTo(3350,8);
+    const source=(link!.source_proof as {source:{centerlineGraph:unknown[];centerlineMetres:unknown[]}}).source;
+    expect(source.centerlineGraph).toHaveLength(2);expect(source.centerlineMetres).toEqual([]);
+    const savedId=row!.id;mocks.query.mockClear();
+    expect(await(await save()).json()).toMatchObject({trayId:savedId,reused:true});
+    expect(writes()).toEqual([]);expect(instances).toEqual(positions);
+  });
   it('refreshes the same owned row after an explicit click for revised CAD geometry',async()=>{
     await save();const savedId=row!.id,savedHash=link!.source_sha256;
     instances[0]={...instances[0],cut_length_mm:2000,revision:2};group.revision=8;mocks.query.mockClear();

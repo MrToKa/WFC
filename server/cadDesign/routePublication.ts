@@ -143,11 +143,17 @@ export function buildCadChain(instances:PublicationInstance[],connections:Public
     adjacency.get(target.id)!.push({other:source.id,name:b.id,otherName:a.id});
   }
   const endpoints=instances.flatMap(row=>ports(row).filter(p=>!used.has(`${row.id}:${p.id}`)).map(p=>({instanceId:row.id,portName:p.id,pointMetres:metres(p.world.position)})));
-  if(instances.some(teeSource)){
-    const visited=new Set<string>(),pending=[instances[0].id];
-    while(pending.length){const id=pending.pop()!;if(visited.has(id))continue;visited.add(id);pending.push(...adjacency.get(id)!.map(edge=>edge.other));}
-    if(edges.length!==instances.length-1||visited.size!==instances.length)
-      return refuse('CAD_ROUTE_NOT_CHAIN','The group must be one connected open tree. Snap and connect every component first.');
+  const visitedGroups=new Set<string>();let groupCount=0;
+  for(const row of instances){
+    if(visitedGroups.has(row.id))continue;
+    groupCount++;const pending=[row.id];
+    while(pending.length){const id=pending.pop()!;if(visitedGroups.has(id))continue;visitedGroups.add(id);pending.push(...adjacency.get(id)!.map(edge=>edge.other));}
+  }
+  // Separate sections share a route name, never an invented centerline across
+  // their gap. Each connected section must still be free of loops.
+  if(edges.length!==instances.length-groupCount)
+    return refuse('CAD_ROUTE_NOT_CHAIN','The route contains a loop. Remove the cyclic connection before publishing.');
+  if(instances.some(teeSource)||groupCount>1){
     const paths:CadRoutePath[]=[];
     for(const row of [...instances].sort((a,b)=>a.id.localeCompare(b.id))){
       if(teeSource(row)){
@@ -187,7 +193,7 @@ export function buildCadChain(instances:PublicationInstance[],connections:Public
   return {endpoints,points,lengthMetres,instances:rows};
 }
 
-/** Keep legacy single-chain identities; a branched route owns several segments
+/** Keep legacy single-chain identities; a branched or separated route owns several segments
  * under one route code and one Trays row. One segment retains the group UUID. */
 export function cadRouteSegments(group:{id:string;tag:string},geometry:CadRouteGeometry):CadOverlaySegment[]{
   if(!geometry.paths)return [{id:`cad:${group.id}`,name:`/${group.tag}`,allowedCategoryMask:7,pointsMetres:geometry.points,

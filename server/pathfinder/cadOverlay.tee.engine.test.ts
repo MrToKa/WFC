@@ -123,7 +123,7 @@ const request = (first = 0, last = 1) => ({
   },
 });
 
-async function prepare() {
+async function prepare(segments = arms) {
   const input = {
     schemaVersion: 'pathfinder.model.runner.v1',
     requestId: randomUUID(),
@@ -133,7 +133,7 @@ async function prepare() {
     snapshotId,
     snapshotSha256: sha,
     timeoutMilliseconds: 30000,
-    cadOverlay: envelope(),
+    cadOverlay: envelope(segments),
   };
   if (process.platform === 'linux') return runEngine(input, new AbortController().signal);
   // Production RSS qualification requires Linux /proc. On Windows exercise
@@ -365,6 +365,20 @@ describe('actual native three-arm CAD tee overlay', () => {
     expect(result.status).toBe('prepared');
     expect(result.prepared).toMatchObject({ segmentCount: 4 });
   }, 40000);
+
+  it('prepares separated sections under one route without inventing a path across the gap', async () => {
+    const first:PublicationInstance={id:randomUUID(),catalog_item_id:randomUUID(),material_asset_id:randomUUID(),revision:1,
+      part_number:'KL 60.303 F',original_filename:'NDX_KL_60-303_F_MED_214.step',
+      source_sha256:'d381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd',component_kind:'straight',cut_length_mm:1300,
+      x_mm:10400,y_mm:80350,z_mm:17530,qx:0,qy:0,qz:0,qw:1};
+    const second={...first,id:randomUUID(),cut_length_mm:2050,x_mm:10550,y_mm:80130,z_mm:18600};
+    const segments=cadRouteSegments({id:routeId,tag:'BC027-1'},buildCadChain([first,second],[]));
+    const proof=await prepare(segments);
+    expect(proof.status).toBe('prepared');expect(proof.prepared).toMatchObject({segmentCount:3});
+    const result=await runEngine({...request(),from:position(segments[0].pointsMetres[0]),to:position(segments[1].pointsMetres[1]),
+      cadOverlay:envelope(segments)},new AbortController().signal);
+    expect(result.status,JSON.stringify(result)).toBe('no_path');
+  },40000);
 
   it('excludes the complete tee when its common route code is capacity-blocked', async () => {
     const result = await runEngine(

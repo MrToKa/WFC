@@ -6,7 +6,7 @@ import { FITTING_SOURCES } from '../../shared/cadFittingSources.js';
 vi.mock('../db.js',()=>({pool:{query:vi.fn(),connect:vi.fn()}}));
 vi.mock('../config.js',()=>({config:{jwtSecret:'test-only',bcryptRounds:4}}));
 vi.mock('../services/objectStorageService.js',()=>({getObjectStream:vi.fn(),getProjectBucket:vi.fn()}));
-import { buildCadChain, resolveCadRouteMaterial, routePort, validateCadAttachment, type PublicationInstance } from './routePublication.js';
+import { buildCadChain, cadRouteSegments, resolveCadRouteMaterial, routePort, validateCadAttachment, type PublicationInstance } from './routePublication.js';
 
 const straight:PublicationInstance={id:'00000000-0000-4000-8000-000000000001',catalog_item_id:'catalog',material_asset_id:'asset',revision:1,part_number:'KL 60.303 F',
   original_filename:'NDX_KL_60-303_F_MED_214.step',source_sha256:STRAIGHT_SOURCE_SHA256,component_kind:'straight',cut_length_mm:1500,
@@ -73,8 +73,28 @@ describe('server-derived publishable CAD chains',()=>{
     {...straight,original_filename:'unknown.step'}])('rejects geometry without approved source identity',row=>{
     expect(()=>buildCadChain([row],[])).toThrow('verified straight and bend');
   });
-  it('rejects disconnected pieces rather than publishing a visually nearby group',()=>{
-    expect(()=>buildCadChain([straight,{...straight,id:'second',z_mm:1500}],[])).toThrow('connected open chain');
+  it('keeps separated sections under one route without bridging or counting the empty gap',()=>{
+    const second={...straight,id:'second',x_mm:10400,y_mm:80350,z_mm:17530,cut_length_mm:2050};
+    const result=buildCadChain([straight,second],[]);
+    expect(result.points).toEqual([]);expect(result.paths).toHaveLength(2);
+    expect(result.endpoints).toHaveLength(4);expect(result.lengthMetres).toBeCloseTo(3.55,9);
+    expect(result.paths!.map(path=>path.points)).toEqual([[[0,.03,0],[0,.03,1.5]],[[10.4,80.38,17.53],[10.4,80.38,19.58]]]);
+    const group={id:'00000000-0000-4000-8000-000000000099',tag:'BC904'};
+    const segments=cadRouteSegments(group,result);
+    expect(segments).toHaveLength(2);expect(segments.every(segment=>segment.name==='/BC904')).toBe(true);
+    expect(cadRouteSegments(group,buildCadChain([second,straight],[]))).toEqual(segments);
+  });
+  it('retains a connected section alongside an isolated section',()=>{
+    const second={...straight,id:'second',z_mm:1500},third={...straight,id:'third',x_mm:10000};
+    const result=buildCadChain([straight,second,third],[{source_instance_id:straight.id,target_instance_id:second.id,source_name:'end',target_name:'start'}]);
+    expect(result.paths).toHaveLength(3);expect(result.endpoints).toHaveLength(4);expect(result.lengthMetres).toBe(4.5);
+  });
+  it('rejects a loop even when another disconnected section has open ends',()=>{
+    const second={...straight,id:'second',cut_length_mm:100},short={...straight,cut_length_mm:100},isolated={...straight,id:'isolated',x_mm:10000};
+    expect(()=>buildCadChain([short,second,isolated],[],[
+      {kind:'routing-transition',source_instance_id:short.id,target_instance_id:second.id,source_name:'end',target_name:'start'},
+      {kind:'routing-transition',source_instance_id:second.id,target_instance_id:short.id,source_name:'end',target_name:'start'},
+    ])).toThrow('loop');
   });
   it('rejects stale saved connector geometry and connections outside the group',()=>{
     const second={...straight,id:'second',z_mm:1501.1};

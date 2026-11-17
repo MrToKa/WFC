@@ -850,6 +850,7 @@ export function CadRoutesPanel({
         {selected ? (
           <Caption1>
             Routes can be separate or connect to nearby trays using the project connection gap.
+            Sections within one route can also be separate. Empty gaps are not included in the saved tray length.
             Cable routing checks the current purposes and registered barriers.
           </Caption1>
         ) : null}

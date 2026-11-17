@@ -76,9 +76,15 @@ describe('branched saved CAD route geometry',()=>{
     expect(exported.source.centerlineGraph).toEqual(graph.paths);
     expect(exported.fields.lengthMm).toBeCloseTo(3435,5);
   });
-  it('rejects disconnected groups, duplicate occupied ports and altered STEP bytes',()=>{
+  it('retains disconnected tee and straight sections without an artificial bridge',()=>{
+    const straight={...attachedPart(),x_mm:10000};
+    const graph=buildCadChain([tee,straight],[]);
+    expect(graph.paths).toHaveLength(4);expect(graph.endpoints).toHaveLength(5);
+    expect(graph.lengthMetres).toBeCloseTo(3.385,9);
+    expect(graph.paths!.some(path=>path.key.startsWith('join:'))).toBe(false);
+  });
+  it('rejects duplicate occupied ports and altered STEP bytes',()=>{
     const straight=attachedPart();
-    expect(()=>buildCadChain([tee,straight],[])).toThrow('connected open tree');
     expect(()=>buildCadChain([tee,straight],[connection(),connection()])).toThrow('multiple connections');
     expect(()=>buildCadChain([{...tee,source_sha256:'0'.repeat(64)}],[])).toThrow('verified straight and bend');
   });
