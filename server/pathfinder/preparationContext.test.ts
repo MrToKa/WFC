@@ -7,7 +7,7 @@ import { readPreparationContext, buildPreparationPlan, preparationDigest } from 
 import { preparationContextSchema, preparationPlanHashInput, type PreparationCreate } from '../../shared/pathfinderPreparation.js';
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 let endpointRows: { name: string }[], currentModel: { state: string; health: string; content_fingerprint: string } | null;
-let detailRows: Array<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown;cad_geometry?:boolean; cad_published?:boolean }>;
+let detailRows: Array<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown;cad_geometry?:boolean; cad_published?:boolean;cad_route_group_id?:string|null }>;
 const query = vi.fn(async (sql: string, _params?: unknown[]) => {
   if (sql.startsWith('SELECT s.active_model_version_id')) return { rows: [{ active_model_version_id: id(2), selection_revision: '1', content_fingerprint: 'a'.repeat(64), state: 'ready', health: 'healthy' }] };
   if (sql.startsWith('SELECT state,health,content_fingerprint')) return { rows: currentModel ? [currentModel] : [] };
@@ -46,6 +46,13 @@ describe('routing-only current preparation context from mocked SQL', () => {
     expect(read[0]).toContain("g.project_id=t.project_id AND g.project_tray_id=t.id AND g.status='published'");
     expect(read[0]).toContain("d.model_version_id=$2 AND d.status='proposed') AS cad_published");
     expect(read[1]).toEqual([id(1), id(2)]);
+  });
+  it('provides the exact CAD group link and no network tick for a saved unpublished route',async()=>{
+    detailRows=[{id:id(10),tray_type:'KL',width_mm:'300',height_mm:'60',cad_geometry:true,cad_route_group_id:id(20)}];
+    const context=await readPreparationContext({query} as unknown as PoolClient,id(1));
+    expect(context.trays[0]).toMatchObject({cadRouteGroupId:id(20),inNetwork:false,geometrySource:'saved-cad-route'});
+    const sql=query.mock.calls.find(([sql])=>sql.startsWith('/* preparation-tray-details */'))![0];
+    expect(sql).toContain('e.route_group_id::text');expect(sql).toContain('e.tray_id=t.id');
   });
   it('holds model selection and version facts FOR SHARE and preserves only routing dependencies', async () => { const context = await readPreparationContext({ query } as unknown as PoolClient, id(1)); expect(query.mock.calls.some(([sql]) => sql.includes('FOR SHARE OF s'))).toBe(true); expect(query.mock.calls.some(([sql]) => sql.startsWith('SELECT state,health,content_fingerprint') && sql.endsWith('FOR SHARE'))).toBe(true); expect(context.endpointNames).toEqual(['Equipment']); expect(context.scope).not.toHaveProperty('drawingInputRevision'); expect(query.mock.calls.some(([sql]) => sql.includes('pf_catalog_snapshots'))).toBe(false); });
   it.each(['missing', 'health', 'fingerprint'] as const)('refuses %s model-version change between selection read and version lock', async kind => { if (kind === 'missing') currentModel = null; else if (kind === 'health') currentModel!.health = 'unavailable'; else currentModel!.content_fingerprint = 'e'.repeat(64); await expect(readPreparationContext({ query } as unknown as PoolClient, id(1))).rejects.toMatchObject({ code: 'MODEL_UNAVAILABLE' }); });

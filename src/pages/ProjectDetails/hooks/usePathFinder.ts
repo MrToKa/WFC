@@ -31,7 +31,7 @@ export type ProjectPreparationViewer = {
 
 type Options = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; container: RefObject<HTMLDivElement | null>; automaticStatePolling?: boolean };
 type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string };
-type Run = { assignmentsVersion: number; closed: boolean; abort: AbortController; viewer: ViewerController | null; storedRoute: StoredRouteDisplay | null; publishedCad: PublishedCadDisplay | null; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
+type Run = { assignmentsVersion: number; closed: boolean; abort: AbortController; viewer: ViewerController | null; storedRoute: StoredRouteDisplay | null; publishedCad: PublishedCadDisplay | null; cadTrayPreview?: boolean; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
 // Cosmetic text only. Capture protocol, geometry assembly and terminal/auth
 // updates retain their original delivery; dropping progress needs no timer.
 const CAPTURE_PROGRESS_INTERVAL_MILLISECONDS = 1000;
@@ -187,7 +187,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
                 onError: error => {
                   if (!live(run)) return;
                   if (error instanceof PathFinderApiError && [401, 403].includes(error.status)) accessFailure(run, error);
-                  else update(run, { error: 'Published routes could not be fully displayed. Refresh Path Finder to retry.' });
+                  else update(run, { error: 'Saved routes could not be fully displayed. Refresh Path Finder to retry.' });
                 },
               });
               run.publishedCad = display;
@@ -483,7 +483,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     }
   }, [captureProgress, isAdmin, live, update]);
   const visible = renderedScope.current === scope ? view : initial;
-  const displayTray = useCallback(async (expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[] | null): Promise<boolean> => {
+  const displayTray = useCallback(async (expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[] | null, cadTray?: { projectTrayId: string; routeGroupId?: string }): Promise<boolean> => {
     const target = { ...expected }, objectIds = ids === null ? null : [...ids], run = runRef.current;
     if (!run || !isAdmin || !run.viewer) return false;
     const viewer = run.viewer, generation = run.generation;
@@ -495,19 +495,39 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     };
     const busy = () => latestView.current.busy || projectPreparationCapture.current || planningCapture.current || lookupCapture.current;
     if (!current()) return false;
-    if (objectIds === null) {
-      const sequence = trayDisplaySequence.current;
+    let sequence: number;
+    if (objectIds === null && !cadTray) {
+      sequence = ++trayDisplaySequence.current;
       // Panel cleanup must restore its appearance without interrupting an active capture.
       while (current() && busy()) await new Promise<void>(resolve => window.setTimeout(resolve, 50));
       if (!current() || trayDisplaySequence.current !== sequence) return false;
     } else {
       if (busy()) return false;
-      ++trayDisplaySequence.current;
+      sequence = ++trayDisplaySequence.current;
     }
-    try { run.storedRoute?.clear(); if (objectIds === null) await viewer.hideTray(); else await viewer.showTray(objectIds); return current(); }
-    catch (error) { if (current() && !(error instanceof DOMException && error.name === 'AbortError')) update(run, { error: message(error) }); return false; }
+    const operationCurrent = () => current() && trayDisplaySequence.current === sequence;
+    try {
+      run.storedRoute?.clear();
+      if (cadTray) {
+        if (!run.publishedCad) return false;
+        await viewer.hideTray();
+        if (!operationCurrent()) return false;
+        run.cadTrayPreview = true;
+        return await run.publishedCad.showTray(cadTray.projectTrayId, cadTray.routeGroupId) && operationCurrent();
+      }
+      if (run.cadTrayPreview && run.publishedCad) {
+        if (!await run.publishedCad.hideTray()) return false;
+        if (!operationCurrent()) return false;
+        run.cadTrayPreview = false;
+      }
+      if (!operationCurrent()) return false;
+      if (objectIds === null) await viewer.hideTray(); else await viewer.showTray(objectIds);
+      return operationCurrent();
+    }
+    catch (error) { if (operationCurrent() && !(error instanceof DOMException && error.name === 'AbortError')) update(run, { error: message(error) }); return false; }
   }, [isAdmin, live, update]);
   const showTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[]) => displayTray(expected, ids), [displayTray]);
+  const showCadTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, projectTrayId: string, cadRouteGroupId?: string) => displayTray(expected, null, { projectTrayId, routeGroupId: cadRouteGroupId }), [displayTray]);
   const hideTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>) => displayTray(expected, null), [displayTray]);
   // Result invalidation, Save and tool changes clear stale appearance only.
   // Fitting the whole model belongs to the explicit Restore view action.
@@ -526,7 +546,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   return { ...visible, setTrayAssignmentContext, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
-    readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray, hideTray,
+    readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray, showCadTray, hideTray,
     readObjectGuid: async (sdkObjectId: number): Promise<string | null> => {
       const run = runRef.current;
       if (!run || !live(run) || latestView.current.viewerPhase !== 'ready' || latestView.current.busy || !run.viewer

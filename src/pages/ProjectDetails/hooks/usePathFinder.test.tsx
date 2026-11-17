@@ -10,9 +10,9 @@ import { createPublishedCadDisplay } from '@/viewer/publishedCadDisplay';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 
-const cadDisplays = vi.hoisted(() => [] as { refresh: ReturnType<typeof vi.fn<() => Promise<void>>>; dispose: ReturnType<typeof vi.fn<() => void>> }[]);
+const cadDisplays = vi.hoisted(() => [] as { showTray: ReturnType<typeof vi.fn<() => Promise<boolean>>>; hideTray: ReturnType<typeof vi.fn<() => Promise<boolean>>>; refresh: ReturnType<typeof vi.fn<() => Promise<void>>>; dispose: ReturnType<typeof vi.fn<() => void>> }[]);
 vi.mock('@/viewer/publishedCadDisplay', () => ({ createPublishedCadDisplay: vi.fn(() => {
-  const display = { refresh: vi.fn<() => Promise<void>>().mockResolvedValue(undefined), dispose: vi.fn<() => void>() };
+  const display = { showTray: vi.fn<() => Promise<boolean>>().mockResolvedValue(true), hideTray: vi.fn<() => Promise<boolean>>().mockResolvedValue(true), refresh: vi.fn<() => Promise<void>>().mockResolvedValue(undefined), dispose: vi.fn<() => void>() };
   cadDisplays.push(display); return display;
 }) }));
 
@@ -186,6 +186,34 @@ describe('fresh popup calculation submission without Viewer appearance changes',
     expect(facts.showLocation.mock.calls[0][1]).not.toBe(ids);
     expect(facts.clear).not.toHaveBeenCalled(); expect(facts.readSelection).not.toHaveBeenCalled();
     expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('shows CAD trays only in the matching ready model and clears previews through Hide', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    expect(await view.result.current.showCadTray(preparationModelScope, locationId, locationId)).toBe(false);
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    await act(async () => {
+      expect(await view.result.current.showCadTray({ ...preparationModelScope, selectionRevision: '99' }, locationId, locationId)).toBe(false);
+      expect(await view.result.current.showCadTray(preparationModelScope, locationId, locationId)).toBe(true);
+    });
+    expect(cadDisplays[0].showTray).toHaveBeenCalledExactlyOnceWith(locationId, locationId);
+    await act(async () => { expect(await view.result.current.hideTray(preparationModelScope)).toBe(true); });
+    expect(cadDisplays[0].hideTray).toHaveBeenCalledOnce();
+    view.unmount();
+  });
+  it.each(['cleanup', 'reload', 'new tray'] as const)('cancels a CAD Show waiting to restore the prior view after %s', async change => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    let finish!: () => void, pending!: Promise<boolean>;
+    facts.hideTray.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    act(() => { pending = view.result.current.showCadTray(preparationModelScope, locationId, locationId); });
+    if (change === 'reload') act(() => view.result.current.reloadViewer());
+    else await act(async () => {
+      expect(await (change === 'cleanup' ? view.result.current.hideTray(preparationModelScope)
+        : view.result.current.showTray(preparationModelScope, [66]))).toBe(true);
+    });
+    await act(async () => { finish(); expect(await pending).toBe(false); });
+    expect(cadDisplays[0].showTray).not.toHaveBeenCalled();
+    view.unmount();
   });
   it('shows all tray roots together only in their ready model and waits for acknowledgement', async () => {
     const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
