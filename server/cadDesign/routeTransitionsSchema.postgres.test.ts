@@ -208,6 +208,29 @@ postgres('installation transition migration and lifecycle in isolated PostgreSQL
     run(`DELETE FROM cad_route_groups WHERE id='${id(4)}'; ${assertSql('(SELECT count(*) FROM cad_route_transition_links)=0')}
       ${assertSql('(SELECT count(*) FROM cad_design_instances)=4')}`);
   });
+  it('atomically replaces an emptied draft tray export while retaining both groups and all physical geometry', () => {
+    run(`${exported}
+      INSERT INTO cad_route_groups(id,project_id,design_id,name,tag,color,purpose)
+        VALUES('${id(51)}','${id(1)}','${id(3)}','Destination','DESTINATION','#16A34A','Control');
+      SAVEPOINT transfer;
+      DELETE FROM cad_route_group_members WHERE route_group_id='${id(4)}';
+      INSERT INTO cad_route_group_members(project_id,design_id,route_group_id,instance_id)
+        SELECT '${id(1)}','${id(3)}','${id(51)}',id FROM cad_design_instances;
+      DELETE FROM cad_route_tray_exports WHERE route_group_id='${id(4)}' AND tray_id='${id(40)}';
+      DELETE FROM trays WHERE project_id='${id(1)}' AND id='${id(40)}';
+      INSERT INTO trays(id,project_id,name) VALUES('${id(41)}','${id(1)}','Destination');
+      ${trayExport(51,41)}
+      SET CONSTRAINTS ALL IMMEDIATE;
+      ${assertSql('(SELECT count(*) FROM cad_route_groups)=2')}
+      ${assertSql(`(SELECT count(*) FROM cad_route_group_members WHERE route_group_id='${id(4)}')=0`)}
+      ${assertSql(`(SELECT count(*) FROM cad_route_group_members WHERE route_group_id='${id(51)}')=4`)}
+      ${assertSql(`(SELECT tray_id FROM cad_route_tray_exports)='${id(41)}'::uuid`)}
+      ROLLBACK TO SAVEPOINT transfer;
+      ${assertSql(`(SELECT count(*) FROM cad_route_group_members WHERE route_group_id='${id(4)}')=4`)}
+      ${assertSql(`(SELECT tray_id FROM cad_route_tray_exports)='${id(40)}'::uuid`)}
+      ${assertSql('(SELECT count(*) FROM trays)=1')}
+      ${assertSql('(SELECT count(*) FROM cad_design_instances)=4')}`);
+  });
   it('rejects foreign project, design and membership references', () => {
     run(`INSERT INTO cad_route_groups(id,project_id,design_id,name,tag,color,purpose) VALUES('${id(51)}','${id(1)}','${id(3)}','Other','OTHER','#16A34A','Control');
       ${rejected(link(32, 11, 'start', 12, 'end', 51), 'foreign_key_violation')}

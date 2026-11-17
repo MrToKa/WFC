@@ -85,6 +85,118 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe('automatic Trays display updates after membership changes', () => {
+  function membershipCatalogue(sourceAssigned: boolean, refused = false) {
+    let saved = { ...draft };
+    const source = {
+      ...draft,
+      id: id(11),
+      name: 'Source route',
+      tag: 'SOURCE',
+      instanceIds: [id(2)],
+    };
+    let routes = sourceAssigned ? [saved, source] : [saved];
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (options.method === 'POST' || options.method === 'PATCH') {
+        if (refused)
+          return { ok: false, status: 409, json: async () => ({ code: 'STALE_CAD_ROUTE' }) };
+        saved = {
+          ...saved,
+          revision: saved.revision + 1,
+          instanceIds: [...saved.instanceIds, id(2)],
+        };
+        routes = sourceAssigned
+          ? [saved, { ...source, revision: source.revision + 1, instanceIds: [] }]
+          : [saved];
+        return { ok: true, json: async () => ({ route: saved }) };
+      }
+      return {
+        ok: true,
+        json: async () => (url.endsWith('/auto-attachments') ? autoResult : { routes }),
+      };
+    });
+  }
+  async function addSection() {
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add existing section' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add existing section' }));
+    const panel = screen.getByRole('region', { name: 'Add existing section' });
+    fireEvent.click(within(panel).getByRole('radio', { name: /PART-2/ }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add section' }));
+  }
+  it.each([true, false])(
+    'updates Trays automatically after assigning an existing section, source assigned=%s',
+    async (sourceAssigned) => {
+      membershipCatalogue(sourceAssigned);
+      const traysChanged = vi.fn(async () => {});
+      show(undefined, undefined, traysChanged);
+      await addSection();
+      await waitFor(() => expect(traysChanged).toHaveBeenCalledOnce());
+      expect(
+        await screen.findByRole('button', { name: /Main riser · 3 components/ }),
+      ).toBeInTheDocument();
+      if (sourceAssigned)
+        expect(
+          screen.getByRole('button', { name: /Source route · 0 components/ }),
+        ).toBeInTheDocument();
+      expect(writes()).toHaveLength(1);
+      expect(writes()[0][0]).toMatch(
+        sourceAssigned ? /\/sections$/ : new RegExp(`/routes/${draft.id}$`),
+      );
+      expect(writes()[0][1].method).toBe(sourceAssigned ? 'POST' : 'PATCH');
+      expect(writes().some(([url]) => url.endsWith('/trays-list'))).toBe(false);
+    },
+  );
+  it('does not announce changed Trays when the section transfer is refused', async () => {
+    membershipCatalogue(true, true);
+    const traysChanged = vi.fn(async () => {});
+    show(undefined, undefined, traysChanged);
+    await addSection();
+    await screen.findByText('STALE_CAD_ROUTE');
+    expect(traysChanged).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Main riser · 2 components/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Source route · 1 components/ })).toBeInTheDocument();
+  });
+  it('keeps the saved transfer visible when only reloading the Trays display fails', async () => {
+    membershipCatalogue(true);
+    const traysChanged = vi.fn().mockRejectedValue(new Error('Display unavailable'));
+    show(undefined, undefined, traysChanged);
+    await addSection();
+    await screen.findByText(
+      'Section assignment and Trays entries saved. The Trays display could not be reloaded; reopen the project to see the updated entries.',
+    );
+    expect(screen.getByRole('button', { name: /Main riser · 3 components/ })).toBeInTheDocument();
+    expect(showToast).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: 'Section added', intent: 'warning' }),
+    );
+    expect(writes()).toHaveLength(1);
+  });
+  it('updates Trays after saving changed membership without using Refresh routes', async () => {
+    let saved = { ...draft };
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (options.method === 'PATCH') {
+        const value = JSON.parse(String(options.body));
+        saved = { ...saved, ...value, revision: saved.revision + 1 };
+        return { ok: true, json: async () => ({ route: saved }) };
+      }
+      return {
+        ok: true,
+        json: async () => (url.endsWith('/auto-attachments') ? autoResult : { routes: [saved] }),
+      };
+    });
+    const traysChanged = vi.fn(async () => {});
+    show(undefined, undefined, traysChanged);
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: `Include component ${id(3)}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save route changes' }));
+    await waitFor(() => expect(traysChanged).toHaveBeenCalledOnce());
+    expect(screen.getByRole('button', { name: /Main riser · 1 components/ })).toBeInTheDocument();
+    expect(writes()).toHaveLength(1);
+  });
+});
+
 describe('complete CAD routes', () => {
   it('offers only purposes used by existing project trays, including custom names', async () => {
     purposesRequest.mockResolvedValue([

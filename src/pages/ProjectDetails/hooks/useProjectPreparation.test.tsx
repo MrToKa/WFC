@@ -16,14 +16,14 @@ import type { PreparationDiscoveryPage, PreparationDiscoveryRequest } from '../.
 import type { ProjectPreparationViewer } from './usePathFinder';
 import * as discoveryCollection from './collectPreparationDiscovery';
 import type { PreparationContext, PreparationDiscovery, PreparationSession } from '../../../../shared/pathfinderPreparation';
-import { prepareAssignedCadNetwork } from '@/api/cadNetworkPreparation';
+import { prepareAssignedCadNetwork, synchronizeAssignedCadTrays } from '@/api/cadNetworkPreparation';
 type HumanPreparationSession = Extract<PreparationSession, {schemaVersion:'wfc.pf.preparation-session.v1'}>;
 vi.mock('../../../../viewer-runtime/capture-evidence.mjs', async original => {
   const actual = await original<typeof import('../../../../viewer-runtime/capture-evidence.mjs')>();
   return { ...actual, bindCompletedCaptureEvidence: vi.fn(actual.bindCompletedCaptureEvidence) };
 });
 vi.mock('@/api/pathfinderGeometryTrace',async original=>({...await original<typeof import('@/api/pathfinderGeometryTrace')>(),saveCaptureEvidence:vi.fn(),createGeometryTrace:vi.fn(),fetchGeometryTraces:vi.fn(),fetchGeometryTraceManifest:vi.fn(),fetchGeometryTraceRuntime:vi.fn()}));
-vi.mock('@/api/cadNetworkPreparation', () => ({ prepareAssignedCadNetwork: vi.fn() }));
+vi.mock('@/api/cadNetworkPreparation', () => ({ prepareAssignedCadNetwork: vi.fn(), synchronizeAssignedCadTrays: vi.fn() }));
 vi.mock('@/api/pathfinderPreparation', async (original) => ({
   ...(await original<typeof api>()),
   fetchPreparationContext: vi.fn(),
@@ -38,6 +38,7 @@ vi.mock('@/api/pathfinderPreparation', async (original) => ({
 function setup() {
   const fixture = preparationFixture();
   vi.mocked(prepareAssignedCadNetwork).mockRejectedValue(new Error('Unexpected CAD network preparation'));
+  vi.mocked(synchronizeAssignedCadTrays).mockResolvedValue({designId:ids.session,modelVersionId:fixture.context.scope.modelVersionId,synchronizedRoutes:0});
   vi.mocked(fetchGeometryTraceRuntime).mockResolvedValue(geometryTraceRuntimeFixture());
   vi.mocked(fetchGeometryTraces).mockImplementation(async (projectId, _token, offset = 0) => ({ schemaVersion: 'wfc.pf.geometry-trace-list.v1', projectId, offset, nextOffset: null, traces: [] }));
   vi.mocked(fetchGeometryTraceManifest).mockRejectedValue(new GeometryTraceApiError('GEOMETRY_TRACE_NOT_FOUND', 404, 'No trace', 'refused'));
@@ -623,6 +624,7 @@ describe('automatic tray workflow', () => {
     expect(f.discover.mock.calls.at(-1)?.[3]).toEqual({ skipEquipment: true, assignedOnly: true });
     expect(api.saveTrayMatches).toHaveBeenCalledOnce();
     expect(result.current.networkReady).toBe(true); expect(result.current.generatingNetwork).toBe(false);
+    expect(synchronizeAssignedCadTrays).not.toHaveBeenCalled();
   });
   it('requires persisted tray assignments before generation and never substitutes automatic matching', async () => {
     const f = automaticSetup(), { result } = renderHook(() => useProjectPreparation(f.pf, true));
@@ -708,6 +710,48 @@ describe('automatic tray workflow', () => {
     expect(vi.mocked(createGeometryTrace).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(prepareAssignedCadNetwork).mock.invocationCallOrder[0]);
     expect(result.current.context?.trays.filter(tray => tray.geometrySource).every(tray => tray.inNetwork)).toBe(true);
     expect(result.current.networkReady).toBe(true);
+  });
+  it('repairs legacy stale CAD entries before reading the catalog used for discovery and capture in one regeneration',async()=>{
+    const f=automaticSetup();
+    f.store.context.resolutions=[{id:crypto.randomUUID(),projectTrayId:ids.tray,mode:'roots',rootObjectIds:['dbid:1'],
+      reason:'Saved model tray selection',actorId:ids.actor,createdAt:new Date().toISOString(),scope:{...f.store.context.scope}}];
+    const emptiedId=crypto.randomUUID(),targetId=crypto.randomUUID();
+    f.store.context.trays.push(...[emptiedId,targetId].map((projectTrayId,at)=>({...f.context.trays[0],projectTrayId,rawName:`BC90${at+1}`,
+      geometrySource:'saved-cad-route' as const,inNetwork:false})));
+    vi.mocked(synchronizeAssignedCadTrays).mockImplementation(async(_project,_token,modelVersionId)=>{
+      expect(f.capture).not.toHaveBeenCalled();expect(api.createPreparation).not.toHaveBeenCalled();
+      f.store.context.trays=f.store.context.trays.filter(tray=>tray.projectTrayId!==emptiedId);
+      f.store.context.scope={...f.store.context.scope,catalogRevision:'41',routingContentSha256:'e'.repeat(64)};
+      return {designId:ids.session,modelVersionId,synchronizedRoutes:2};
+    });
+    vi.mocked(prepareAssignedCadNetwork).mockImplementation(async(_project,_token,_model,artifactId,snapshotSha256)=>{
+      for(const tray of f.store.context.trays)if(tray.geometrySource)tray.inNetwork=true;
+      return {artifactId,snapshotSha256,publishedCount:1,revalidatedCount:0,routeCount:1,duplicate:false};
+    });
+    const {result}=renderHook(()=>useProjectPreparation(f.pf,true));
+    await waitFor(()=>expect(result.current.context).not.toBeNull());
+    expect(synchronizeAssignedCadTrays).not.toHaveBeenCalled();
+    await act(()=>result.current.generateNetwork());
+    expect(result.current.error).toBeNull();expect(result.current.networkReady).toBe(true);
+    expect(synchronizeAssignedCadTrays).toHaveBeenCalledExactlyOnceWith(ids.project,'login',f.store.context.scope.modelVersionId,expect.any(AbortSignal));
+    const synchronizedAt=vi.mocked(synchronizeAssignedCadTrays).mock.invocationCallOrder[0],discoveredAt=f.discover.mock.invocationCallOrder[0];
+    expect(synchronizedAt).toBeLessThan(discoveredAt);
+    expect(vi.mocked(api.fetchPreparationContext).mock.invocationCallOrder.some(order=>order>synchronizedAt&&order<discoveredAt)).toBe(true);
+    expect(f.discover.mock.calls[0][0].scope.catalogRevision).toBe('41');
+    expect(f.discover.mock.calls[0][0].trays.some(tray=>tray.projectTrayId===emptiedId)).toBe(false);
+    expect(vi.mocked(api.createPreparation).mock.calls[0][2].expected.catalogRevision).toBe('41');
+    expect(api.createPreparation).toHaveBeenCalledOnce();expect(f.capture).toHaveBeenCalledOnce();expect(prepareAssignedCadNetwork).toHaveBeenCalledOnce();
+    expect(result.current.context?.trays.some(tray=>tray.projectTrayId===emptiedId)).toBe(false);
+  });
+  it('stops before freezing a network when automatic CAD tray reconciliation refuses the saved rows',async()=>{
+    const f=automaticSetup();
+    f.store.context.trays.push({...f.context.trays[0],projectTrayId:crypto.randomUUID(),geometrySource:'saved-cad-route',inNetwork:false});
+    vi.mocked(synchronizeAssignedCadTrays).mockRejectedValue(new api.PreparationApiError('CAD_ROUTE_TRAY_EDITED',409,'A manually edited tray was preserved.','refused'));
+    const {result}=renderHook(()=>useProjectPreparation(f.pf,true));await waitFor(()=>expect(result.current.context).not.toBeNull());
+    await act(()=>result.current.generateNetwork());
+    expect(result.current.error).toContain('A manually edited tray was preserved.');
+    expect(synchronizeAssignedCadTrays).toHaveBeenCalledOnce();expect(f.discover).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled();expect(f.capture).not.toHaveBeenCalled();expect(prepareAssignedCadNetwork).not.toHaveBeenCalled();
   });
   it('keeps a base with an unconfirmed assigned CAD route unready on open and never publishes it automatically', async () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);

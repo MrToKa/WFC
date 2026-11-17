@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({ connect: vi.fn(), query: vi.fn(), release: vi.
 vi.mock('../db.js', () => ({ pool: { connect: mocks.connect } }));
 vi.mock('../middleware.js', () => ({ requireProjectEdit: (req: express.Request,res: express.Response,next: express.NextFunction) => {
   if (req.header('x-test-edit') === 'yes') next(); else res.status(403).json({ code: 'EDIT_REQUIRED' });
-} }));
+}, requireAdmin: (_req: express.Request,_res: express.Response,next: express.NextFunction) => next() }));
 const projectId = '00000000-0000-4000-8000-000000000001';
 const designId = '00000000-0000-4000-8000-000000000002';
 const instanceId = '00000000-0000-4000-8000-000000000003';

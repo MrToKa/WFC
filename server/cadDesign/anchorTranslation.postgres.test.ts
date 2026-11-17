@@ -18,6 +18,7 @@ const postgres = enabled ? describe : describe.skip;
 const harness = vi.hoisted(() => ({ connect: vi.fn(), network: vi.fn() }));
 vi.mock('../db.js', () => ({ pool: { connect: harness.connect } }));
 vi.mock('./routePublication.js', () => ({ networkOptions: harness.network }));
+vi.mock('./routeTrayExports.js', () => ({ synchronizeCadTrayExportsAfterTransfer: vi.fn() }));
 vi.mock('../middleware.js', () => ({ requireProjectEdit: (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (req.header('x-test-edit') === 'yes') next(); else res.status(403).json({ code: 'EDIT_REQUIRED' });
 } }));

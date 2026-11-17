@@ -38,7 +38,7 @@ import {bindCompletedCaptureEvidence,type CompletedCaptureEvidence} from '../../
 import { formatPreparationDiagnostics } from '../preparationDiagnostics';
 import { trayIdentityErrorMessage } from '@/viewer/trayIdentityErrors';
 import { validateTrayIdentityRequest, type TrayObjectIdentity, type TrayIdentityMatch } from '../../../../viewer-runtime/tray-identity.mjs';
-import { prepareAssignedCadNetwork } from '@/api/cadNetworkPreparation';
+import { prepareAssignedCadNetwork, synchronizeAssignedCadTrays } from '@/api/cadNetworkPreparation';
 
 type PF = ReturnType<typeof usePathFinder>;
 type PreparationModel = { modelVersionId: string | null; contentFingerprint: string | null; selectionRevision: string };
@@ -1337,10 +1337,19 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       automaticModelKey.current = latestModelKey.current;
       update(value => ({ ...value, discovery: null, networkTrace: null, conflict: false,
         progress: value.context?.currentAggregate ? 'Regenerating the routing network from the current model…' : 'Generating the routing network from the current model…', notice: null }));
-      await prepareTrays(signal, await reconcileAutomatic(signal), true);
+      let fresh=await reconcileAutomatic(signal)??await readCurrent(signal,null);
+      if(fresh.context.trays.some(tray=>tray.geometrySource)) {
+        update(value=>({...value,progress:'Updating saved CAD tray entries…'}));
+        await synchronizeAssignedCadTrays(access.projectId!,access.token!,fresh.context.scope.modelVersionId,signal);
+        assertCurrent(signal);
+        // Synchronization may remove an emptied source tray or change its
+        // catalog identity. Freeze discovery and plans only from the new scope.
+        fresh=await readCurrent(signal,null);
+      }
+      await prepareTrays(signal,fresh,true);
       regenerationRequested.current = false; regenerationSession.current = null;
     });
-  }, [checkTrays, operate, prepareTrays, reconcileAutomatic, update]);
+  }, [access?.projectId, access?.token, assertCurrent, checkTrays, operate, prepareTrays, readCurrent, reconcileAutomatic, update]);
   const finishNetwork = useCallback(() => {
     if (!latestActive.current || pending.current || cancelPending.current) return Promise.resolve();
     return operate(async signal => {

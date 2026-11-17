@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { prepareAssignedCadNetwork } from './cadNetworkPreparation';
+import { prepareAssignedCadNetwork, synchronizeAssignedCadTrays } from './cadNetworkPreparation';
 
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const projectId = id(1), modelId = id(2), artifactId = id(3), designId = id(4), snapshot = 'a'.repeat(64);
@@ -7,6 +7,40 @@ const design = { id: designId, modelVersionId: modelId, activeModel: true, statu
 const receipt = { artifactId, snapshotSha256: snapshot, publishedCount: 1, revalidatedCount: 1, routeCount: 2, duplicate: false };
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 afterEach(() => vi.unstubAllGlobals());
+describe('automatic CAD tray synchronization before preparation',()=>{
+  const synchronized={designId,modelVersionId:modelId,synchronizedRoutes:2};
+  it('synchronizes the active proposed design against the exact current model',async()=>{
+    const fetch=vi.fn().mockResolvedValueOnce(response({designs:[{...design,id:id(5),status:'archived'},design]}))
+      .mockResolvedValueOnce(response(synchronized));vi.stubGlobal('fetch',fetch);
+    await expect(synchronizeAssignedCadTrays(projectId,'login',modelId)).resolves.toEqual(synchronized);
+    expect(fetch.mock.calls[1][0]).toContain(`/designs/${designId}/synchronize-trays`);
+    expect(fetch.mock.calls[1][1]).toMatchObject({method:'POST',cache:'no-store',credentials:'same-origin',headers:{Authorization:'Bearer login'},
+      body:JSON.stringify({expectedModelVersionId:modelId})});
+  });
+  it.each([
+    {...synchronized,designId:id(9)}, {...synchronized,modelVersionId:id(9)},
+    {...synchronized,synchronizedRoutes:-1}, {...synchronized,synchronizedRoutes:1.5},
+  ])('rejects an invalid or unrelated synchronization receipt',async receipt=>{
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(response({designs:[design]})).mockResolvedValueOnce(response(receipt)));
+    await expect(synchronizeAssignedCadTrays(projectId,'login',modelId)).rejects.toMatchObject({code:'CAD_NETWORK_RESPONSE_INVALID'});
+  });
+  it('preserves a reconciliation refusal and never starts network publication',async()=>{
+    const fetch=vi.fn().mockResolvedValueOnce(response({designs:[design]}))
+      .mockResolvedValueOnce(response({code:'CAD_ROUTE_TRAY_EDITED',message:'A manually edited tray was preserved.'},409));vi.stubGlobal('fetch',fetch);
+    await expect(synchronizeAssignedCadTrays(projectId,'login',modelId)).rejects.toMatchObject({code:'CAD_ROUTE_TRAY_EDITED',outcome:'refused'});
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('refuses a missing active design before sending a write',async()=>{
+    const fetch=vi.fn().mockResolvedValue(response({designs:[]}));vi.stubGlobal('fetch',fetch);
+    await expect(synchronizeAssignedCadTrays(projectId,'login',modelId)).rejects.toMatchObject({code:'CAD_NETWORK_DESIGN_UNAVAILABLE'});
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it('honors cancellation before starting reconciliation',async()=>{
+    const fetch=vi.fn();vi.stubGlobal('fetch',fetch);const abort=new AbortController();abort.abort();
+    await expect(synchronizeAssignedCadTrays(projectId,'login',modelId,abort.signal)).rejects.toMatchObject({name:'AbortError'});
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
 describe('assigned CAD network preparation', () => {
   it('uses the proposed active design for the exact current model and pins the prepared artifact', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(response({ designs: [

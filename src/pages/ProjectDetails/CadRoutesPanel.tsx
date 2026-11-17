@@ -384,6 +384,18 @@ export function CadRoutesPanel({
       await reload();
       edit(data.route);
       await onMetadataChanged?.();
+      if (selected) {
+        try {
+          await onTraysChanged?.();
+        } catch {
+          reportCommand(
+            'Route saved',
+            'Route and Trays entries saved. The Trays display could not be reloaded; reopen the project to see the updated entries.',
+            'warning',
+          );
+          return;
+        }
+      }
       reportCommand('Route saved', 'Route saved. Its colour is applied to all member components.');
     } catch (error) {
       reportCommand(
@@ -438,6 +450,16 @@ export function CadRoutesPanel({
         setRoutes((old) => old.map((route) => (route.id === data.route.id ? data.route : route)));
       edit(data.route);
       await onMetadataChanged?.();
+      try {
+        await onTraysChanged?.();
+      } catch {
+        reportCommand(
+          'Section added',
+          'Section assignment and Trays entries saved. The Trays display could not be reloaded; reopen the project to see the updated entries.',
+          'warning',
+        );
+        return;
+      }
       reportCommand(
         'Section added',
         source
