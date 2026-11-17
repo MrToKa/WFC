@@ -5,11 +5,15 @@ import { canonicalPurposeJson, catalogRoutingHashInput, normalizeCatalogKey, pol
 import { normalizeRoutingKey } from '../../viewer-runtime/protocol.mjs';
 import { projectRoutingCatalogRows } from '../pathfinder/catalog.js';
 import { ViewerSessionError } from './errors.js';
+import { readCadOverlay } from '../pathfinder/cadOverlay.js';
+import { cadOverlayPayloadSchema } from '../../shared/pathfinderCadOverlay.js';
+import { PathFinderError } from '../pathfinder/errors.js';
 
-export const ROUTING_BINDING_LIMITS = Object.freeze({ mappings: 128, roots: 512, bytes: 28 * 1024 });
+export const ROUTING_BINDING_LIMITS = Object.freeze({ mappings: 128, roots: 512, bytes: 28 * 1024, cadBytes: 512 * 1024, cadPaths: 256, cadPoints: 32768 });
 export type ViewerRoutingBindings = {
-  schemaVersion: 'wfc.viewer.routing-bindings.v1'; modelVersionId: string; contentFingerprint: string;
+  schemaVersion: 'wfc.viewer.routing-bindings.v1' | 'wfc.viewer.routing-bindings.v2'; modelVersionId: string; contentFingerprint: string;
   selectionRevision: string; aggregateId: string | null; bindings: Array<{ routeName: string; rootObjectIds: string[] }>;
+  cadBindings?: Array<{ routeName: string; paths: Array<{ pointsMetres: number[][]; widthMetres: number }> }>;
 };
 type Row = Record<string, any>;
 const digest = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
@@ -74,7 +78,7 @@ export async function readViewerRoutingBindings(client: PoolClient, input: { pro
   if (!parsedAggregate.success || !parsedPlan.success) return corrupt();
   const aggregate = parsedAggregate.data, plan = parsedPlan.data;
   if (aggregate.modelVersionId !== input.modelVersionId || aggregate.contentFingerprint !== input.contentFingerprint ||
-      aggregate.selectionRevision !== parsedRevision.data || plan.catalogRevision !== row.catalog_revision ||
+      aggregate.selectionRevision !== parsedRevision.data ||
       plan.routingPolicyRevision !== row.routing_policy_revision || plan.resolutionRevision !== row.resolution_revision) return empty();
   if (row.session_state !== 'published' || !row.publication_proof || row.aggregate_id !== aggregate.id || row.current_aggregate_id !== aggregate.id ||
       row.published_aggregate_id !== aggregate.id || row.aggregate_project_id !== input.projectId || aggregate.projectId !== input.projectId ||
@@ -93,10 +97,40 @@ export async function readViewerRoutingBindings(client: PoolClient, input: { pro
     routingPolicyRevision: plan.routingPolicyRevision, routingPolicySha256: plan.routingPolicySha256 };
   if (row.producer_version !== 'pathfinder.catalog-preparation.v1' || !same(row.routing_scope, expectedRoutingScope)) return corrupt();
 
+  // Use the same current publication/base/catalog validation as calculation.
+  // No host geometry or source-model dbId is accepted for a native CAD path.
+  let overlay: Awaited<ReturnType<typeof readCadOverlay>>;
+  try {
+    overlay = await readCadOverlay(client, input.projectId, aggregate.artifactId, aggregate.projection.sha256,
+      input.modelVersionId, expectedRoutingScope, { ...expectedRoutingScope, catalogRevision: row.catalog_revision }, { lock: false });
+  } catch (error) {
+    if (error instanceof PathFinderError) return corrupt();
+    throw error;
+  }
+  const cadBindings: NonNullable<ViewerRoutingBindings['cadBindings']> = [];
+  if (overlay && overlay !== 'retired-base-proof') {
+    const payload = cadOverlayPayloadSchema.parse(JSON.parse(Buffer.from(overlay.payloadBase64, 'base64').toString('utf8')));
+    let points = 0, paths = 0;
+    for (const segment of payload.segments) {
+      if (requested && !requested.has(normalizeRoutingKey(segment.name))) continue;
+      if (++paths > ROUTING_BINDING_LIMITS.cadPaths || (points += segment.pointsMetres.length) > ROUTING_BINDING_LIMITS.cadPoints) return limit();
+      let binding = cadBindings.find(value => value.routeName === segment.name);
+      if (!binding) { binding = { routeName: segment.name, paths: [] }; cadBindings.push(binding); }
+      binding.paths.push({ pointsMetres: segment.pointsMetres.map(point => [...point]), widthMetres: segment.ports[0].widthMetres });
+      if (binding.paths.length > 128) return limit();
+    }
+  }
+
   const source = (await client.query<{ id: string; name: string; purpose: string | null }>(
     '/* viewer-routing-bindings:catalog */ SELECT id::text,name,purpose FROM trays WHERE project_id=$1 ORDER BY id LIMIT 100001', [input.projectId])).rows;
   const catalog = projectRoutingCatalogRows(source);
-  if (digest(catalogRoutingHashInput(input.projectId, catalog.rows, catalog.diagnostics)) !== plan.routingContentSha256) return empty();
+  if (!overlay && (plan.catalogRevision !== row.catalog_revision || digest(catalogRoutingHashInput(input.projectId, catalog.rows, catalog.diagnostics)) !== plan.routingContentSha256)) return empty();
+  const currentNames = new Map<string, number>();
+  for (const tray of catalog.rows) {
+    let key: string; try { key = normalizeRoutingKey(tray.rawName); } catch { continue; }
+    currentNames.set(key, (currentNames.get(key) ?? 0) + 1);
+  }
+  for (const binding of cadBindings) if (currentNames.get(normalizeRoutingKey(binding.routeName)) !== 1) return corrupt();
   const currentTrays = new Map(catalog.rows.map(tray => [tray.projectTrayId, tray]));
   const manifest = new Map(plan.objectManifest.map(object => [object.objectId, object]));
   const allRoots = new Map<string, string>(), keys = new Set<string>(), explicit = plan.requestedScope.trays.filter(tray => tray.ownershipDecisionId !== null&&(!requested||requested.has(normalizeRoutingKey(tray.routeName))));
@@ -163,7 +197,9 @@ export async function readViewerRoutingBindings(client: PoolClient, input: { pro
   const preparation = (await client.query<Row>('/* viewer-routing-bindings:preparation-fence */ SELECT current_aggregate_id,current_artifact_id,geometry_revision::text,resolution_revision::text FROM pf_project_preparations WHERE project_id=$1 FOR SHARE', [input.projectId])).rows[0];
   if (!policy || !preparation || policy.catalog_revision !== row.catalog_revision || policy.routing_policy_revision !== row.routing_policy_revision ||
       preparation.current_aggregate_id !== aggregate.id || preparation.current_artifact_id !== aggregate.artifactId || preparation.geometry_revision !== aggregate.geometryRevision || preparation.resolution_revision !== plan.resolutionRevision) return empty();
-  const result: ViewerRoutingBindings = { ...empty(), aggregateId: aggregate.id, bindings };
-  if (Buffer.byteLength(JSON.stringify(result)) > ROUTING_BINDING_LIMITS.bytes) return limit();
+  const cadNames = new Set(cadBindings.map(binding => binding.routeName));
+  const result: ViewerRoutingBindings = { ...empty(), aggregateId: aggregate.id, bindings: bindings.filter(binding => !cadNames.has(binding.routeName)),
+    ...(cadBindings.length ? { schemaVersion: 'wfc.viewer.routing-bindings.v2', cadBindings } as const : {}) };
+  if (Buffer.byteLength(JSON.stringify(result)) > (cadBindings.length ? ROUTING_BINDING_LIMITS.cadBytes : ROUTING_BINDING_LIMITS.bytes)) return limit();
   return result;
 }

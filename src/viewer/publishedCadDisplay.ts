@@ -15,7 +15,7 @@ type Options = {
   projectId: string; token: string; modelVersionId: string;
   isCurrent: () => boolean; onError: (error: unknown) => void;
 };
-export type PublishedCadDisplay = { refresh: () => Promise<void>; showTray: (projectTrayId: string, routeGroupId?: string) => Promise<boolean>; hideTray: () => Promise<boolean>; dispose: () => void };
+export type PublishedCadDisplay = { refresh: () => Promise<boolean>; showTray: (projectTrayId: string, routeGroupId?: string) => Promise<boolean>; hideTray: () => Promise<boolean>; dispose: () => void };
 
 /** Display saved CAD route components without changing the model or its capture. */
 export function createPublishedCadDisplay({ viewer, projectId, token, modelVersionId, isCurrent, onError }: Options): PublishedCadDisplay {
@@ -26,6 +26,7 @@ export function createPublishedCadDisplay({ viewer, projectId, token, modelVersi
   let preview: { projectTrayId: string; routeGroupId?: string } | null = null;
   let selectedRoute: CadRouteGroup | null = null;
   let synchronized = false;
+  let geometryComplete = false;
   const current = () => !abort.signal.aborted && isCurrent();
   const read = async <T,>(path: string, optional = false): Promise<T | null> => {
     const deadline = pathFinderRequestDeadline(abort.signal, 30_000,
@@ -41,6 +42,8 @@ export function createPublishedCadDisplay({ viewer, projectId, token, modelVersi
   };
   const synchronize = async () => {
     synchronized = false;
+    geometryComplete = false;
+    let complete = true;
     try {
       if (!current()) return;
       selectedRoute = null;
@@ -61,6 +64,7 @@ export function createPublishedCadDisplay({ viewer, projectId, token, modelVersi
           for (const id of route.instanceIds) {
             const instance = instances.get(id);
             if (!instance) {
+              complete = false;
               onError(new Error(`Saved route ${route.name} has a component missing from the saved placements.`));
               continue;
             }
@@ -100,15 +104,16 @@ export function createPublishedCadDisplay({ viewer, projectId, token, modelVersi
           if (instance.metadata && instance.route) await viewer.setCadComponentProperties(id, instance.metadata, instance.route);
           if (!current()) return;
           displayed.set(id, signature);
-        } catch (error) { if (current()) onError(error); }
+        } catch (error) { complete = false; if (current()) onError(error); }
       }
       synchronized = current();
+      geometryComplete = complete && synchronized;
     } catch (error) { if (current()) onError(error); }
   };
   const refresh = () => {
-      if (!current()) return Promise.resolve();
+      if (!current()) return Promise.resolve(false);
       if (!pending) pending = synchronize().finally(() => { pending = null; });
-      return pending;
+      return pending.then(() => geometryComplete && current());
   };
   return {
     refresh,

@@ -54,6 +54,10 @@ function fixture(t, nodes = { 1: { name: 'Model', parent: null }, 2: { name: '/A
   t.after(() => { controller.dispose(); Object.assign(globalThis, previous); });
   return { controller, viewer, tree, facts, nodes };
 }
+function nativeVisibility(f) {
+  const changes=[];const manager={getDefaultVisibility:()=>true,getVisibility:()=>[],setVisibility:(visible,states)=>changes.push({visible,states}),
+    setAllVisibility:visible=>changes.push({visible})};f.viewer.model.visibilityManager=manager;return changes;
+}
 
 test('published multiple roots resolve one unchanged project code without suffix guessing', async t => {
   const f = fixture(t);
@@ -65,6 +69,57 @@ test('published multiple roots resolve one unchanged project code without suffix
   assert.deepEqual(result.segments[0].ids, [2, 3]); assert.equal(result.matchedCount, 1); assert.equal(result.drawableCount, 1); assert.ok(result.lineCount > 0);
   assert.deepEqual(f.facts.isolates.at(-1), [2, 3]); assert.deepEqual(f.facts.fits.at(-1), [2, 3]);
   assert.deepEqual(f.facts.vertices, [2, 3]);
+});
+
+test('saved mixed CAD and SDK routing resolves and draws native names absent from the SDK tree', async t => {
+  const f = fixture(t, { 1: { name: 'Model', parent: null }, 2: { name: 'BC025', parent: 1, fragment: true }, 3: { name: 'BC026', parent: 1, fragment: true } });
+  Object.assign(f.viewer.model, { getUnitScale: () => 1, getUpVector: () => [0, 0, 1], getGlobalOffset: () => [0, 0, 0] });
+  const published = { ...bindings(), schemaVersion: 'wfc.viewer.routing-bindings.v2', bindings: [], cadBindings: [
+    { routeName: '/BC027-2', paths: [{ pointsMetres: [[-4, 0, 0], [-2, 0, 0]], widthMetres: .3 }] },
+    { routeName: '/BC027-1', paths: [{ pointsMetres: [[-2, 0, 0], [-1, 0, 0], [0, 0, 0]], widthMetres: .3 }] },
+  ] };
+  const result = await f.controller.showRoute('/SECONDARY/BC027-2/BC027-1/BC025/BC026/SECONDARY', { routingBindings: published });
+  assert.deepEqual(result.segments.map(value => value.status), ['found', 'found', 'found', 'found']);
+  assert.equal(result.drawableCount, 4); assert.ok(result.lineCount > 0);
+  assert.deepEqual(result.diagnostics.order.map(value => value.token), ['BC027-2', 'BC027-1', 'BC025', 'BC026']);
+  assert.deepEqual(result.diagnostics.order[0].start, [-4, 0, 0]);
+  let fitted;
+  window.THREE.Box3=class{points=[];expandByPoint(point){this.points.push(point);return this;}};
+  f.viewer.navigation={fitBounds(_instant,bounds){fitted=bounds;}};
+  await f.controller.showRoute('/BC027-2/BC027-1/BC025/BC026',{routingBindings:published});
+  assert.ok(fitted.points.some(point=>point.x===-4));assert.ok(fitted.points.some(point=>point.x===20));
+});
+
+test('native saved centerlines retain every bend vertex and convert world metres and width exactly once', async t => {
+  const f = fixture(t);
+  const visibility=nativeVisibility(f);
+  Object.assign(f.viewer.model, { getUnitScale: () => .001, getUpVector: () => [0,0,1], getGlobalOffset: () => [1000,2000,3000] });
+  let fitted;
+  window.THREE.Box3 = class { points = []; expandByPoint(point) { this.points.push(point); return this; } };
+  f.viewer.navigation = { fitBounds(_instant, bounds) { fitted = bounds; } };
+  const centerline = [[1,2,3],[1.1,2,3],[1.2,2.1,3],[1.2,2.2,3]];
+  const published = { ...bindings(), schemaVersion:'wfc.viewer.routing-bindings.v2',bindings:[],
+    cadBindings:[{routeName:'/BC027-1',paths:[{pointsMetres:centerline,widthMetres:.3}]}] };
+  const result = await f.controller.showRoute('/BC027-1',{routingBindings:published});
+  assert.equal(result.segments[0].status,'found'); assert.equal(result.diagnostics.order[0].method,'published-cad-centerline');
+  assert.equal(result.diagnostics.order[0].width,300); assert.equal(result.diagnostics.bends.fallback,0);
+  assert.deepEqual(fitted.points.map(point=>[point.x,point.y,point.z]),centerline.map(point=>point.map((value,i)=>value/.001-[1000,2000,3000][i])));
+  assert.equal(f.facts.vertices.length,0); // No source SDK identity or fitted mesh substitutes for native CAD geometry.
+  assert.deepEqual(visibility[0],{visible:false});assert.equal(f.viewer.impl.fadeMaterial.opacity,.025);
+  const fits = f.facts.fits.length; f.controller.fitRoute(); assert.equal(f.facts.fits.length,fits);
+  const focus=fitted;f.controller.clearRoute({preserveCamera:true});assert.equal(fitted,focus);
+  assert.deepEqual(visibility.at(-1),{visible:true,states:[]});
+});
+
+test('withdrawn native names cannot reuse a preceding CAD response and unknown names remain missing', async t => {
+  const f = fixture(t); Object.assign(f.viewer.model,{getUnitScale:()=>1,getUpVector:()=>[0,0,1],getGlobalOffset:()=>[0,0,0]});
+  nativeVisibility(f);
+  const published={...bindings(),schemaVersion:'wfc.viewer.routing-bindings.v2',bindings:[],cadBindings:[
+    {routeName:'/BC027-2',paths:[{pointsMetres:[[0,0,0],[1,0,0]],widthMetres:.3},{pointsMetres:[[1,0,0],[2,0,0]],widthMetres:.3}]}]};
+  const first=await f.controller.showRoute('/BC027-2/UNKNOWN',{routingBindings:published});
+  assert.equal(first.segments[0].count,1);assert.equal(first.drawableCount,1);assert.equal(first.segments[1].status,'missing');
+  const after=await f.controller.showRoute('/BC027-2',{routingBindings:{...bindings(),bindings:[]}});
+  assert.equal(after.segments[0].status,'missing');assert.equal(after.drawableCount,0);
 });
 
 test('mapped leaf geometry keeps original colors, a yellow line and filled Ghost; Clear restores appearance', async t => {

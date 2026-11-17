@@ -66,12 +66,15 @@ async function readBarrierProposalApplicability(client: PoolClient, input: Propo
 }> {
   const no = { applicable: false, evidence: null };
   if (!input.seal || (['projectId','jobId','cableId','proposalId','dependencyHash'] as const).some(key => input.seal![key] !== input[key])) return no;
-  const row = (await client.query<{ state: string; status: string; dependencies: unknown; proposal_dependencies: unknown; result: unknown;
+  // Read the retained dependency body once, under the same dependency+result
+  // budget used by the writer and workflow proof. SQL checks the separately
+  // bounded item copy for exact equality instead of charging/transferring it twice.
+  const row = (await client.query<{ state: string; status: string; dependencies: unknown; item_dependencies_match: boolean | null; result: unknown;
     proposal_hash: string; dependency_hash: string; proposal_status: string; job_state: string; cancel_requested: boolean }>(
     `/* pathfinder:barrier-sealed-item-applicability */ SELECT i.state,i.status,
-      CASE WHEN octet_length(i.dependencies::text)+octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 THEN i.dependencies ELSE NULL END AS dependencies,
-      CASE WHEN octet_length(i.dependencies::text)+octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 THEN p.dependencies ELSE NULL END AS proposal_dependencies,
-      CASE WHEN octet_length(i.dependencies::text)+octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 THEN p.result ELSE NULL END AS result,
+      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 THEN p.dependencies ELSE NULL END AS dependencies,
+      CASE WHEN octet_length(i.dependencies::text)<=262144 THEN i.dependencies=p.dependencies ELSE false END AS item_dependencies_match,
+      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 THEN p.result ELSE NULL END AS result,
       p.proposal_hash,p.dependency_hash,p.status AS proposal_status,j.state AS job_state,j.cancel_requested
       FROM pf_job_items i JOIN pf_jobs j ON j.project_id=i.project_id AND j.id=i.job_id
       JOIN pf_proposals p ON p.project_id=i.project_id AND p.job_id=i.job_id AND p.cable_id=i.cable_id AND p.id=$4
@@ -79,7 +82,7 @@ async function readBarrierProposalApplicability(client: PoolClient, input: Propo
     [input.projectId,input.jobId,input.cableId,input.proposalId])).rows[0];
   if (!row || row.state !== 'complete' || row.status !== 'calculated' || row.proposal_status !== 'calculated' || row.cancel_requested
     || row.job_state !== input.jobState || !row.dependencies || hash(row.dependencies) !== input.dependencyHash
-    || !row.proposal_dependencies || hash(row.proposal_dependencies) !== input.dependencyHash || row.dependency_hash !== input.dependencyHash
+    || row.item_dependencies_match !== true || row.dependency_hash !== input.dependencyHash
     || (row.dependencies as { schemaVersion?: unknown }).schemaVersion !== 'pathfinder.dependencies.v8') return no;
   try {
     const dependencies = row.dependencies as BarrierDependencySnapshot;

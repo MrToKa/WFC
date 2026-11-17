@@ -1,5 +1,6 @@
 import { profileGeometry, buildRouteLines } from './route-geometry.mjs';
 import { parseRoutingBindings } from './routing-bindings.mjs';
+import { modelCoordinates } from './pathfinder.mjs';
 
 export function normalizeIdentifier(value) {
   return String(value).normalize('NFKC').trim().replace(/^\/+|\/+$/g, '').toUpperCase();
@@ -22,6 +23,7 @@ export function createRouteController(viewer, { signal } = {}) {
   let nameIndex;
   let indexPromise;
   let routeIds = [];
+  let routeBounds = null;
   let overlayMeshes = [];
   let overlayResources = [];
   let disposed = false;
@@ -222,6 +224,7 @@ export function createRouteController(viewer, { signal } = {}) {
     restoreGhostContext();
     if (!preserveSelection) viewer.clearSelection();
     routeIds = [];
+    routeBounds = null;
     if (!preserveCamera) viewer.fitToView();
     viewer.impl.invalidate(true, true, true);
   }
@@ -265,9 +268,21 @@ export function createRouteController(viewer, { signal } = {}) {
       { modelVersionId: routingBindings?.modelVersionId, contentFingerprint: routingBindings?.contentFingerprint });
     if (routingBindings !== undefined && !bindings) throw invalidBindings();
     const mapped = new Map((bindings?.bindings ?? []).map(binding => [normalizeIdentifier(binding.routeName), binding.rootObjectIds.map(id => Number(id.slice(5)))]));
+    const cad = new Map((bindings?.cadBindings ?? []).map(binding => [normalizeIdentifier(binding.routeName), binding.paths]));
+    const coordinates = cad.size ? modelCoordinates(model) : null;
+    const nativeProfile = (path, token, index) => {
+      const centerline = path.pointsMetres.map(point => coordinates.toDisplay(point));
+      const start = centerline[0], end = centerline.at(-1), axis = end.map((value, i) => value - start[i]);
+      const length = Math.hypot(...axis), bounds = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+      for (const point of centerline) for (let i = 0; i < 3; i++) { bounds.min[i] = Math.min(bounds.min[i], point[i]); bounds.max[i] = Math.max(bounds.max[i], point[i]); }
+      return { id: `cad:${token}:${index}`, name: token, kind: 'published-cad', method: 'published-cad-centerline',
+        points: centerline, centerline, start, end, axis: length ? axis.map(value => value / length) : [1, 0, 0],
+        center: start.map((value, i) => (value + end[i]) / 2), bounds, width: path.widthMetres / coordinates.scale };
+    };
     await validateRootOwnership(tree, [...mapped.values()].flat(), ticket);
     active(ticket);
     const segments = tokens.map(token => {
+      if (cad.has(normalizeIdentifier(token))) return { token, ids: [], count: 1, status: 'found', cad: true };
       const assigned = mapped.get(normalizeIdentifier(token));
       if (assigned) return { token, ids: assigned, count: 1, status: 'found', mapped: true };
       const ids = index.get(normalizeIdentifier(token)) || [];
@@ -282,7 +297,8 @@ export function createRouteController(viewer, { signal } = {}) {
       const segment = segments[i];
       onProgress?.(`Проследяване на трасетата… ${i + 1}/${segments.length}`);
       // Unresolved names stay in the result list; the line joins known parts.
-      const profiles = segment.status === 'found' ? segment.ids.flatMap(id => collectProfiles(tree, id)) : [];
+      const profiles = segment.cad ? cad.get(normalizeIdentifier(segment.token)).map((path, index) => nativeProfile(path, segment.token, index))
+        : segment.status === 'found' ? segment.ids.flatMap(id => collectProfiles(tree, id)) : [];
       if (profiles.length > 128) throw invalidBindings();
       groups.push({ token: segment.token, profiles });
       await nextFrame();
@@ -290,26 +306,36 @@ export function createRouteController(viewer, { signal } = {}) {
     const line = buildRouteLines(groups);
     active(ticket);
     const ids = [...new Set(found.flatMap(segment => segment.ids))];
+    if (!ids.length && cad.size && (typeof model.visibilityManager?.setAllVisibility !== 'function' || !captureVisibility())) throw visibilityUnavailable();
     viewer.clearSelection();
     captureGhostState();
-    viewer.isolate(ids, model);
+    if (ids.length) viewer.isolate(ids, model);
+    else model.visibilityManager.setAllVisibility(false);
     enableGhostContext();
     drawLines(line.polylines, groups.flatMap(group => group.profiles));
     routeIds = ids;
-    viewer.fitToView(ids, model);
+    routeBounds = null;
+    if (cad.size && THREE.Box3 && typeof viewer.navigation?.fitBounds === 'function') {
+      routeBounds = new THREE.Box3();
+      for (const polyline of line.polylines) for (const point of polyline) routeBounds.expandByPoint(new THREE.Vector3(...point));
+    }
+    fitRoute();
     const warnings = [...line.warnings];
     if (segments.some(segment => segment.status !== 'found')) warnings.unshift('Ненамерените или нееднозначните означения се пропускат. Линията свързва намерените участъци в зададения ред.');
     return { segments: segments.map((segment, index) => ({ ...segment, drawable: groups[index].profiles.length > 0 })), matchedCount: found.length, drawableCount: groups.filter(group => group.profiles.length).length, lineCount: line.polylines.length, warnings, diagnostics: line.diagnostics };
   }
 
-  function fitRoute() { if (routeIds.length) viewer.fitToView(routeIds, model); }
+  function fitRoute() {
+    if (routeBounds) viewer.navigation.fitBounds(false, routeBounds);
+    else if (routeIds.length) viewer.fitToView(routeIds, model);
+  }
   function dispose() {
     if (disposed) return;
     disposed = true; generation++;
     try { removeOverlay(); }
     finally {
       try { restoreGhostContext(); }
-      finally { routeIds = []; profileCache.clear(); nameIndex = null; inventoryIds = undefined; }
+      finally { routeIds = []; routeBounds = null; profileCache.clear(); nameIndex = null; inventoryIds = undefined; }
     }
   }
   return { prepareIndex: indexNames, showRoute, clearRoute, fitRoute, prepareForVisibilityObservation, dispose };

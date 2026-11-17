@@ -444,7 +444,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         { signal, credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error' });
       if (!response.ok) throw failure([413,414].includes(response.status) ? 'ROUTING_BINDINGS_LIMIT' : httpCode(response.status));
       let bindingValue;
-      try { bindingValue = await responseJson(response, ROUTING_BINDINGS_LIMITS.bytes); }
+      try { bindingValue = await responseJson(response, ROUTING_BINDINGS_LIMITS.cadBytes); }
       catch (cause) { if (cause?.code === 'INVALID_MESSAGE') throw failure('ROUTING_BINDINGS_INVALID'); throw cause; }
       const bindings = parseRoutingBindings(bindingValue, loadedDescriptor, routingSelectionRevision, requestedKeys);
       if (!bindings) throw failure('ROUTING_BINDINGS_INVALID');

@@ -67,7 +67,7 @@ function fixture() {
     if (sql.includes('cable-workflow:proposal-proof')) return { rows: [raw] };
     if (sql.includes('cable-workflow:accepted-proof')) return { rows: [receipt] };
     if (sql.includes('pathfinder:sealed-item-applicability')) return {rows:[{state:'complete',status:'calculated',dependencies:raw.dependencies,job_state:raw.job_state,cancel_requested:raw.cancel_requested}]};
-    if (sql.includes('pathfinder:barrier-sealed-item-applicability')) return {rows:[{state:'complete',status:'calculated',dependencies:raw.dependencies,proposal_dependencies:raw.dependencies,result:raw.result,
+    if (sql.includes('pathfinder:barrier-sealed-item-applicability')) return {rows:[{state:'complete',status:'calculated',dependencies:raw.dependencies,item_dependencies_match:true,result:raw.result,
       dependency_hash:raw.dependency_hash,proposal_hash:raw.proposal_hash,proposal_status:raw.status,job_state:raw.job_state,cancel_requested:raw.cancel_requested}]};
     throw Error('Unexpected SQL in proof fixture.');
   });

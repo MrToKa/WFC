@@ -18,6 +18,7 @@ const sameEvent = (event: ViewerEvent, load: ViewerLoadSnapshot) => Boolean(even
 
 /** Display-only SDK name/root lookup. No Path Finder jobs, lengths or write authority. */
 export function createStoredRouteDisplay(options: { viewer: Viewer; projectId: string; token: string; isCurrent: () => boolean;
+  prepare?: () => Promise<boolean>;
   fetchTrays?: typeof fetchRoutingTrays; onAccessFailure?: (error: RoutingTrayApiError) => void }) {
   let pending: Pending | null = null, displayed: ViewerLoadSnapshot | null = null;
   const current = (load: ViewerLoadSnapshot) => options.isCurrent() && sameLoad(options.viewer.getLoadSnapshot(), load);
@@ -106,7 +107,12 @@ export function createStoredRouteDisplay(options: { viewer: Viewer; projectId: s
           }
           attempt.trays = null; attempt.databaseDone = true; combine(attempt);
         });
-        void options.viewer.showRoute(raw, 'cable', cableId).then(requestId => {
+        const request = options.prepare ? options.prepare().then(ready => {
+          if (pending !== attempt || !current(load)) return null;
+          if (!ready) throw new Error('The current saved CAD geometry could not be synchronized. Refresh the model before showing this route.');
+          return options.viewer.showRoute(raw, 'cable', cableId);
+        }) : options.viewer.showRoute(raw, 'cable', cableId);
+        void request.then(requestId => {
           if (pending !== attempt || !current(load)) {
             if (requestId) options.viewer.cancel(requestId);
             if (pending === attempt) cancel(); return;

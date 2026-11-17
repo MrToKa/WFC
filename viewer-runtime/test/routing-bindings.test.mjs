@@ -8,6 +8,26 @@ const response = (bindings = [{ routeName: '/A105', rootObjectIds: ['dbid:2', 'd
   schemaVersion: 'wfc.viewer.routing-bindings.v1', ...descriptor, selectionRevision: '12',
   aggregateId: '33333333-3333-4333-8333-333333333333', bindings,
 });
+const native = () => ({...response([]),schemaVersion:'wfc.viewer.routing-bindings.v2',cadBindings:[
+  {routeName:'/BC027-2',paths:[{pointsMetres:[[4.61,68.54,19.33],[4.61,74.54,19.33]],widthMetres:.3}]}]});
+
+test('native response is scoped, immutable, bounded, and rejects ambiguous or fabricated mappings',()=>{
+  const input=native(),parsed=parseRoutingBindings(input,descriptor,'12',['BC027-2']);assert.ok(parsed);
+  input.cadBindings[0].paths[0].pointsMetres[0][0]=999;assert.equal(parsed.cadBindings[0].paths[0].pointsMetres[0][0],4.61);
+  assert.equal(parseRoutingBindings(native(),descriptor,'13'),null);
+  assert.equal(parseRoutingBindings(native(),{...descriptor,modelVersionId:'44444444-4444-4444-8444-444444444444'}),null);
+  assert.equal(parseRoutingBindings(native(),descriptor,'12',['OTHER']),null);
+  for(const mutate of [
+    v=>v.cadBindings.push(structuredClone(v.cadBindings[0])),
+    v=>v.bindings.push({routeName:'/BC027-2',rootObjectIds:['dbid:2']}),
+    v=>v.cadBindings[0].paths[0].pointsMetres[0][0]=Infinity,
+    v=>v.cadBindings[0].paths[0].pointsMetres[0]=[1,2],
+    v=>v.cadBindings[0].paths[0].widthMetres=-1,
+    v=>v.cadBindings[0].paths[0].sourceObjectIds=['dbid:2'],
+    v=>v.cadBindings[0].paths[0].pointsMetres=Array.from({length:ROUTING_BINDINGS_LIMITS.cadPoints+1},()=>[0,0,0]),
+    v=>v.aggregateId=null,
+  ]){const v=native();mutate(v);assert.equal(parseRoutingBindings(v,descriptor),null);}
+});
 
 test('scoped responses accept only requested exact route keys',()=>{
   assert.ok(parseRoutingBindings(response(),descriptor,'12',['A105']));

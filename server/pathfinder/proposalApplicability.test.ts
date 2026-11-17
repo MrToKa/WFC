@@ -64,7 +64,7 @@ function barrierFixture(jobState = 'running') {
           distanceMeters:1,nearestFromMeters:0.1,nearestToMeters:0.1,eligibleTrays:1,comparison:null},binding:barriers.binding,directRouteSha256:routeSha256,mode:'tray-network',directCheck:null,reasonCode:'DISTANCE_NOT_QUALIFIED'},
       diagnostics:{status:'no-barriers-declared',reasonCode:'DRILLING_BYPASS',searchComplete:true,candidatesTruncated:false,pairAttempts:0,collisionQueries:0,work:'1',plannerAttempts:0,straightPairAttempts:0,localEdgeChecks:0,localPhaseUsed:false,straightPhaseTruncated:false},
       connectors:{from:null,to:null},qualification:null} };
-  const row = { ...f.row,dependencies:dependencies as unknown,proposal_dependencies:dependencies as unknown,result:result as unknown,
+  const row = { ...f.row,dependencies:dependencies as unknown,item_dependencies_match:true as boolean|null,result:result as unknown,
     proposal_hash:'',dependency_hash:hash(dependencies),proposal_status:'calculated' };
   const input:ProposalApplicabilityInput={...f.input,dependencyVersion:'pathfinder.dependencies.v8',dependencyHash:hash(dependencies),seal:null};
   const reseal = () => { const baselineHash='e'.repeat(64);row.dependency_hash=hash(row.dependencies);input.dependencyHash=row.dependency_hash;
@@ -116,7 +116,9 @@ describe('version-specific sealed cable applicability with mocked SQL and scoped
     const f=barrierFixture(parent),value=await f.run();
     expect(value).toEqual({applicable:true,evidence:{schemaVersion:'wfc.pf.sealed-cable-applicability.v2',dependencyVersion:'pathfinder.dependencies.v8',
       projectId,jobId,cableId,proposalId,dependencyHash:f.input.dependencyHash,scope:'sealed-cable-item'}});
-    expect(f.query.mock.calls[0][0]).toContain('octet_length(i.dependencies::text)+octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144');
+    expect(f.query.mock.calls[0][0]).toContain('octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144');
+    expect(f.query.mock.calls[0][0]).toContain('CASE WHEN octet_length(i.dependencies::text)<=262144 THEN i.dependencies=p.dependencies ELSE false END AS item_dependencies_match');
+    expect(f.query.mock.calls[0][0]).not.toContain('AS proposal_dependencies');
     expect(f.query.mock.calls[0][1]).toEqual([projectId,jobId,cableId,proposalId]);
     expect(authority).toHaveBeenCalledExactlyOnceWith(f.client,{projectId,jobId,cableId,lock:true});expect(wholeAuthority).not.toHaveBeenCalled();
   });
@@ -147,10 +149,14 @@ describe('version-specific sealed cable applicability with mocked SQL and scoped
   it.each(['missing-proposal','wrong-proposal-dependencies','wrong-result-seal','wrong-proposal-hash','missing-v2-seal'] as const)('refuses unavailable or tampered v8 retained proof: %s',async kind=>{
     const f=barrierFixture('complete');
     if(kind==='missing-proposal') f.query.mockResolvedValue({rows:[]});
-    if(kind==='wrong-proposal-dependencies') f.row.proposal_dependencies={...f.dependencies,cableWriteRevision:'99'};
+    if(kind==='wrong-proposal-dependencies') f.row.item_dependencies_match=false;
     if(kind==='wrong-result-seal') f.input.seal!.engineResultSha256='0'.repeat(64);
     if(kind==='wrong-proposal-hash') f.row.proposal_hash='0'.repeat(64);
     if(kind==='missing-v2-seal') delete f.input.seal!.baselineHash;
+    expect(await f.run()).toEqual({applicable:false,evidence:null});expect(authority).not.toHaveBeenCalled();
+  });
+  it.each([false,null])('requires an affirmative exact SQL dependency match, not %s',async match=>{
+    const f=barrierFixture('complete');f.row.item_dependencies_match=match;
     expect(await f.run()).toEqual({applicable:false,evidence:null});expect(authority).not.toHaveBeenCalled();
   });
   it.each(['queued', 'running', 'complete'])('permits one exact sealed v7 completed item with parent %s without waiting for siblings', async parent => {

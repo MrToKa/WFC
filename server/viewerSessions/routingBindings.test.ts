@@ -6,6 +6,11 @@ import { projectRoutingCatalogRows } from '../pathfinder/catalog.js';
 import { catalogRoutingHashInput } from '../../shared/pathfinderPurposePolicy.js';
 import { preparationContextSchema, preparationCreateSchema, preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
 import { parseRoutingBindingQuery,readViewerRoutingBindings } from './routingBindings.js';
+import { readCadOverlay, encodeCadOverlay } from '../pathfinder/cadOverlay.js';
+import { PathFinderError } from '../pathfinder/errors.js';
+vi.mock('../pathfinder/cadOverlay.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../pathfinder/cadOverlay.js')>(), readCadOverlay: vi.fn(async () => null),
+}));
 
 const id = (n: number) => `11000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function fixture(options: { mappings?: number; roots?: number; longNames?: boolean } = {}) {
@@ -67,6 +72,49 @@ function fixture(options: { mappings?: number; roots?: number; longNames?: boole
 }
 
 describe('ordinary Viewer published routing bindings', () => {
+  const cad = (f: ReturnType<typeof fixture>) => encodeCadOverlay({ schemaVersion: 'wfc.pf.cad-overlay-payload.v3',
+    projectId: f.input.projectId, modelVersionId: f.input.modelVersionId, baseSnapshotSha256: f.aggregate.projection.sha256,
+    segments: [{ id: `cad:${id(901)}`, name: '/BC027-2', allowedCategoryMask: 4,
+      pointsMetres: [[4.61,68.54,19.33],[4.61,74.54,19.33]],
+      ports: [{ pointMetres: [4.61,68.54,19.33], outward:[0,-1,0],u:[1,0,0],v:[0,0,1],widthMetres:.3,heightMetres:.06 }] },
+    { id: `cad:${id(902)}`, name: '/BC027-1', allowedCategoryMask: 4,
+      pointsMetres: [[4.61,74.54,19.33],[4.61,75,19.33],[5,75,19.33]],
+      ports: [{ pointMetres: [4.61,74.54,19.33], outward:[0,-1,0],u:[1,0,0],v:[0,0,1],widthMetres:.3,heightMetres:.06 }] }] });
+  it('projects exact current CAD centerlines beside SDK mappings after validated additive catalog changes', async () => {
+    const f = fixture(); f.source.push({ id:id(903),name:'BC027-2',purpose:'LV' },{id:id(904),name:'BC027-1',purpose:'LV'});
+    f.row.catalog_revision = f.policy.catalog_revision = '2';
+    vi.mocked(readCadOverlay).mockResolvedValueOnce(cad(f));
+    const result = await readViewerRoutingBindings(f.client, f.input);
+    expect(result.schemaVersion).toBe('wfc.viewer.routing-bindings.v2');
+    expect(result.bindings).toHaveLength(1); expect(result.cadBindings?.map(value=>value.routeName)).toEqual(['/BC027-2','/BC027-1']);
+    expect(result.cadBindings?.find(value=>value.routeName==='/BC027-1')?.paths[0].pointsMetres).toEqual([[4.61,74.54,19.33],[4.61,75,19.33],[5,75,19.33]]);
+    expect(readCadOverlay).toHaveBeenLastCalledWith(f.client,f.input.projectId,f.aggregate.artifactId,f.aggregate.projection.sha256,
+      f.input.modelVersionId,f.row.routing_scope,{...f.row.routing_scope,catalogRevision:'2'},{lock:false});
+    expect(f.query.mock.calls.every(([sql])=>! /\b(?:INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(true);
+  });
+  it('returns only requested CAD names and never reveals their private publications or masks', async () => {
+    const f = fixture(); f.source.push({id:id(903),name:'BC027-2',purpose:'LV'},{id:id(904),name:'BC027-1',purpose:'LV'});
+    vi.mocked(readCadOverlay).mockResolvedValueOnce(cad(f));
+    const result = await readViewerRoutingBindings(f.client,{...f.input,routeCodes:['BC027-2']});
+    expect(result.cadBindings).toHaveLength(1); expect(result.cadBindings?.[0].routeName).toBe('/BC027-2');
+    expect(JSON.stringify(result)).not.toMatch(/payloadBase64|allowedCategoryMask|baseSnapshotSha256|cad:/);
+  });
+  it('withdrawn CAD paths disappear on the next read while validated base mappings survive', async () => {
+    const f = fixture(); f.row.catalog_revision = f.policy.catalog_revision = '2';
+    vi.mocked(readCadOverlay).mockResolvedValueOnce('retired-base-proof');
+    const result = await readViewerRoutingBindings(f.client,f.input);
+    expect(result.schemaVersion).toBe('wfc.viewer.routing-bindings.v1'); expect(result.cadBindings).toBeUndefined();
+    expect(result.bindings).toHaveLength(1);
+  });
+  it('refuses ambiguous native project names instead of treating several tray rows as one CAD route',async()=>{
+    const f=fixture();f.source.push({id:id(903),name:'BC027-2',purpose:'LV'},{id:id(904),name:'BC027-2',purpose:'LV'});
+    vi.mocked(readCadOverlay).mockResolvedValueOnce(cad(f));
+    await expect(readViewerRoutingBindings(f.client,{...f.input,routeCodes:['BC027-2']})).rejects.toMatchObject({code:'ROUTING_BINDINGS_INVALID'});
+  });
+  it('refuses changed CAD publication provenance instead of claiming it is missing model geometry', async () => {
+    const f = fixture(); vi.mocked(readCadOverlay).mockRejectedValueOnce(new PathFinderError('CAD_ROUTE_BASE_CHANGED',409));
+    await expect(readViewerRoutingBindings(f.client,f.input)).rejects.toMatchObject({code:'ROUTING_BINDINGS_INVALID'});
+  });
   it('returns exact requested bindings from a larger project without weakening publication proof or response bounds',async()=>{
     const f=fixture({mappings:129});
     const result=await readViewerRoutingBindings(f.client,{...f.input,routeCodes:['A105']});

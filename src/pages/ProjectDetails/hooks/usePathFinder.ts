@@ -208,6 +208,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
           onCaptureTiming: timing => { console.debug('WFC capture host timing', timing); } });
         const viewer = run.viewer;
         run.storedRoute = createStoredRouteDisplay({ viewer, projectId, token,
+          prepare: () => run.publishedCad?.refresh() ?? Promise.resolve(true),
           isCurrent: () => {
             const model = dataRef.current?.activeModel;
             return live(run) && run.viewer === viewer && latestView.current.viewerPhase === 'ready'

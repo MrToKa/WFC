@@ -289,7 +289,7 @@ describe('published CAD geometry in Path Finder', () => {
     const normal = f.fetcher.getMockImplementation()!;
     f.fetcher.mockImplementation((url, init) => String(url).endsWith(`/catalog/${id(120)}/mesh`)
       ? Promise.resolve(new Response('', { status: 503 })) : normal(url, init));
-    await f.display.refresh();
+    expect(await f.display.refresh()).toBe(false);
     expect(f.onError).toHaveBeenCalled();
     expect(f.viewer.showCadComponent).toHaveBeenCalledWith(id(21), expect.anything(), expect.anything());
     expect(f.viewer.showCadComponent).not.toHaveBeenCalledWith(id(20), expect.anything(), expect.anything());

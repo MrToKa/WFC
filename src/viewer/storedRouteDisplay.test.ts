@@ -19,6 +19,32 @@ function fixture() {
 }
 afterEach(()=>vi.useRealTimers());
 describe('saved cable routing display without calculation or writes',()=>{
+  it('waits for current native geometry synchronization before submitting Show',async()=>{
+    const f=fixture(),ready=deferred<boolean>(),prepare=vi.fn(()=>ready.promise);
+    const display=createStoredRouteDisplay({viewer:f.viewer,projectId:id(2),token:'token',isCurrent:()=>true,fetchTrays:f.fetchTrays,prepare});
+    const shown=display.show('/BC001',id(6));expect(f.viewer.showRoute).not.toHaveBeenCalled();
+    ready.resolve(true);await Promise.resolve();expect(f.viewer.showRoute).toHaveBeenCalledOnce();
+    f.request.resolve(id(5));f.db.resolve([{id:id(7),projectId:id(2),name:'BC001'}]);display.onEvent(f.event());
+    expect((await shown)?.status).toBe('complete');
+  });
+  it('refuses incomplete CAD synchronization without submitting stale geometry',async()=>{
+    const f=fixture(),prepare=vi.fn(async()=>false);
+    const display=createStoredRouteDisplay({viewer:f.viewer,projectId:id(2),token:'token',isCurrent:()=>true,fetchTrays:f.fetchTrays,prepare});
+    await expect(display.show('/BC001',id(6))).rejects.toThrow('could not be synchronized');
+    expect(f.viewer.showRoute).not.toHaveBeenCalled();
+  });
+  it('cancellation while CAD synchronization is pending never sends an obsolete Show',async()=>{
+    const f=fixture(),ready=deferred<boolean>(),prepare=vi.fn(()=>ready.promise);
+    const display=createStoredRouteDisplay({viewer:f.viewer,projectId:id(2),token:'token',isCurrent:()=>true,fetchTrays:f.fetchTrays,prepare});
+    const abort=new AbortController(),shown=display.show('/BC001',id(6),{signal:abort.signal});abort.abort();
+    expect(await shown).toBeNull();ready.resolve(true);await Promise.resolve();expect(f.viewer.showRoute).not.toHaveBeenCalled();
+  });
+  it('a model change during CAD synchronization cannot display or clear its replacement',async()=>{
+    const f=fixture(),ready=deferred<boolean>(),prepare=vi.fn(()=>ready.promise);
+    const display=createStoredRouteDisplay({viewer:f.viewer,projectId:id(2),token:'token',isCurrent:()=>true,fetchTrays:f.fetchTrays,prepare});
+    const shown=display.show('/BC001',id(6));f.setLoad({...f.getLoad(),loadId:id(80)});ready.resolve(true);
+    expect(await shown).toBeNull();expect(f.viewer.showRoute).not.toHaveBeenCalled();expect(f.viewer.clear).not.toHaveBeenCalled();
+  });
   it('combines an early exact frame reply with a fresh project GET',async()=>{
     const f=fixture(),shown=f.display.show('/BC001',id(6));f.display.onEvent(f.event());
     f.db.resolve([{id:id(7),projectId:id(2),name:'BC001'}]);f.request.resolve(id(5));
