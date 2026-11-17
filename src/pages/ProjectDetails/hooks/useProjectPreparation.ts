@@ -205,6 +205,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
   const automaticRun = useRef(false), automaticModelKey = useRef<string | null>(null);
   const regeneratingRun = useRef(false), regenerationRequested = useRef(false), regenerationSession = useRef<string | null>(null);
   const initialReadIdentity = useRef<string | null>(null);
+  const previousRoutesActive = useRef(active);
   const cancelPending = useRef<Extract<Pending, { kind: 'publish' | 'cancel' }> | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const cancelInFlight = useRef(false);
@@ -683,6 +684,11 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       unknown: Boolean(pending.current) || value.unknown, conflict: false, error: null }));
   }, [artifactKey, update]);
   useEffect(() => {
+    if (previousRoutesActive.current && !active && !busyRef.current && !pending.current)
+      initialReadIdentity.current = null;
+    previousRoutesActive.current = active;
+  }, [active]);
+  useEffect(() => {
     // Loading can temporarily retire the model frame. Check the durable network
     // after loading ends, without replaying any pending preparation command.
     if (pf.viewerPhase === 'loading') {
@@ -692,6 +698,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       }
       return;
     }
+    // Re-entry reads saved membership; it never replays a preparation write.
     if (!enabled || !active || busyRef.current || initialReadIdentity.current === identity) return;
     initialReadIdentity.current = identity;
     void operate(async (signal) => {
