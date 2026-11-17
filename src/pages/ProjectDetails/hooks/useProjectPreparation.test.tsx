@@ -284,15 +284,17 @@ describe('project preparation lifecycle', () => {
     expect(api.createPreparation).not.toHaveBeenCalled();
     expect(api.mutatePreparation).not.toHaveBeenCalled();
   });
-  it('defers cold hidden controls until first Routes activation, then retains loaded controls across switches without 3D readiness', async () => {
+  it('defers cold hidden controls until first Routes activation, then refreshes saved controls on re-entry without 3D readiness', async () => {
     const { pf, context } = setup(), cold = { ...pf, viewerPhase: 'error' as const };
     const { result, rerender } = renderHook(({ active }) => useProjectPreparation(cold, active), { initialProps: { active: false } });
     expect(api.fetchPreparationContext).not.toHaveBeenCalled(); expect(api.fetchPreparationIndex).not.toHaveBeenCalled(); expect(api.fetchPreparationSession).not.toHaveBeenCalled();
     rerender({ active: true }); await waitFor(() => expect(result.current.context).toEqual(context));
     expect(api.fetchPreparationContext).toHaveBeenCalledTimes(1); expect(api.fetchPreparationIndex).toHaveBeenCalledTimes(1);
     rerender({ active: false }); expect(result.current.context).toEqual(context); expect(result.current.canMutate).toBe(false);
-    rerender({ active: true }); expect(result.current.context).toEqual(context); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(1);
-    await act(() => result.current.refresh()); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(2); expect(pf.runProjectPreparation).not.toHaveBeenCalled();
+    rerender({ active: true }); await waitFor(() => expect(api.fetchPreparationContext).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    expect(result.current.context).toEqual(context);
+    await act(() => result.current.refresh()); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(3); expect(pf.runProjectPreparation).not.toHaveBeenCalled();
   });
   it('permits explicit hidden refresh and does not repeat its reads on first activation', async () => {
     const { pf } = setup();
@@ -976,6 +978,31 @@ describe('automatic tray workflow', () => {
     await act(async () => finish(trace));
     expect(result.current.networkReady).toBe(true); expect(result.current.networkStorageStatus).toBe('stored-current');
     expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+  });
+  it.each([true, false])('reloads durable tray checkmarks on returning to Routes without discovery or regeneration (%s)', async inNetwork => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
+    f.store.context.trays[0].inNetwork = !inNetwork;
+    const { result, rerender } = renderHook(({ active }) => useProjectPreparation(f.pf, active), { initialProps: { active: true } });
+    await waitFor(() => expect(result.current.networkReady).toBe(true));
+    expect(result.current.context!.trays[0].inNetwork).toBe(!inNetwork);
+    rerender({ active: false });
+    // Another view finished verifying the network while Routes was hidden.
+    f.store.context.trays[0].inNetwork = inNetwork;
+    const reads = vi.mocked(api.fetchPreparationContext).mock.calls.length;
+    rerender({ active: true });
+    await waitFor(() => expect(result.current.context!.trays[0].inNetwork).toBe(inNetwork));
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    expect(api.fetchPreparationContext).toHaveBeenCalledTimes(reads + 1);
+    expect(result.current.networkReady).toBe(true);
+    rerender({ active: false }); rerender({ active: true });
+    await waitFor(() => expect(api.fetchPreparationContext).toHaveBeenCalledTimes(reads + 2));
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    expect(result.current.context!.trays[0].inNetwork).toBe(inNetwork);
+    expect(api.saveTrayMatches).not.toHaveBeenCalled(); expect(api.savePreparationResolution).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+    expect(prepareAssignedCadNetwork).not.toHaveBeenCalled(); expect(createGeometryTrace).not.toHaveBeenCalled();
+    expect(f.pf.runProjectPreparation).not.toHaveBeenCalled();
   });
   it('restores a verified saved network after remount without capturing or publishing it again', async () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
