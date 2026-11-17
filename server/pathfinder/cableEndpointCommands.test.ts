@@ -26,6 +26,7 @@ function fixture() {
   const query = vi.fn(async (sql: string, args: unknown[] = []) => {
     if (sql.startsWith('BEGIN ISOLATION')) return original('BEGIN');
     if (sql.startsWith('/* model-location-match:preserved-display */')) return { rows: [] };
+    if (sql.startsWith('/* numerical-display:')) return { rows: [] };
     if (sql.startsWith('/* cable-endpoint:')) {
       f.queries.push(sql); f.parameters.push(args); const p = args as string[];
       if (sql.startsWith('/* cable-endpoint:cable */')) { const c = f.state.cables.find(c => c.id === p[1]); return { rows: c && !settings.missing ? [{ ...c, cable_write_revision: settings.cableRevision, mto: settings.mto, oversized: settings.oversized }] : [] }; }
@@ -506,7 +507,8 @@ describe('automatic endpoint context is a verified unconfirmed suggestion', () =
   });
   it('keeps a confirmed shared head instead of replacing it with an automatic candidate', async () => {
     const f = fixture(); await f.save(f.command(await f.read())); mocks.automatic.mockClear();
-    expect((await f.read()).head?.status).toBe('confirmed'); expect((await f.read()).automaticSelection).toBe(null); expect(mocks.automatic).not.toHaveBeenCalled();
+    expect((await f.read()).head?.status).toBe('confirmed'); expect((await f.read()).automaticSelection).toBe(null);
+    expect(mocks.automatic).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ name: 'EQUIPMENT' }));
   });
   it('retains the verified model name and exact source after a confirmed object-derived save and reload', async () => {
     const f = fixture(), input = f.command(await f.read()); input.selection = { mode: 'object-derived', sdkObjectId: 345, object: f.ref };
@@ -515,5 +517,56 @@ describe('automatic endpoint context is a verified unconfirmed suggestion', () =
       sdkObjectId: f.object.identity.dbId, name: f.object.historicalModel.name, object: f.ref, pointProjectMetres: f.object.geometry.equipmentAnchor!.pointMetres });
     expect(f.state.bindings.size).toBe(1); expect(c.contextSha256).toBe(endpointBindingHash(cableEndpointContextHashInput(c)));
     f.state.prepared = false; expect((await f.read()).confirmedSelection).toBe(null);
+  });
+});
+
+describe('saved shared location reconnects to the current model without Assign or Save', () => {
+  async function savedFixture() {
+    const f = fixture(), input = f.command(await f.read());
+    const point = f.object.geometry.equipmentAnchor!.pointMetres;
+    input.selection = { mode: 'fixed-world', pointProjectMetres: [...point], derivation: 'manual-world-point', displaySdkObjectId: null };
+    await f.save(input);
+    const objectId = f.object.identity.objectId;
+    mocks.automatic.mockResolvedValue({ status: 'automatic-ready', candidateObjectIds: [objectId], objectId, point: [...point] });
+    mocks.automatic.mockClear();
+    return { ...f, point, objectId };
+  }
+  it.each([false, true])('reconnects saved coordinates even without an old display command (missing ledger=%s)', async missingLedger => {
+    const f = await savedFixture(); if (missingLedger) f.state.commands.clear();
+    const before = structuredClone(f.state), c = await f.read(), other = await f.read(id(11), 'to');
+    expect(c.confirmedDisplaySelection).toMatchObject({ sdkObjectId: f.object.identity.dbId, name: f.object.historicalModel.name,
+      pointProjectMetres: f.point, bindingId: c.head!.id, bindingContentSha256: c.head!.contentSha256,
+      reconnection: { kind: 'current-named-object', logicalName: 'EQUIPMENT', object: f.ref, objectPointProjectMetres: f.point } });
+    expect(c.confirmedDisplaySelection).not.toHaveProperty('commandSha256');
+    expect(other.confirmedDisplaySelection).toEqual(c.confirmedDisplaySelection);
+    expect(c.automaticSelection).toBe(null); expect(c.confirmedSelection).toBe(null);
+    expect(c.contextSha256).toBe(endpointBindingHash(cableEndpointContextHashInput(c)));
+    expect(f.state).toEqual(before);
+  });
+  it.each(['missing', 'ambiguous', 'object-unverified', 'preparation-required'])('keeps the saved point without reconnecting a %s match', async status => {
+    const f = await savedFixture(); mocks.automatic.mockResolvedValue({ status, candidateObjectIds: [], objectId: null, point: null });
+    const c = await f.read(); expect(c.head!.pointProjectMetres).toEqual(f.point); expect(c.confirmedDisplaySelection).toBe(null);
+  });
+  it('allows numerical noise without moving the saved point', async () => {
+    const f = await savedFixture(), moved = [...f.point] as [number, number, number]; moved[0] += 1e-7;
+    mocks.automatic.mockResolvedValue({ status: 'automatic-ready', candidateObjectIds: [f.objectId], objectId: f.objectId, point: moved });
+    mocks.selection.mockImplementation(async (_client, input) => ({ status: 'available', object: f.ref, pointProjectMetres: moved, current: input.current }));
+    const c = await f.read(); expect(c.confirmedDisplaySelection?.sdkObjectId).toBe(f.object.identity.dbId);
+    expect(c.head!.pointProjectMetres).toEqual(f.point); expect(c.confirmedDisplaySelection!.pointProjectMetres).toEqual(f.point);
+  });
+  it.each(['moved', 'duplicate', 'selection-unavailable', 'selection-point', 'selection-trace'])('refuses %s recovery evidence', async fault => {
+    const f = await savedFixture();
+    if (fault === 'moved') mocks.automatic.mockResolvedValue({ status: 'automatic-ready', candidateObjectIds: [f.objectId], objectId: f.objectId, point: f.point.map(p => p + .01) });
+    if (fault === 'duplicate') mocks.automatic.mockResolvedValue({ status: 'automatic-ready', candidateObjectIds: [f.objectId, 'dbid:999'], objectId: f.objectId, point: f.point });
+    if (fault.startsWith('selection-')) mocks.selection.mockResolvedValue({ status: fault === 'selection-unavailable' ? 'unavailable' : 'available',
+      object: { ...f.ref, ...(fault === 'selection-trace' ? { traceId: id(999) } : {}) },
+      pointProjectMetres: fault === 'selection-point' ? [99, 99, 99] : f.point });
+    const c = await f.read(); expect(c.confirmedDisplaySelection).toBe(null); expect(c.head!.pointProjectMetres).toEqual(f.point);
+  });
+  it('keeps an explicit current parent hint instead of searching for a different named object', async () => {
+    const f = await savedFixture(), input = f.command(await f.read());
+    input.selection = { mode: 'fixed-world', pointProjectMetres: [...f.point], derivation: 'manual-world-point', displaySdkObjectId: 900, displayObjectName: '/Selected parent' };
+    await f.save(input); mocks.automatic.mockClear();
+    expect((await f.read()).confirmedDisplaySelection?.sdkObjectId).toBe(900); expect(mocks.automatic).not.toHaveBeenCalled();
   });
 });

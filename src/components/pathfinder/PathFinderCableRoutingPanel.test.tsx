@@ -218,6 +218,28 @@ describe('showing the popup From/To locations without changing them', () => {
     expect(show).toHaveBeenCalledExactlyOnceWith(444, sdkObjectIds);
     expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
   });
+  it('shows a saved From object reconnected during the context read without making an unsaved assignment', async () => {
+    const saved = context('from', 'confirmed'), p = props();
+    assignment.from.context = cableEndpointContextSchema.parse({ ...saved, confirmedSelection: null,
+      head: { ...saved.head!, mode: 'fixed-world', sourceObject: null, attachment: null, derivation: 'manual-world-point' },
+      confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 444,
+        name: 'Reconnected Panel 001', pointProjectMetres: saved.head!.pointProjectMetres, current: saved.current!,
+        bindingId: saved.head!.id, bindingContentSha256: saved.head!.contentSha256,
+        reconnection: { kind: 'current-named-object', logicalName: saved.location!.name,
+          object: { traceId: saved.current!.traceId, objectRevisionId: id(90), recordSha256: 'e'.repeat(64) },
+          objectPointProjectMetres: saved.head!.pointProjectMetres } } });
+    const show = vi.fn(async () => true); render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    expect((screen.getByRole('textbox', { name: 'From assigned model object' }) as HTMLTextAreaElement).value).toContain('Reconnected Panel 001');
+    expect(screen.getByText('Saved shared location.')).toBeVisible();
+    expect(screen.queryByText('Automatically matched — confirm with Save.')).toBeNull();
+    expect(screen.queryByText('Selected — not saved.')).toBeNull();
+    const button = screen.getByRole('button', { name: 'Show From location' });
+    expect(button).toBeEnabled(); await act(async () => { fireEvent.click(button); });
+    expect(show).toHaveBeenCalledExactlyOnceWith(444);
+    expect(assignment.from.selectObject).not.toHaveBeenCalled(); expect(assignment.to.selectObject).not.toHaveBeenCalled();
+    expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
+    expect(p.onTogglePath).not.toHaveBeenCalled(); expect(p.access.onSaved).not.toHaveBeenCalled();
+  });
   it('does not show an invalid partial or reordered saved location group', () => {
     const saved = context('to', 'confirmed');
     assignment.to.context = { ...saved, confirmedSelection: null, confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world',

@@ -23,18 +23,25 @@ export const cableEndpointAutomaticSelectionSchema = z.object({ source: z.litera
 export const cableEndpointConfirmedSelectionSchema = cableEndpointAutomaticSelectionSchema.omit({ source: true, confirmed: true }).extend({
   source: z.literal('confirmed'), confirmed: z.literal(true),
 }).strict();
-/** A display hint is not retained geometry, an attachment or automatic matching authority. */
+/** Ledger hints and verified current-name reconnections supply presentation
+ * only. A reconnection retains its own proof instead of inventing a command. */
 export const cableEndpointConfirmedDisplaySelectionSchema = z.object({ source: z.literal('confirmed-display-only'), mode: z.literal('fixed-world'),
   sdkObjectId: cableEndpointSdkObjectIdSchema, name: cableEndpointDisplayObjectNameSchema.optional(), pointProjectMetres: endpointPointSchema,
   sdkObjectIds: z.array(cableEndpointSdkObjectIdSchema).min(2).max(ENDPOINT_MODEL_MATCH_OBJECT_LIMIT).refine(ids => ids.every((id, i) => i === 0 || ids[i - 1] < id)).optional(),
   preservedMatchObjectGroup: endpointModelMatchObjectGroupSchema.optional(),
-  current: endpointCurrentScopeSchema, bindingId: policyUuidSchema, bindingContentSha256: policyHashSchema, commandSha256: policyHashSchema }).strict()
+  current: endpointCurrentScopeSchema, bindingId: policyUuidSchema, bindingContentSha256: policyHashSchema,
+  commandSha256: policyHashSchema.optional(),
+  reconnection: z.object({ kind: z.literal('current-named-object'), logicalName: endpointLocationNameSchema,
+    object: endpointObjectRefSchema, objectPointProjectMetres: endpointPointSchema }).strict().optional() }).strict()
+  .refine(value => (value.commandSha256 !== undefined) !== (value.reconnection !== undefined))
+  .refine(value => !value.reconnection || (value.reconnection.object.traceId === value.current.traceId
+    && !value.sdkObjectIds && !value.preservedMatchObjectGroup
+    && Math.hypot(...value.reconnection.objectPointProjectMetres.map((p, axis) => p - value.pointProjectMetres[axis])) <= 1e-6))
   .refine(value => !value.sdkObjectIds || value.sdkObjectIds[0] === value.sdkObjectId)
   .refine(value => !value.preservedMatchObjectGroup
     || canonicalPurposeJson(value.sdkObjectIds ?? null) === canonicalPurposeJson(value.preservedMatchObjectGroup.objectIds));
 
-/** A complete Find/assign scan may restore presentation for a preserved manual
- * point without changing its coordinates or making it follow the source item. */
+/** Preserve exact source-item groups for ledger and scan display evidence. */
 export function cableEndpointDisplayMatchesSourceGroup(display: z.infer<typeof cableEndpointConfirmedDisplaySelectionSchema>,
   head: z.infer<typeof endpointBindingSchema> | null | undefined): boolean {
   if (display.preservedMatchObjectGroup) return Boolean(head && !head.autoMatchEvidence
@@ -67,6 +74,9 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     || canonicalPurposeJson(value.confirmedSelection.pointProjectMetres) !== canonicalPurposeJson(value.head.pointProjectMetres)))
     context.addIssue({ code: 'custom', message: 'Confirmed model display belongs to the exact current object-derived head.' });
   const display = value.confirmedDisplaySelection;
+  if (display?.reconnection && (!value.location || ![value.location.name, ...value.location.aliases]
+    .some(name => name.normalize('NFC').trim().toUpperCase() === display.reconnection!.logicalName.normalize('NFC').trim().toUpperCase())))
+    context.addIssue({ code: 'custom', message: 'A reconnected object matches a name of this shared location.' });
   if (display && !cableEndpointDisplayMatchesSourceGroup(display, value.head))
     context.addIssue({ code: 'custom', message: 'Grouped display IDs retain the exact confirmed source-item members.' });
   if (display && (!value.canBind || !value.current || !value.head || !value.location || value.head.status !== 'confirmed'

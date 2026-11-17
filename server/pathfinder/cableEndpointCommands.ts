@@ -5,6 +5,7 @@ import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderP
 import { CABLE_ENDPOINT_LIMITS, cableEndpointCommandSchema, cableEndpointContextHashInput, cableEndpointContextSchema,
   cableEndpointEndSchema, cableEndpointImpactSchema, cableEndpointReceiptSchema, cableEndpointRecoverySchema,
   cableEndpointClosedSchema, cableEndpointSdkObjectIdSchema, cableEndpointSelectionResponseSchema,
+  cableEndpointConfirmedDisplaySelectionSchema, cableEndpointDisplayObjectNameSchema,
   type CableEndpointCommand, type CableEndpointContext } from '../../shared/pathfinderCableEndpoints.js';
 import { ENDPOINT_ANCHOR_RULE, endpointBindingSchema, endpointLocationNameSchema, endpointLocationSchema, type EndpointObjectRef } from '../../shared/pathfinderEndpointBindings.js';
 import { assertLoginNotExpired } from './auth.js';
@@ -139,8 +140,34 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
         confirmedSelection = { source: 'confirmed', ...display, object: selected.object, pointProjectMetres: head.pointProjectMetres, approximate: true, confirmed: true };
     }
   }
-  const confirmedDisplaySelection = head && location && current && reasons.length === 0
+  let confirmedDisplaySelection = head && location && current && reasons.length === 0
     ? await readCableEndpointDisplay(client, { projectId, head, location, current }, check) : null;
+  // Reconnect presentation from current retained geometry, without replacing a
+  // saved point or turning the match into an unsaved automatic assignment.
+  if (!confirmedDisplaySelection && head?.status === 'confirmed' && head.mode === 'fixed-world'
+    && head.sourceObject === null && head.attachment === null && !head.autoMatchEvidence?.objectGroup
+    && location && head.locationRevision === location.revision && current && reasons.length === 0
+    && head.modelVersionId === current.modelVersionId && head.aggregateId === current.aggregateId
+    && head.artifactId === current.artifactId && head.projectionSha256 === current.projectionSha256
+    && head.captureFrameId === current.captureFrameId) {
+    const candidate = await readAutomaticNamedEndpointCandidate(client, { projectId, current, name: location.name }); check();
+    const sdkObjectId = candidate.objectId?.startsWith('dbid:') ? Number(candidate.objectId.slice(5)) : null;
+    if (candidate.status === 'automatic-ready' && candidate.candidateObjectIds.length === 1
+      && candidate.candidateObjectIds[0] === candidate.objectId && cableEndpointSdkObjectIdSchema.safeParse(sdkObjectId).success
+      && candidate.point && Math.hypot(...candidate.point.map((p, axis) => p - head!.pointProjectMetres[axis])) <= 1e-6) {
+      const selected = await readCableEndpointSelection(client, { projectId, current, sdkObjectId: sdkObjectId! }, check);
+      if (selected.status === 'available' && selected.object?.traceId === current.traceId
+        && canonicalPurposeJson(selected.pointProjectMetres) === canonicalPurposeJson(candidate.point)) {
+        const display = await objectDisplay(client, projectId, selected.object, check);
+        if (display?.sdkObjectId === sdkObjectId) confirmedDisplaySelection = cableEndpointConfirmedDisplaySelectionSchema.parse({
+          source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId,
+          ...(cableEndpointDisplayObjectNameSchema.safeParse(display.name).success ? { name: display.name } : {}),
+          pointProjectMetres: head.pointProjectMetres, current, bindingId: head.id, bindingContentSha256: head.contentSha256,
+          reconnection: { kind: 'current-named-object', logicalName: location.name, object: selected.object, objectPointProjectMetres: candidate.point },
+        });
+      }
+    }
+  }
   const draft = cableEndpointContextSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-context.v1', projectId, cableId, end,
     cableWriteRevision: cable.cable_write_revision, logicalName, logicalKey, mto: cable.mto, canBind: reasons.length === 0,
     reasonCodes: reasons, registryRevision: registry.revision, location, head, current, automaticSelection, confirmedSelection,

@@ -95,6 +95,19 @@ describe('strict cable endpoint command and display contracts', () => {
     for (const sdkObjectIds of [undefined, [42, 43], [42, 43, 44, 46], [43, 42, 44, 45]])
       expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...hint, sdkObjectIds }).success).toBe(false);
   });
+  it('requires independent current object evidence for an automatic display reconnection', () => {
+    const hint = { source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 42, pointProjectMetres: [1, 2, 3],
+      current, bindingId: id(9), bindingContentSha256: 'b'.repeat(64),
+      reconnection: { kind: 'current-named-object', logicalName: 'Equipment',
+        object: { traceId: current.traceId, objectRevisionId: id(10), recordSha256: 'd'.repeat(64) }, objectPointProjectMetres: [1, 2, 3] } };
+    expect(cableEndpointConfirmedDisplaySelectionSchema.parse(hint)).toEqual(hint);
+    for (const altered of [
+      { ...hint, reconnection: undefined }, { ...hint, commandSha256: 'c'.repeat(64) },
+      { ...hint, sdkObjectIds: [42, 43] },
+      { ...hint, reconnection: { ...hint.reconnection, objectPointProjectMetres: [1, 2, 3.001] } },
+      { ...hint, reconnection: { ...hint.reconnection, object: { ...hint.reconnection.object, traceId: id(99) } } },
+    ]) expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse(altered).success).toBe(false);
+  });
   it('v3 requires an explicit nullable policy while a policy cannot silently promote older commands', () => {
     const v2 = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null };
     expect(cableEndpointCommandSchema.safeParse({ ...v2, schemaVersion: 'wfc.pf.cable-endpoint-command.v3' }).success).toBe(false);
