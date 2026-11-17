@@ -150,7 +150,8 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
   const show = async (trayId: string) => {
     if (!context || disabled || reading || !modelCurrent || pending.current || pendingDisplay.current) return;
     const target = trayDisplayTarget({ trayId, context, plan, discovery });
-    if (!target.objectIds.length) return;
+    const tray = context.trays.find(item => item.projectTrayId === trayId);
+    if (!tray?.geometrySource && !target.objectIds.length) return;
     const currentOwner = latestOwner.current, scope = { ...context.scope }, scopeKey = JSON.stringify(scope), ticket = {};
     const current = () => pendingDisplay.current === ticket && latestOwner.current === currentOwner
       && JSON.stringify(latestScope.current) === scopeKey;
@@ -159,7 +160,9 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     ownedPeek.current = peek;
     pendingDisplay.current = ticket; setShowError(null); setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: 'showing' });
     try {
-      const shown = await pf.showTray(scope, [...target.objectIds]);
+      const shown = tray?.geometrySource
+        ? await pf.showCadTray(scope, trayId, tray.cadRouteGroupId)
+        : await pf.showTray(scope, [...target.objectIds]);
       if (current()) {
         if (!shown) {
           ownedPeek.current = previousPeek ?? peek;
@@ -284,7 +287,8 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
         {filtered.map(tray => {
           const isAssigned = assigned(tray.projectTrayId);
           const target = trayDisplayTarget({ trayId: tray.projectTrayId, context, plan, discovery });
-          const unavailable = tray.geometrySource==='published-cad-route' ? 'This tray is assigned to its published geometry. Use Draw trays to show it.' : tray.geometrySource==='saved-cad-route'?'Use Draw trays to show or publish this saved CAD route. No model object assignment is needed.':!modelCurrent ? 'Load the matching model before showing this tray.' : target.message;
+          const unavailable = !modelCurrent ? 'Load the matching model before showing this tray.' : tray.geometrySource === 'saved-cad-route'
+            ? 'Saved CAD route. Use Draw trays to add it to the routing network.' : tray.geometrySource ? null : target.message;
           const showing = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'showing';
           const hiding = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'hiding';
           const canHide = currentDisplay?.trayId === tray.projectTrayId && ['shown', 'hiding', 'hide-failed'].includes(currentDisplay.status);
@@ -294,7 +298,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
             color: isAssigned ? undefined : tokens.colorPaletteYellowForeground2,
             borderRadius: 6, padding: 12, minWidth: 0, overflowWrap: 'anywhere' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-            <h4 style={{ margin: '0 0 8px' }}>{tray.rawName}</h4>
+            <h4 style={{ margin: '0 0 8px' }}>{modelCurrent && tray.inNetwork === true ? <span role="img" aria-label="Included in calculation network" title="Included in calculation network" style={{ color: tokens.colorPaletteGreenForeground1, marginRight: 6 }}>✓</span> : null}{tray.rawName}</h4>
             <span>{tray.geometrySource==='saved-cad-route'?'Saved CAD geometry':isAssigned ? 'Assigned' : 'Not assigned'}</span>
           </div>
           {isAssigned ? <dl style={{ display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', gap: '4px 8px', margin: '0 0 12px' }}>
@@ -308,7 +312,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
               : 'Routing permitted' : tray.policyState === 'excluded' ? 'Excluded from routing' : 'Set routing permissions in Project Details'}
           </p>
           {blockers.filter(issue => issue.trayIds.includes(tray.projectTrayId)).map(issue => <p key={issue.code} style={{ color: tokens.colorPaletteRedForeground1, marginBlock: 8 }}>{issue.message}</p>)}
-          <Button disabled={disabled || Boolean(reading) || displayPending || !modelCurrent || (!canHide && (Boolean(tray.geometrySource) || !target.objectIds.length))}
+          <Button disabled={disabled || Boolean(reading) || displayPending || !modelCurrent || (!canHide && !tray.geometrySource && !target.objectIds.length)}
             aria-label={`${canHide ? 'Hide' : 'Show'} tray ${tray.rawName}`} onClick={() => void (canHide ? hide(tray.projectTrayId) : show(tray.projectTrayId))}
             style={{ width: '100%', whiteSpace: 'normal', marginBottom: 8 }}>
             {showing ? 'Showing tray…' : hiding ? 'Hiding tray…' : canHide ? 'Hide' : 'Show tray'}

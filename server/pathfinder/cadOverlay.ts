@@ -28,10 +28,10 @@ export function automaticCadOverlayView(value:unknown){
 /** Additive provenance: the old immutable artifact is never restamped with new tokens.
  * Every non-CAD catalog row must still have the exact originally prepared projection. */
 export async function readCadOverlay(client: PoolClient, projectId: string, artifactId: string,
-  snapshotSha256: string, modelVersionId: string, prepared: RoutingScope, current: RoutingScope): Promise<CadOverlayEnvelope | 'retired-base-proof' | null> {
+  snapshotSha256: string, modelVersionId: string, prepared: RoutingScope, current: RoutingScope, options: {lock?:boolean} = {}): Promise<CadOverlayEnvelope | 'retired-base-proof' | null> {
   if (!cadDesignEnabled()) return null;
   const groups = await client.query<{status:string;project_tray_id:string|null;publication:unknown}>(
-    `SELECT status,project_tray_id,publication FROM cad_route_groups WHERE project_id=$1 AND publication IS NOT NULL ORDER BY id FOR SHARE`,[projectId]);
+    `SELECT status,project_tray_id,publication FROM cad_route_groups WHERE project_id=$1 AND publication IS NOT NULL ORDER BY id${options.lock===false?'':' FOR SHARE'}`,[projectId]);
   if (!groups.rows.length) return null;
   const active=groups.rows.filter(row=>row.status==='published');
   const retired=groups.rows.filter(row=>row.status==='draft'&&(row.publication as {baseArtifactId?:string})?.baseArtifactId===artifactId);
@@ -41,7 +41,7 @@ export async function readCadOverlay(client: PoolClient, projectId: string, arti
   // Only rows created by this publication are an additive catalogue delta.
   const additions=active.filter(row=>(row.publication as {trayInBaseCatalog?:boolean})?.trayInBaseCatalog!==true).map(row=>row.project_tray_id!);
   const actualTrays = (await client.query<{id:string;name:string;purpose:string|null;tray_type:string|null;width_mm:string|number|null;height_mm:string|number|null;length_mm:string|number|null}>(
-    'SELECT id::text,name,purpose,tray_type,width_mm,height_mm,length_mm FROM trays WHERE project_id=$1 AND id=ANY($2::uuid[]) ORDER BY id FOR SHARE',[projectId,owned])).rows;
+    `SELECT id::text,name,purpose,tray_type,width_mm,height_mm,length_mm FROM trays WHERE project_id=$1 AND id=ANY($2::uuid[]) ORDER BY id${options.lock===false?'':' FOR SHARE'}`,[projectId,owned])).rows;
   for (const group of active) {
     const saved=(group.publication as {traySnapshot?:{id:string;name:string;purpose:string;trayType:string;widthMm:number;heightMm:number;lengthMm:number}})?.traySnapshot;
     const actual=actualTrays.find(row=>row.id===group.project_tray_id);

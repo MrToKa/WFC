@@ -47,10 +47,10 @@ export function equalRoutingScope(a: RoutingScope, b: RoutingScope): boolean {
 }
 
 /** Called under the normal project mutex; current policy locks stay held until commit. */
-export async function requirePreparedRoutingScope(client: PoolClient, projectId: string, artifactId: string): Promise<RoutingScope> {
-  const current = routingScopeSchema.parse(await readRoutingPolicyScope(client, projectId));
+export async function requirePreparedRoutingScope(client: PoolClient, projectId: string, artifactId: string, options: {lock?:boolean} = {}): Promise<RoutingScope> {
+  const current = routingScopeSchema.parse(await readRoutingPolicyScope(client, projectId, options));
   const row = (await client.query<{producer_version: string; routing_scope: unknown}>(
-    'SELECT producer_version,routing_scope FROM pf_artifact_routing_scopes WHERE project_id=$1 AND artifact_id=$2 FOR SHARE',
+    `SELECT producer_version,routing_scope FROM pf_artifact_routing_scopes WHERE project_id=$1 AND artifact_id=$2${options.lock===false?'':' FOR SHARE'}`,
     [projectId, artifactId])).rows[0];
   const prepared = routingScopeSchema.safeParse(row?.routing_scope);
   if (!row || row.producer_version !== 'pathfinder.catalog-preparation.v1' || !prepared.success || prepared.data.cadOverlay)
@@ -61,7 +61,7 @@ export async function requirePreparedRoutingScope(client: PoolClient, projectId:
       'SELECT snapshot_sha256,model_version_id FROM pf_artifacts WHERE project_id=$1 AND id=$2',[projectId,artifactId])).rows[0];
     if (!artifact) throw new PathFinderError('PREPARATION_CURRENT_INTEGRITY',409);
     const { readCadOverlay } = await import('./cadOverlay.js');
-    const cadOverlay = await readCadOverlay(client,projectId,artifactId,artifact.snapshot_sha256,artifact.model_version_id,prepared.data,current);
+    const cadOverlay = await readCadOverlay(client,projectId,artifactId,artifact.snapshot_sha256,artifact.model_version_id,prepared.data,current,options);
     if (cadOverlay==='retired-base-proof') return current;
     if (cadOverlay) return {...current,cadOverlay};
   }

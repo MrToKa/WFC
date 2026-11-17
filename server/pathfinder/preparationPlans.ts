@@ -1,5 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
+import { requirePreparedRoutingScope } from './routingScope.js';
+import { cadOverlayPayloadSchema } from '../../shared/pathfinderCadOverlay.js';
+import { GEOMETRY_TRACE_DERIVATION, geometryTraceManifestSchema } from '../../shared/pathfinderGeometryTrace.js';
 import { cadDesignEnabled } from '../cadDesign/configuration.js';
 import { canonicalPurposeJson, normalizeCatalogKey, routingCatalogDiagnostics, PURPOSE_POLICY_LIMITS } from '../../shared/pathfinderPurposePolicy.js';
 import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, preparationResolutionMatchesScope, preparationResolutionSchema, type PreparationContext, type PreparationCreate, type PreparationPlan, preparationAggregateSchema, type PreparationScope } from '../../shared/pathfinderPreparation.js';
@@ -45,14 +48,18 @@ export async function readPreparationContext(c: PoolClient, projectId: string, o
   const catalog = await readRoutingCatalog(c, projectId,{lock}), routing = await readRoutingPolicyScope(c, projectId,{lock});
   // Current display facts are intentionally separate from the routing catalog's
   // null dimension placeholders, immutable plans and drawing proof budgets.
-  const detailRows = (await c.query<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown; cad_geometry?:boolean; cad_published?:boolean }>(
+  const detailRows = (await c.query<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown; cad_geometry?:boolean; cad_published?:boolean; cad_route_group_id?:string|null }>(
     cadDesignEnabled()?`/* preparation-tray-details */ SELECT t.id::text,t.tray_type,t.width_mm::text,t.height_mm::text,
       EXISTS(SELECT 1 FROM cad_route_tray_exports e JOIN cad_designs d ON d.project_id=e.project_id AND d.id=e.design_id
         JOIN cad_route_groups g ON g.project_id=e.project_id AND g.design_id=e.design_id AND g.id=e.route_group_id
         WHERE e.project_id=t.project_id AND e.tray_id=t.id AND d.model_version_id=$2 AND d.status='proposed') AS cad_geometry,
       EXISTS(SELECT 1 FROM cad_route_groups g JOIN cad_designs d ON d.project_id=g.project_id AND d.id=g.design_id
         WHERE g.project_id=t.project_id AND g.project_tray_id=t.id AND g.status='published'
-          AND d.model_version_id=$2 AND d.status='proposed') AS cad_published
+          AND d.model_version_id=$2 AND d.status='proposed') AS cad_published,
+      COALESCE((SELECT g.id::text FROM cad_route_groups g JOIN cad_designs d ON d.project_id=g.project_id AND d.id=g.design_id
+        WHERE g.project_id=t.project_id AND g.project_tray_id=t.id AND g.status='published' AND d.model_version_id=$2 AND d.status='proposed' ORDER BY g.id LIMIT 1),
+        (SELECT e.route_group_id::text FROM cad_route_tray_exports e JOIN cad_designs d ON d.project_id=e.project_id AND d.id=e.design_id
+        WHERE e.project_id=t.project_id AND e.tray_id=t.id AND d.model_version_id=$2 AND d.status='proposed' ORDER BY e.route_group_id LIMIT 1)) AS cad_route_group_id
       FROM trays t WHERE t.project_id=$1 ORDER BY t.id LIMIT 100001`:
       '/* preparation-tray-details */ SELECT id::text,tray_type,width_mm::text,height_mm::text FROM trays WHERE project_id=$1 ORDER BY id LIMIT 100001',
       cadDesignEnabled()?[projectId,model.active_model_version_id]:[projectId])).rows;
@@ -60,6 +67,7 @@ export async function readPreparationContext(c: PoolClient, projectId: string, o
   const detailsById = new Map(detailRows.map(row => [row.id, { type: presentationType(row.tray_type),
     widthMm: presentationMillimetres(row.width_mm), heightMm: presentationMillimetres(row.height_mm) }]));
   const publishedCadTrayIds = new Set(detailRows.filter(row => row.cad_published === true).map(row => row.id));
+  const cadGroupsByTrayId = new Map(detailRows.map(row => [row.id, row.cad_route_group_id]));
   const cadTrayIds=new Set(detailRows.filter(row=>row.cad_geometry===true).map(row=>row.id));
   const state = await readPreparationState(c, projectId,{lock});
   const registry = (await c.query<{ revision: string }>(`SELECT registry_revision::text AS revision FROM pf_project_state WHERE project_id=$1${lock?' FOR UPDATE':''}`, [projectId])).rows[0];
@@ -80,6 +88,7 @@ export async function readPreparationContext(c: PoolClient, projectId: string, o
     const allowedCategories: Array<'MV' | 'LV' | 'Control'> | undefined = rule
       ? Array.isArray(rule.allowed_categories) && rule.allowed_categories.length ? ['MV', 'LV', 'Control'] : [] : undefined;
     return { projectTrayId: row.projectTrayId, rawName: row.rawName, purposeKey: row.purposeKey, routeName, allowedCategories: allowedCategories ?? [], policyState: codes.length ? 'invalid' as const : !rule ? 'unconfigured' as const : allowedCategories?.length ? 'configured' as const : 'excluded' as const, diagnosticCodes: codes,
+      ...(cadGroupsByTrayId.get(row.projectTrayId) ? {cadRouteGroupId: cadGroupsByTrayId.get(row.projectTrayId)!} : {}),
       details: detailsById.get(row.projectTrayId) ?? { type: null, widthMm: null, heightMm: null },
       ...(publishedCadTrayIds.has(row.projectTrayId) ? { geometrySource: 'published-cad-route' as const }
         : cadTrayIds.has(row.projectTrayId) ? { geometrySource: 'saved-cad-route' as const } : {}) };
@@ -93,8 +102,48 @@ export async function readPreparationContext(c: PoolClient, projectId: string, o
   const trayAssignmentCarryover = await loadTrayAssignmentCarryover(c, projectId, scope, resolutions);
   const aggregate = state.current_aggregate_id ? (await c.query<{ manifest: unknown }>('SELECT manifest FROM pf_preparation_aggregates WHERE project_id=$1 AND id=$2', [projectId, state.current_aggregate_id])).rows[0]?.manifest ?? null : null;
   const currentAggregate=aggregate===null?null:preparationAggregateSchema.parse(aggregate);
+  const networkTrayIds = await readPreparationNetworkTrayIds(c, projectId, scope, currentAggregate, lock);
+  for (const tray of trays) Object.assign(tray, {inNetwork: networkTrayIds.has(tray.projectTrayId)});
   return preparationContextSchema.parse({ schemaVersion: currentAggregate?.schemaVersion==='wfc.pf.geometry-aggregate.v2'?'wfc.pf.preparation-context.v2':'wfc.pf.preparation-context.v1', projectId, scope, trays, endpointNames, resolutions, diagnostics: catalog.diagnostics, currentAggregate,
     ...(trayAssignmentCarryover.length ? { trayAssignmentCarryover } : {}) });
+}
+
+/** Membership follows fitted base geometry and the validated additive CAD overlay. */
+export async function readPreparationNetworkTrayIds(c: PoolClient, projectId: string, scope: PreparationScope,
+  aggregate: PreparationContext['currentAggregate'], lock: boolean): Promise<Set<string>> {
+  const result = new Set<string>();
+  if (!aggregate || aggregate.projectId !== projectId || aggregate.modelVersionId !== scope.modelVersionId
+    || aggregate.contentFingerprint !== scope.contentFingerprint || aggregate.selectionRevision !== scope.selectionRevision
+    || aggregate.resolutionRevision !== scope.resolutionRevision) return result;
+  let routing;
+  try { routing = await requirePreparedRoutingScope(c, projectId, aggregate.artifactId, {lock}); }
+  catch (error) {
+    if (error instanceof PathFinderError && ['ROUTING_PREPARATION_REQUIRED', 'CAD_ROUTE_CATALOG_CHANGED', 'CAD_ROUTE_BASE_CHANGED', 'PREPARATION_CURRENT_INTEGRITY'].includes(error.code)) return result;
+    throw error;
+  }
+  const traceRow = (await c.query<{id:string;manifest:unknown}>(`/* preparation-network-trace */ SELECT id,manifest FROM pf_geometry_trace_sets
+    WHERE project_id=$1 AND aggregate_id=$2 AND derivation_version=$3 ORDER BY created_at DESC,id DESC LIMIT 1`,
+    [projectId, aggregate.id, GEOMETRY_TRACE_DERIVATION])).rows[0];
+  if (!traceRow) return result;
+  const trace = geometryTraceManifestSchema.parse(traceRow.manifest);
+  if (trace.id !== traceRow.id || trace.projectId !== projectId || trace.aggregateId !== aggregate.id || trace.modelVersionId !== aggregate.modelVersionId
+    || trace.derivationVersion !== GEOMETRY_TRACE_DERIVATION || trace.counts.objects !== aggregate.counts.objects
+    || trace.counts.segments !== aggregate.counts.physicalLeaves
+    || trace.sessionId !== aggregate.sessionId || trace.geometryRevision !== aggregate.geometryRevision
+    || trace.projection.sha256 !== aggregate.projection.sha256 || trace.projection.payloadRef !== aggregate.projection.payloadRef
+    || trace.projection.bytes !== aggregate.projection.bytes || trace.captureFrameId !== aggregate.coordinateFrameId) return result;
+  const members = (await c.query<{project_tray_id:string}>(`/* preparation-network-members */ SELECT DISTINCT project_tray_id::text FROM pf_geometry_object_revisions
+    WHERE project_id=$1 AND trace_id=$2 AND project_tray_id IS NOT NULL AND record->'geometry'->>'role'='routing-leaf'
+      AND record->'geometry'->'fitted' IS NOT NULL AND record->'geometry'->'fitted'<>'null'::jsonb`, [projectId, traceRow.id])).rows;
+  for (const member of members) result.add(member.project_tray_id);
+  if (routing.cadOverlay) {
+    const payload = cadOverlayPayloadSchema.parse(JSON.parse(Buffer.from(routing.cadOverlay.payloadBase64, 'base64').toString('utf8')));
+    const groupIds = payload.segments.map(segment => segment.id.replace(/^cad:/, ''));
+    const groups = (await c.query<{project_tray_id:string}>(`/* preparation-network-cad-members */ SELECT project_tray_id::text FROM cad_route_groups
+      WHERE project_id=$1 AND id=ANY($2::uuid[]) AND status='published' AND project_tray_id IS NOT NULL`, [projectId, groupIds])).rows;
+    for (const group of groups) result.add(group.project_tray_id);
+  }
+  return result;
 }
 
 export function buildPreparationPlan(context: PreparationContext, input: PreparationCreate, id: string = randomUUID(), capacityProfile: PreparationCapacityProfile = LEGACY_PREPARATION_CAPACITY_PROFILE): PreparationPlan {

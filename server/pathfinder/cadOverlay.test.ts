@@ -33,6 +33,11 @@ describe('immutable CAD overlay and additive base-network scope',()=>{
     expect(independent.segments[0].independent).toBe(true);expect(independent.schemaVersion).toBe('wfc.pf.cad-overlay-payload.v2');
     expect(result).not.toEqual(encodeCadOverlay(independent));
   });
+  it('validates the same CAD inclusion from a coherent status snapshot without row locks',async()=>{
+    vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');const db=fake([group()]);
+    expect(await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current,{lock:false})).toEqual(encodeCadOverlay(automaticCadOverlayView(payload)));
+    expect(db.query.mock.calls.every(([sql])=>!String(sql).includes('FOR SHARE'))).toBe(true);
+  });
   it('makes bytes, hash, and orientation/length changes part of the immutable envelope',()=>{
     const first=encodeCadOverlay(payload),second=encodeCadOverlay({...payload,segments:[{...payload.segments[0],pointsMetres:[[0,0,0],[0,0,2]]}]});
     expect(first.sha256).not.toBe(second.sha256);

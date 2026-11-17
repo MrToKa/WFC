@@ -26,7 +26,7 @@ function setup() {
   const showTray = vi.fn(async () => true);
   const hideTray = vi.fn(async () => true);
   const pf = { preparationAccess: { projectId: state.context.projectId, token: 'test-token' }, data: { activeModel: { ...state.context.scope } }, preparationViewerGeneration: 1, viewerPhase: 'ready', busy: false,
-    showTray, hideTray, runProjectPreparation: vi.fn(async (_scope, operation) => operation({ readTrayRootSelection: read, readSelection: readMetadata })) } as unknown as ReturnType<typeof usePathFinder>;
+    showTray, showCadTray: vi.fn(async () => true), hideTray, runProjectPreparation: vi.fn(async (_scope, operation) => operation({ readTrayRootSelection: read, readSelection: readMetadata })) } as unknown as ReturnType<typeof usePathFinder>;
   vi.mocked(useProjectPreparation).mockReturnValue(state as unknown as ReturnType<typeof useProjectPreparation>);
   return { state, pf, read, readMetadata, showTray, hideTray, tray: state.context.trays[0] };
 }
@@ -39,6 +39,26 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => {}); });
 
 describe('simple project tray preparation', () => {
+  it('marks only trays verified in the calculation network and shows saved CAD routes', () => {
+    const { state, pf } = setup();
+    state.context.trays = [
+      { ...state.context.trays[0], rawName: 'BC901', geometrySource: 'published-cad-route', inNetwork: true },
+      { ...state.context.trays[0], projectTrayId: '10000000-0000-4000-8000-000000000099', rawName: 'BC902', geometrySource: 'saved-cad-route', inNetwork: false },
+    ];
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(within(screen.getByRole('article', { name: 'Tray BC901' })).getByRole('img', { name: 'Included in calculation network' })).toBeVisible();
+    expect(within(screen.getByRole('article', { name: 'Tray BC902' })).queryByRole('img')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show tray BC902' }));
+    expect(pf.showCadTray).toHaveBeenCalledWith(state.context.scope, state.context.trays[1].projectTrayId, undefined);
+  });
+  it('does not retain a network check when the loaded model changes', () => {
+    const { state, pf } = setup();
+    state.context.trays[0].inNetwork = true;
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('img', { name: 'Included in calculation network' })).toBeVisible();
+    view.rerender(<ProjectPreparationPanel pf={{ ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel!, selectionRevision: '999' } } }} active />);
+    expect(screen.queryByRole('img', { name: 'Included in calculation network' })).toBeNull();
+  });
   it('explains saved CAD geometry without requesting a fake model object assignment',()=>{
     const {state,pf}=setup();
     state.context.trays.push({...state.context.trays[0],projectTrayId:'10000000-0000-4000-8000-000000000099',rawName:'CAD001',routeName:'/CAD001',geometrySource:'saved-cad-route'});
@@ -60,7 +80,9 @@ describe('simple project tray preparation', () => {
     expect(within(card).getByText('300 × 77 mm')).toBeVisible();
     expect(within(card).queryByText(/No model objects/)).toBeNull();
     expect(within(card).getByRole('button', { name: 'Use current model selection for BC901' })).toBeDisabled();
-    expect(within(card).getByText(/assigned to its published geometry/)).toBeVisible();
+    expect(within(card).getByRole('button', { name: 'Show tray BC901' })).toBeEnabled();
+    fireEvent.click(within(card).getByRole('button', { name: 'Show tray BC901' }));
+    expect(pf.showCadTray).toHaveBeenCalledWith(state.context.scope, state.context.trays[0].projectTrayId, undefined);
   });
   it('offers an explicit frame finish action independently of recapturing the network', () => {
     const { state, pf } = setup(); state.canFinishNetwork = true; state.networkReady = false;

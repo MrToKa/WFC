@@ -11,22 +11,25 @@ type Instance = {
   metadata?: CadSectionMetadata; route?: CadSectionRoute;
 };
 type Options = {
-  viewer: Pick<ViewerController, 'showCadComponent' | 'removeCadComponent' | 'setCadComponentColor' | 'setCadComponentProperties'>;
+  viewer: Pick<ViewerController, 'showCadComponent' | 'removeCadComponent' | 'setCadComponentColor' | 'setCadComponentProperties' | 'setCadComponentVisibility' | 'focusCadComponent'>;
   projectId: string; token: string; modelVersionId: string;
   isCurrent: () => boolean; onError: (error: unknown) => void;
 };
-export type PublishedCadDisplay = { refresh: () => Promise<void>; dispose: () => void };
+export type PublishedCadDisplay = { refresh: () => Promise<void>; showTray: (projectTrayId: string, routeGroupId?: string) => Promise<boolean>; hideTray: () => Promise<boolean>; dispose: () => void };
 
-/** Display saved published components without changing the model or its capture. */
+/** Display saved CAD route components without changing the model or its capture. */
 export function createPublishedCadDisplay({ viewer, projectId, token, modelVersionId, isCurrent, onError }: Options): PublishedCadDisplay {
   const abort = new AbortController();
   const displayed = new Map<string, string>();
   const base = `${getApiBaseUrl()}/api/projects/${encodeURIComponent(projectId)}/cad-design`;
   let pending: Promise<void> | null = null;
+  let preview: { projectTrayId: string; routeGroupId?: string } | null = null;
+  let selectedRoute: CadRouteGroup | null = null;
+  let synchronized = false;
   const current = () => !abort.signal.aborted && isCurrent();
   const read = async <T,>(path: string, optional = false): Promise<T | null> => {
     const deadline = pathFinderRequestDeadline(abort.signal, 30_000,
-      () => new Error('Loading published route geometry timed out.'));
+      () => new Error('Loading saved route geometry timed out.'));
     try {
       return await deadline.wait(async () => {
         const response = await fetch(`${base}${path}`, { signal: deadline.signal, cache: 'no-store', headers: { Authorization: `Bearer ${token}` } });
@@ -37,8 +40,10 @@ export function createPublishedCadDisplay({ viewer, projectId, token, modelVersi
     } finally { deadline.dispose(); }
   };
   const synchronize = async () => {
+    synchronized = false;
     try {
       if (!current()) return;
+      selectedRoute = null;
       const listing = await read<{ designs: { id: string; modelVersionId: string; activeModel: boolean; status: string }[] }>('/designs', true);
       if (!current()) return;
       const design = listing?.designs.find(value => value.activeModel && value.modelVersionId === modelVersionId && value.status === 'proposed');
@@ -50,11 +55,13 @@ export function createPublishedCadDisplay({ viewer, projectId, token, modelVersi
         ]);
         if (!current()) return;
         const instances = new Map(placements!.instances.map(instance => [instance.id, instance]));
-        for (const route of groups!.routes.filter(value => value.status === 'published')) {
+        selectedRoute = preview ? groups!.routes.find(value => preview!.routeGroupId
+          ? value.id === preview!.routeGroupId : value.projectTrayId === preview!.projectTrayId) ?? null : null;
+        for (const route of groups!.routes) {
           for (const id of route.instanceIds) {
             const instance = instances.get(id);
             if (!instance) {
-              onError(new Error(`Published route ${route.name} has a component missing from the saved placements.`));
+              onError(new Error(`Saved route ${route.name} has a component missing from the saved placements.`));
               continue;
             }
             members.set(id, { instance, route });
@@ -91,13 +98,46 @@ export function createPublishedCadDisplay({ viewer, projectId, token, modelVersi
           displayed.set(id, signature);
         } catch (error) { if (current()) onError(error); }
       }
+      synchronized = current();
     } catch (error) { if (current()) onError(error); }
   };
-  return {
-    refresh: () => {
+  const refresh = () => {
       if (!current()) return Promise.resolve();
       if (!pending) pending = synchronize().finally(() => { pending = null; });
       return pending;
+  };
+  return {
+    refresh,
+    showTray: async (projectTrayId, routeGroupId) => {
+      if (!current()) return false;
+      const request = { projectTrayId, routeGroupId };
+      preview = request;
+      if (pending) await pending;
+      if (!current() || preview !== request) return false;
+      await refresh();
+      const route = selectedRoute;
+      if (!synchronized || !current() || preview !== request || !route?.instanceIds.length
+        || route.instanceIds.some(id => !displayed.get(id))) return false;
+      try {
+        for (const id of route.instanceIds) {
+          if (!current() || preview !== request) return false;
+          await viewer.setCadComponentVisibility(id, true);
+        }
+        if (!current() || preview !== request) return false;
+        await viewer.focusCadComponent(route.instanceIds[0]);
+        return current() && preview === request;
+      } catch (error) { if (current()) onError(error); return false; }
+    },
+    hideTray: async () => {
+      if (!current()) return false;
+      if (!preview) return true;
+      const previous = preview;
+      preview = null;
+      if (pending) await pending;
+      if (!current() || preview !== null) return false;
+      await refresh();
+      if (!synchronized && current() && preview === null) preview = previous;
+      return synchronized && current();
     },
     dispose: () => { abort.abort(); displayed.clear(); },
   };

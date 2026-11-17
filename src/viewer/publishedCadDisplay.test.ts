@@ -25,6 +25,8 @@ function fixture() {
     routes: [route()], instances: [instance(20)],
   };
   const viewer = {
+    focusCadComponent: vi.fn().mockResolvedValue(undefined),
+    setCadComponentVisibility: vi.fn().mockResolvedValue(undefined),
     showCadComponent: vi.fn().mockResolvedValue(undefined),
     removeCadComponent: vi.fn().mockResolvedValue(undefined),
     setCadComponentColor: vi.fn().mockResolvedValue(undefined),
@@ -48,13 +50,119 @@ function fixture() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('published CAD geometry in Path Finder', () => {
-  it('loads only published members of the exact active model with saved transforms, cut mesh and presentation', async () => {
+  it('loads all saved draft sections automatically and shows them by authoritative group ID', async () => {
+    const f = fixture();
+    f.state.routes = [route([id(20), id(21)], 'draft')];
+    f.state.instances = [instance(20), instance(21)];
+    await f.display.refresh();
+    expect(f.viewer.showCadComponent.mock.calls.map(call => call[0])).toEqual([id(20), id(21)]);
+    expect(await f.display.showTray(id(11), id(10))).toBe(true);
+    expect(f.viewer.showCadComponent.mock.calls.map(call => call[0])).toEqual([id(20), id(21)]);
+    expect(f.viewer.setCadComponentVisibility).toHaveBeenCalledWith(id(21), true);
+    expect(f.viewer.focusCadComponent).toHaveBeenCalledWith(id(20));
+    expect(await f.display.hideTray()).toBe(true);
+    expect(f.viewer.removeCadComponent).not.toHaveBeenCalled();
+    f.display.dispose();
+  });
+  it('focuses published routes by tray ID and retains their ordinary visibility after Hide', async () => {
+    const f = fixture();
+    expect(await f.display.showTray(id(11))).toBe(true);
+    await f.display.hideTray();
+    expect(f.viewer.removeCadComponent).not.toHaveBeenCalled();
+    expect(await f.display.showTray(id(99))).toBe(false);
+    f.display.dispose();
+  });
+  it('does not report a preview as shown when a section mesh fails', async () => {
+    const f = fixture();
+    const normal = f.fetcher.getMockImplementation()!;
+    f.fetcher.mockImplementation((url, init) => String(url).endsWith('/mesh')
+      ? Promise.resolve(new Response('', { status: 503 })) : normal(url, init));
+    expect(await f.display.showTray(id(11))).toBe(false);
+    expect(f.viewer.focusCadComponent).not.toHaveBeenCalled();
+    f.display.dispose();
+  });
+  it('rejects showing cached geometry after a failed route refresh', async () => {
+    const f = fixture();
+    await f.display.refresh();
+    f.fetcher.mockImplementationOnce(async () => new Response('', { status: 503 }));
+    expect(await f.display.showTray(id(11))).toBe(false);
+    expect(f.viewer.focusCadComponent).not.toHaveBeenCalled();
+    f.display.dispose();
+  });
+  it('shows a healthy tray even when another saved route has a failed mesh', async () => {
+    const f = fixture();
+    f.state.routes.push({ ...route([id(21)]), id: id(12), projectTrayId: id(13) });
+    f.state.instances.push(instance(21));
+    const normal = f.fetcher.getMockImplementation()!;
+    f.fetcher.mockImplementation((url, init) => String(url).endsWith(`/catalog/${id(121)}/mesh`)
+      ? Promise.resolve(new Response('', { status: 503 })) : normal(url, init));
+    expect(await f.display.showTray(id(11))).toBe(true);
+    expect(f.viewer.focusCadComponent).toHaveBeenCalledWith(id(20));
+    expect(f.onError).toHaveBeenCalled();
+    f.display.dispose();
+  });
+  it('does not focus a delayed CAD Show after Hide supersedes it', async () => {
+    const f = fixture(), gate = deferred<Response>(), meshStarted = deferred<void>();
+    const normal = f.fetcher.getMockImplementation()!;
+    f.fetcher.mockImplementation((url, init) => {
+      if (String(url).endsWith('/mesh')) { meshStarted.resolve(); return gate.promise; }
+      return normal(url, init);
+    });
+    const shown = f.display.showTray(id(11));
+    await meshStarted.promise;
+    const hidden = f.display.hideTray();
+    gate.resolve(Response.json({ mesh: 'saved' }));
+    expect(await shown).toBe(false);
+    expect(await hidden).toBe(true);
+    expect(f.viewer.focusCadComponent).not.toHaveBeenCalled();
+    f.display.dispose();
+  });
+  it('cancels a Show waiting for an automatic refresh when Hide supersedes it', async () => {
+    const f = fixture(), gate = deferred<Response>();
+    f.fetcher.mockImplementationOnce(() => gate.promise);
+    const automatic = f.display.refresh();
+    const shown = f.display.showTray(id(11));
+    const hidden = f.display.hideTray();
+    gate.resolve(Response.json({ designs: f.state.designs }));
+    await automatic;
+    expect(await shown).toBe(false);
+    expect(await hidden).toBe(true);
+    expect(f.viewer.focusCadComponent).not.toHaveBeenCalled();
+    f.display.dispose();
+  });
+  it('keeps the newest Show when both await an automatic refresh', async () => {
+    const f = fixture(), gate = deferred<Response>();
+    f.state.routes.push({ ...route([id(21)]), id: id(12), projectTrayId: id(13) });
+    f.state.instances.push(instance(21));
+    f.fetcher.mockImplementationOnce(() => gate.promise);
+    const automatic = f.display.refresh();
+    const oldShow = f.display.showTray(id(11));
+    const newShow = f.display.showTray(id(13));
+    gate.resolve(Response.json({ designs: f.state.designs }));
+    await automatic;
+    expect(await oldShow).toBe(false);
+    expect(await newShow).toBe(true);
+    expect(f.viewer.focusCadComponent).toHaveBeenCalledExactlyOnceWith(id(21));
+    f.display.dispose();
+  });
+  it('keeps failed draft preview cleanup retryable', async () => {
+    const f = fixture();
+    f.state.routes = [route([id(20)], 'draft')];
+    expect(await f.display.showTray(id(11), id(10))).toBe(true);
+    f.state.routes = [];
+    f.viewer.removeCadComponent.mockRejectedValueOnce(new Error('Removal failed'));
+    expect(await f.display.hideTray()).toBe(false);
+    expect(await f.display.hideTray()).toBe(true);
+    expect(f.viewer.removeCadComponent).toHaveBeenCalledTimes(2);
+    f.display.dispose();
+  });
+  it('loads saved route members of the exact active model with saved transforms, cut mesh and presentation', async () => {
     const f = fixture();
     f.state.designs.unshift({ id: id(4), modelVersionId: id(5), activeModel: true, status: 'proposed' });
     f.state.routes = [route([id(20), id(21)]), { ...route([id(22)], 'draft'), id: id(12) }];
     f.state.instances = [instance(20, 1530), instance(21), instance(22), instance(23)];
     await f.display.refresh();
-    expect(f.viewer.showCadComponent.mock.calls.map(call => call[0])).toEqual([id(20), id(21)]);
+    expect(f.viewer.showCadComponent.mock.calls.map(call => call[0])).toEqual([id(20), id(21), id(22)]);
     const cutPath = `/api/projects/${projectId}/cad-design/designs/${designId}/instances/${id(20)}/mesh`;
     expect(f.viewer.showCadComponent).toHaveBeenCalledWith(id(20), { mesh: cutPath }, {
       positionMm: { x: 11360, y: 75500, z: 21460 }, rotation: { x: 0, y: 0.6, z: 0, w: 0.8 },
@@ -79,7 +187,7 @@ describe('published CAD geometry in Path Finder', () => {
     f.state.instances[0] = { ...f.state.instances[0], revision: 2, zMm: 23000 };
     await f.display.refresh();
     expect(f.viewer.showCadComponent).toHaveBeenCalledTimes(2);
-    f.state.routes[0] = route([id(20)], 'draft');
+    f.state.routes = [];
     await f.display.refresh();
     expect(f.viewer.removeCadComponent).toHaveBeenCalledWith(id(20));
     expect(f.viewer.showCadComponent).toHaveBeenCalledTimes(2);
