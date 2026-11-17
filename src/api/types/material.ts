@@ -204,7 +204,7 @@ export type MaterialInstrumentInput = MaterialCableInstallationMaterialInput;
 export type MaterialInstrumentInstallationMaterialInput = MaterialCableInstallationMaterialInput;
 
 export type MaterialTrayInput = {
-  orderNumber?: string | null;
+  orderNumber: string;
   type: string;
   manufacturer?: string | null;
   heightMm?: number | null;

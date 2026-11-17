@@ -92,6 +92,13 @@ describe.each([
   { catalog: 'trays', path: '/trays/import', table: 'material_trays', dimension: 'Rung height [mm]', weight: 'Weight [kg/m]' },
   { catalog: 'supports', path: '/supports/import', table: 'material_supports', dimension: 'Length [mm]', weight: 'Weight [kg]' }
 ])('$catalog Excel validation', ({ path, table, dimension, weight }) => {
+  const catalogWorkbook = (rows: Cell[][]) => workbookBuffer(
+    table === 'material_trays'
+      ? rows.map((row, index) => index === 0 ? [...row, 'Order number'] :
+          row.some(cell => cell !== null && String(cell).trim() !== '') ? [...row, 'TRAY-001'] : row)
+      : rows
+  );
+
   it.each([
     { column: 'Type', value: '', label: 'blank type' },
     { column: 'Type', value: 'a'.repeat(201), label: 'too long type' },
@@ -111,7 +118,7 @@ describe.each([
   ])('rejects $label with its physical row and column before writes', async ({ column, value }) => {
     const headers = column === 'Type' ? ['Type', 'Price'] : ['Type', column];
     const invalid = column === 'Type' ? [value, 1] : ['Bad material', value];
-    const response = await invoke(path, workbookBuffer([
+    const response = await invoke(path, catalogWorkbook([
       headers,
       ['Valid material', null],
       [],
@@ -121,27 +128,27 @@ describe.each([
   });
 
   it.each([dimension, weight])('rejects an invalid optional %s value', async (column) => {
-    const response = await invoke(path, workbookBuffer([['Type', column], ['A', 'unknown']]));
+    const response = await invoke(path, catalogWorkbook([['Type', column], ['A', 'unknown']]));
     expectRejected(response, 2, column);
   });
 
   it('rejects a missing required header', async () => {
-    const response = await invoke(path, workbookBuffer([['Manufacturer'], ['Maker']]));
+    const response = await invoke(path, catalogWorkbook([['Manufacturer'], ['Maker']]));
     expectRejected(response, 1, 'Type');
   });
 
   it('rejects header-only workbooks instead of reporting success', async () => {
-    const response = await invoke(path, workbookBuffer([['Type', 'Price']]));
+    const response = await invoke(path, catalogWorkbook([['Type', 'Price']]));
     expectRejected(response, 2, 'Workbook');
   });
 
   it('rejects repeated type headers instead of choosing one silently', async () => {
-    const response = await invoke(path, workbookBuffer([['Type', 'Type'], ['A', 'B']]));
+    const response = await invoke(path, catalogWorkbook([['Type', 'Type'], ['A', 'B']]));
     expectRejected(response, 1, 'Type');
   });
 
   it('rejects duplicate types using the same whitespace and case normalization as writes', async () => {
-    const response = await invoke(path, workbookBuffer([
+    const response = await invoke(path, catalogWorkbook([
       ['Type'], ['Tray  A'], [], [' tray a ']
     ]));
     expectRejected(response, 4, 'Type');
@@ -149,7 +156,7 @@ describe.each([
   });
 
   it('accepts absent optional fields and preserves default insert values', async () => {
-    const response = await invoke(path, workbookBuffer([['Type'], ['Minimal material']]));
+    const response = await invoke(path, catalogWorkbook([['Type'], ['Minimal material']]));
     expect(response.status).not.toHaveBeenCalled();
     expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
       summary: { totalRows: 1, created: 1, updated: 0, skipped: 0 }
@@ -161,7 +168,7 @@ describe.each([
   });
 
   it('ignores rows containing only whitespace', async () => {
-    const response = await invoke(path, workbookBuffer([['Type', 'Price'], ['Material A', 0], ['  ', '  ']]));
+    const response = await invoke(path, catalogWorkbook([['Type', 'Price'], ['Material A', 0], ['  ', '  ']]));
     expect(response.status).not.toHaveBeenCalled();
     expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
       summary: { totalRows: 1, created: 1, updated: 0, skipped: 0 }
@@ -170,7 +177,9 @@ describe.each([
 
   it('preserves displayed type identifiers while importing raw numeric prices', async () => {
     const workbook = XLSX.utils.book_new();
-    const sheet = XLSX.utils.aoa_to_sheet([['Type', 'Price'], [1, 1234.5], ['1', 0]]);
+    const sheet = XLSX.utils.aoa_to_sheet(table === 'material_trays'
+      ? [['Type', 'Price', 'Order number'], [1, 1234.5, 'TRAY-001'], ['1', 0, 'TRAY-002']]
+      : [['Type', 'Price'], [1, 1234.5], ['1', 0]]);
     sheet.A2.z = '000';
     sheet.B2.z = '"$"#,##0.00';
     XLSX.utils.book_append_sheet(workbook, sheet, 'Materials');
@@ -186,7 +195,7 @@ describe.each([
   });
 
   it('accepts decimal commas, zero dimensions, and established order measurement casing', async () => {
-    const response = await invoke(path, workbookBuffer([
+    const response = await invoke(path, catalogWorkbook([
       ['Type', 'Height [mm]', dimension, weight, 'Price', 'Minimum order quantity', 'Order measurement', 'Packaging'],
       ['Material A', 0, '12,5', '1,75', '2,5', '0,5', 'PCS', 'Box']
     ]));
@@ -205,7 +214,7 @@ describe.each([
 describe('tray load curve references', () => {
   it('rejects an unknown reference before creating any tray', async () => {
     const response = await invoke('/trays/import', workbookBuffer([
-      ['Type', 'Load curve'], ['Valid tray', null], [], ['Invalid tray', 'Missing curve']
+      ['Type', 'Load curve', 'Order number'], ['Valid tray', null, 'TRAY-001'], [], ['Invalid tray', 'Missing curve', 'TRAY-002']
     ]));
     expectRejected(response, 4, 'Load curve');
     expect(response.json.mock.calls[0][0].issues[0].message).toContain('Missing curve');
@@ -214,7 +223,7 @@ describe('tray load curve references', () => {
   it('resolves existing names using case and whitespace normalization', async () => {
     database.query.mockResolvedValueOnce({ rows: [{ id: curveId, name: 'Curve A' }] });
     const response = await invoke('/trays/import', workbookBuffer([
-      ['Type', 'Load curve'], ['Tray A', ' curve  a ']
+      ['Type', 'Load curve', 'Order number'], ['Tray A', ' curve  a ', 'TRAY-001']
     ]));
     expect(response.status).not.toHaveBeenCalled();
     const insert = client.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO material_trays'));

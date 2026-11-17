@@ -88,7 +88,7 @@ const materialImportColumns = (
 ): ExcelImportColumn[] => [
   { headers: [headers.type], required: true, maxLength: 200, unique: true, normalizeWhitespace: true },
   { headers: [headers.manufacturer], maxLength: 200 },
-  ...('orderNumber' in headers ? [{ headers: [headers.orderNumber], maxLength: 200 }] : []),
+  ...('orderNumber' in headers ? [{ headers: [headers.orderNumber], required: true, maxLength: 200 }] : []),
   ...('loadCurve' in headers ? [{ headers: [headers.loadCurve], maxLength: 200 }] : []),
   ...[
     headers.height,
@@ -969,9 +969,7 @@ materialsRouter.post(
         const parseResult = createMaterialTraySchema.safeParse({
           type: normalizeType(String(row[TRAY_HEADERS.type])),
           manufacturer: normalizeOptionalText(String(row[TRAY_HEADERS.manufacturer] ?? '')),
-          orderNumber: TRAY_HEADERS.orderNumber in row
-            ? normalizeOptionalText(String(row[TRAY_HEADERS.orderNumber] ?? ''))
-            : undefined,
+          orderNumber: String(row[TRAY_HEADERS.orderNumber] ?? '').trim(),
           heightMm: toNullableNumber(row[TRAY_HEADERS.height]),
           rungHeightMm: toNullableNumber(row[TRAY_HEADERS.rungHeight]),
           widthMm: toNullableNumber(row[TRAY_HEADERS.width]),
@@ -1030,7 +1028,7 @@ materialsRouter.post(
                   minimum_order_quantity = $9,
                   order_measurement = $10,
                   packaging = $11,
-                  order_number = CASE WHEN $13 THEN $14 ELSE order_number END,
+                  order_number = $13,
                   updated_at = NOW()
                 WHERE id = $12;
               `,
@@ -1047,8 +1045,7 @@ materialsRouter.post(
                 data.orderMeasurement ?? 'pcs',
                 data.packaging ?? 'pcs',
                 existing.rows[0].id,
-                data.orderNumber !== undefined,
-                data.orderNumber ?? null
+                data.orderNumber
               ]
             );
             updated += 1;
@@ -1084,7 +1081,7 @@ materialsRouter.post(
                 data.minimumOrderQuantity ?? 1,
                 data.orderMeasurement ?? 'pcs',
                 data.packaging ?? 'pcs',
-                data.orderNumber ?? null
+                data.orderNumber
               ]
             );
             created += 1;

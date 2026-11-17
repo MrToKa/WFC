@@ -42,7 +42,7 @@ const material: MaterialCableInstallationMaterial = {
 };
 
 describe('MaterialEditDialog', () => {
-  it.each(['  000123-KL  ', ''])('edits a tray order number from the details page: %s', async (value) => {
+  it.each(['  000123-KL  '])('edits a tray order number from the details page: %s', async (value) => {
     const tray = makeTray(1);
     const onSaved = vi.fn().mockResolvedValue(undefined);
     apiMocks.updateTray.mockResolvedValue({ tray });
@@ -56,11 +56,30 @@ describe('MaterialEditDialog', () => {
     expect(input).toHaveAttribute('maxLength', '200');
     fireEvent.change(input, { target: { value } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(apiMocks.updateTray).toHaveBeenCalledWith('token', tray.id, expect.objectContaining({ orderNumber: value.trim() || null })));
+    await waitFor(() => expect(apiMocks.updateTray).toHaveBeenCalledWith('token', tray.id, expect.objectContaining({ orderNumber: value.trim() })));
     expect(onSaved).toHaveBeenCalledOnce();
   });
 
+  it.each(['', '   '])('rejects a missing order number when editing a legacy tray: %s', async (value) => {
+    const tray = { ...makeTray(1), orderNumber: null };
+    const onSaved = vi.fn();
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <MaterialEditDialog open category="tray" material={tray} token="token" onDismiss={vi.fn()} onSaved={onSaved} />
+      </FluentProvider>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Order number' });
+    expect(input).toBeRequired();
+    expect(input).toHaveValue('');
+    fireEvent.change(input, { target: { value } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Order number is required.')).toBeInTheDocument();
+    expect(apiMocks.updateTray).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
+    apiMocks.updateTray.mockReset();
     apiMocks.updateCableInstallationMaterial.mockReset();
     apiMocks.updateCableInstallationMaterial.mockResolvedValue({
       cableInstallationMaterial: material,

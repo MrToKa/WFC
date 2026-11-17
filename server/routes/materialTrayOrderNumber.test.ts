@@ -32,9 +32,16 @@ beforeEach(() => {
   db.connect.mockReset().mockResolvedValue(client);
 });
 describe('material tray order number', () => {
-  it('accepts text, null and an order-number-only patch, rejects numbers and oversized text', () => {
+  it('requires trimmed nonblank order numbers while allowing unrelated partial updates', () => {
     expect(createMaterialTraySchema.parse({ type: 'A', orderNumber: ' 001-A ' }).orderNumber).toBe('001-A');
-    expect(updateMaterialTraySchema.parse({ orderNumber: null }).orderNumber).toBeNull();
+    for (const orderNumber of [undefined, null, '', '  ', 123]) {
+      expect(createMaterialTraySchema.safeParse({ type: 'A', orderNumber }).success).toBe(false);
+      if (orderNumber !== undefined) expect(updateMaterialTraySchema.safeParse({ orderNumber }).success).toBe(false);
+    }
+    expect(updateMaterialTraySchema.safeParse({ unitPrice: 10 }).success).toBe(true);
+    expect(updateMaterialTraySchema.safeParse({ loadCurveId: id }).success).toBe(true);
+    expect(updateMaterialTraySchema.safeParse({ imageTemplateId: id }).success).toBe(true);
+    expect(mapMaterialTrayRow({ ...row, order_number: null } as MaterialTrayRow).orderNumber).toBeNull();
     expect(updateMaterialTraySchema.parse({ orderNumber: '001-A' }).orderNumber).toBe('001-A');
     expect(createMaterialTraySchema.safeParse({ type: 'A', orderNumber: 123 }).success).toBe(false);
     expect(createMaterialTraySchema.safeParse({ type: 'A', orderNumber: 'x'.repeat(201) }).success).toBe(false);
@@ -48,7 +55,7 @@ describe('material tray order number', () => {
     expect(insert?.[1].at(-1)).toBe('00123-A');
     expect(res.json).toHaveBeenCalledWith({ tray: expect.objectContaining({ orderNumber: '00123-A' }) });
   });
-  it.each(['00123-A', null, ''])('persists an order-number-only patch: %s', async orderNumber => {
+  it.each(['00123-A'])('persists an order-number-only patch: %s', async orderNumber => {
     const res = await invoke('patch', '/trays/:trayId', { params: { trayId: id }, body: { orderNumber } });
     expect(res.status).not.toHaveBeenCalled();
     const update = db.query.mock.calls.find(([sql]) => sql.includes('UPDATE material_trays'));
@@ -71,20 +78,57 @@ describe('material tray order number', () => {
       const imported = await invoke('post', '/trays/import', { file: { buffer: res.send.mock.calls[0][0] } });
       expect(imported.status).not.toHaveBeenCalled();
       const update = client.query.mock.calls.find(([sql]) => sql.includes('UPDATE material_trays'));
-      expect(update?.[1].slice(-2)).toEqual([true, '00123-A']);
+      expect(update?.[1].at(-1)).toBe('00123-A');
     }
   });
   it.each([
-    { headers: ['Type', 'Order number'], values: ['KL 100', '00123-A'], expected: [true, '00123-A'] },
-    { headers: ['Type', 'Order number'], values: ['KL 100', 123], expected: [true, '00123'] },
-    { headers: ['Type', 'Order number'], values: ['KL 100', ''], expected: [true, null] },
-    { headers: ['Type'], values: ['KL 100'], expected: [false, null] },
-  ])('imports displayed order number and preserves a legacy missing column: $expected', async ({ headers, values, expected }) => {
+    { headers: ['Type', 'Order number'], values: ['KL 100', '00123-A'], expected: '00123-A' },
+    { headers: ['Type', 'Order number'], values: ['KL 100', 123], expected: '00123' },
+  ])('imports displayed order number: $expected', async ({ headers, values, expected }) => {
     const res = await invoke('post', '/trays/import', { file: { buffer: workbook(headers, values) } });
     expect(res.status).not.toHaveBeenCalled();
     const update = client.query.mock.calls.find(([sql]) => sql.includes('UPDATE material_trays'));
-    expect(update?.[0]).toContain('order_number = CASE WHEN $13 THEN $14 ELSE order_number END');
-    expect(update?.[1].slice(-2)).toEqual(expected);
+    expect(update?.[0]).toContain('order_number = $13');
+    expect(update?.[1].at(-1)).toEqual(expected);
+  });
+  it.each([undefined, null, '', '  '])('rejects create without a nonblank order number: %s', async orderNumber => {
+    const res = await invoke('post', '/trays', { body: { type: 'KL 100', orderNumber } });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+  it.each([null, '', '  '])('rejects clearing a saved order number: %s', async orderNumber => {
+    const res = await invoke('patch', '/trays/:trayId', { params: { trayId: id }, body: { orderNumber } });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+  it.each([
+    { headers: ['Type'], values: ['KL 100'], errorRow: 1 },
+    { headers: ['Type', 'Order number'], values: ['KL 100', ''], errorRow: 2 },
+    { headers: ['Type', 'Order number'], values: ['KL 100', '  '], errorRow: 2 },
+    { headers: ['Type', 'Order number'], values: ['KL 100', 'x'.repeat(201)], errorRow: 2 },
+  ])('rejects invalid Order number column/value before any writes: $values', async ({ headers, values, errorRow }) => {
+    const res = await invoke('post', '/trays/import', { file: { buffer: workbook(headers, values) } });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ issues: expect.arrayContaining([
+      expect.objectContaining({ column: 'Order number', row: errorRow })
+    ]) }));
+    expect(db.query).not.toHaveBeenCalled();
+    expect(db.connect).not.toHaveBeenCalled();
+    expect(client.query).not.toHaveBeenCalled();
+  });
+  it('cancels the whole import when a later row has no order number', async () => {
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
+      ['Type', 'Order number'], ['Valid tray', '001'], [], ['Invalid tray', '']
+    ]), 'Trays');
+    const buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    const res = await invoke('post', '/trays/import', { file: { buffer } });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ issues: expect.arrayContaining([
+      expect.objectContaining({ column: 'Order number', row: 4 })
+    ]) }));
+    expect(db.connect).not.toHaveBeenCalled();
+    expect(client.query).not.toHaveBeenCalled();
   });
   it('imports new trays with an order number', async () => {
     client.query.mockImplementation(async (sql: string) => ({ rows: [], rowCount: sql.includes('SELECT id FROM material_trays') ? 0 : 1 }));

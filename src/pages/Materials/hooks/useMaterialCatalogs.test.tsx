@@ -177,7 +177,7 @@ describe('tray order numbers', () => {
     apiMocks.updateMaterialTray.mockResolvedValue({ tray: makeTray(1) });
   });
 
-  it('loads and updates an order number as text and clears it explicitly', async () => {
+  it('loads and updates an order number as text', async () => {
     const { result } = renderHook(() => useTrays(params));
     await waitFor(() => expect(result.current.isLoadingTrays).toBe(false));
     act(() => result.current.openTrayEditDialog(makeTray(1)));
@@ -185,10 +185,26 @@ describe('tray order numbers', () => {
     act(() => result.current.handleTrayFieldChange('orderNumber')({} as ChangeEvent<HTMLInputElement>, { value: '  00123-KL  ' }));
     await act(async () => result.current.handleTraySubmit({ preventDefault: vi.fn() } as never));
     expect(apiMocks.updateMaterialTray).toHaveBeenLastCalledWith('token', 'tray-1', expect.objectContaining({ orderNumber: '00123-KL' }));
-    act(() => result.current.openTrayEditDialog(makeTray(1)));
-    act(() => result.current.handleTrayFieldChange('orderNumber')({} as ChangeEvent<HTMLInputElement>, { value: '' }));
+
+  });
+
+  it.each(['', '   '])('rejects a blank order number for create and edit: %s', async (orderNumber) => {
+    const { result } = renderHook(() => useTrays(params));
+    await waitFor(() => expect(result.current.isLoadingTrays).toBe(false));
+    act(() => {
+      result.current.openTrayCreateDialog();
+      result.current.handleTrayFieldChange('type')({} as ChangeEvent<HTMLInputElement>, { value: 'New tray' });
+      result.current.handleTrayFieldChange('orderNumber')({} as ChangeEvent<HTMLInputElement>, { value: orderNumber });
+    });
     await act(async () => result.current.handleTraySubmit({ preventDefault: vi.fn() } as never));
-    expect(apiMocks.updateMaterialTray).toHaveBeenLastCalledWith('token', 'tray-1', expect.objectContaining({ orderNumber: null }));
+    expect(result.current.trayFormErrors.orderNumber).toBe('Order number is required');
+    expect(apiMocks.createMaterialTray).not.toHaveBeenCalled();
+    act(() => result.current.openTrayEditDialog({ ...makeTray(1), orderNumber: null }));
+    expect(result.current.trayForm.orderNumber).toBe('');
+    act(() => result.current.handleTrayFieldChange('orderNumber')({} as ChangeEvent<HTMLInputElement>, { value: orderNumber }));
+    await act(async () => result.current.handleTraySubmit({ preventDefault: vi.fn() } as never));
+    expect(result.current.trayFormErrors.orderNumber).toBe('Order number is required');
+    expect(apiMocks.updateMaterialTray).not.toHaveBeenCalled();
   });
 
   it('creates a tray with its order number and resets the form', async () => {

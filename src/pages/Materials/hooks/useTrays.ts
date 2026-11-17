@@ -287,6 +287,12 @@ export const useTrays = ({ token, isAdmin, showToast, pageSize = 10 }: UseTraysP
       }
 
       const errors: TrayFormErrors = {};
+      const orderNumber = trayForm.orderNumber.trim();
+      if (!orderNumber) {
+        errors.orderNumber = 'Order number is required';
+      } else if (orderNumber.length > 200) {
+        errors.orderNumber = 'Order number must be at most 200 characters';
+      }
       const type = trayForm.type.trim();
       if (!type) {
         errors.type = 'Type is required';
@@ -341,7 +347,7 @@ export const useTrays = ({ token, isAdmin, showToast, pageSize = 10 }: UseTraysP
           await createMaterialTray(token, {
             type,
             manufacturer: nextManufacturer,
-            orderNumber: trayForm.orderNumber.trim() || null,
+            orderNumber,
             heightMm: heightResult.numeric,
             rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,
@@ -361,7 +367,7 @@ export const useTrays = ({ token, isAdmin, showToast, pageSize = 10 }: UseTraysP
           await updateMaterialTray(token, editingTray.id, {
             type,
             manufacturer: nextManufacturer,
-            orderNumber: trayForm.orderNumber.trim() || null,
+            orderNumber,
             heightMm: heightResult.numeric,
             rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,

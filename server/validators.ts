@@ -616,7 +616,7 @@ export const createMaterialTraySchema = z
   .object({
     type: z.string().trim().min(1).max(200),
     manufacturer: materialManufacturerField,
-    orderNumber: z.string().trim().max(200).nullable().optional(),
+    orderNumber: z.string().trim().min(1).max(200),
     heightMm: materialNumericField,
     rungHeightMm: materialNumericField,
     widthMm: materialNumericField,
@@ -651,7 +651,7 @@ export const updateMaterialTraySchema = z
   .object({
     type: z.string().trim().min(1).max(200).optional(),
     manufacturer: materialManufacturerField,
-    orderNumber: z.string().trim().max(200).nullable().optional(),
+    orderNumber: z.string().trim().min(1).max(200).optional(),
     heightMm: materialNumericField,
     rungHeightMm: materialNumericField,
     widthMm: materialNumericField,
