@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { fetchProjectModels, ProjectModelApiError, type ProjectModelVersion } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { generateId } from '@/utils/generateId';
+import { fetchPreparationContext, PreparationApiError } from '@/api/pathfinderPreparation';
+import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
+import { trayAssignmentSnapshot } from '@/viewer/trayAssignmentSnapshot';
 type Scope = { projectId: string | null; loadedProjectId: string | null; token: string | null };
 export type RoutingViewerPhase = 'metadata' | 'loading' | 'ready' | 'no-model' | 'missing-model' | 'unavailable' | 'access-denied' | 'login-required' | 'error';
 type State = { scope: Scope; lifecycleKey: string | null; phase: RoutingViewerPhase; message: string; model: ProjectModelVersion | null };
 type Load = NonNullable<ReturnType<ViewerController['getLoadSnapshot']>>;
-type Run = { scope: Scope; closed: boolean; metadata: AbortController; controller: ViewerController | null };
+type Run = { scope: Scope; closed: boolean; metadata: AbortController; assignments: AbortController | null; controller: ViewerController | null };
 const initial = (scope: Scope): State => ({ scope, lifecycleKey: null, phase: 'metadata', message: 'Checking the active model…', model: null });
 const errors: Record<string, string> = {
   LOGIN_REFRESH_REQUIRED: 'Sign in again to open the protected model.',
@@ -47,8 +50,43 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     update(run, { lifecycleKey: null, phase, message: loadFailureMessage(code) });
     run.closed = true;
   }, [current, update]);
+  const restoreAssignments = useCallback(async (run: Run) => {
+    const viewer = run.controller, load = viewer?.getLoadSnapshot();
+    if (!current(run) || !viewer || !load?.ready || !run.scope.projectId || !run.scope.token) return;
+    run.assignments?.abort();
+    const request = new AbortController(); run.assignments = request;
+    const deadline = pathFinderRequestDeadline(AbortSignal.any([run.metadata.signal, request.signal]), 30_000,
+      () => new Error('Tray assignment display request timed out.'));
+    const live = () => {
+      const now = viewer.getLoadSnapshot();
+      return current(run) && run.assignments === request && !request.signal.aborted && !run.metadata.signal.aborted && now?.ready
+        && now.instanceId === load.instanceId && now.loadId === load.loadId
+        && now.modelVersionId === load.modelVersionId && now.selectionRevision === load.selectionRevision;
+    };
+    try {
+      const context = await deadline.wait(() => fetchPreparationContext(run.scope.projectId!, run.scope.token!, deadline.signal));
+      if (!live() || context.projectId !== load.projectId || context.scope.modelVersionId !== load.modelVersionId
+        || context.scope.selectionRevision !== String(load.selectionRevision)) return;
+      // A model version is immutable. Its authenticated context supplies the
+      // package fingerprint; the original source file hash is a different identity.
+      let assignments;
+      try {
+        assignments = trayAssignmentSnapshot(context, { modelVersionId: load.modelVersionId,
+          selectionRevision: String(load.selectionRevision), contentFingerprint: context.scope.contentFingerprint });
+      } catch (error) {
+        await viewer.setTrayAssignments([]);
+        throw error;
+      }
+      await viewer.setTrayAssignments(assignments);
+    } catch (error) {
+      // Preparation annotations are admin-only; ordinary model viewers retain
+      // their existing access to the Routing builder and source Properties.
+      if (!live() || error instanceof PreparationApiError && error.status === 403) return;
+      update(run, { message: 'The model is ready; tray assignments could not be displayed in Properties.' });
+    } finally { deadline.dispose(); }
+  }, [current, update]);
   useEffect(() => {
-    const run: Run = { scope, closed: false, metadata: new AbortController(), controller: null };
+    const run: Run = { scope, closed: false, metadata: new AbortController(), assignments: null, controller: null };
     runRef.current = run; update(run, { ...initial(scope), lifecycleKey: generateId() });
     const start = async () => {
       if (!scope.projectId || !scope.token || scope.projectId !== scope.loadedProjectId || !container.current) {
@@ -68,12 +106,14 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
           if (event.type === 'RUNTIME_READY') {
             void run.controller?.load(model.id).catch(() => fail(run, 'RESOURCE_FAILED'));
           } else if (event.type === 'MODEL_LOADING') {
+            run.assignments?.abort();
             // The controller has already invalidated the old load and its pending commands.
             update(run, { lifecycleKey: generateId(), phase: 'loading', message: 'Loading the model, identifiers and properties…' });
           } else if (event.type === 'MODEL_LOADED') {
             const loaded = run.controller?.getLoadSnapshot();
             if (!loaded?.ready || loaded.modelVersionId !== model.id || loaded.projectId !== scope.projectId || !identityMatches(event, loaded)) return;
             update(run, { phase: 'ready', message: 'The model and its identifiers are ready.' });
+            void restoreAssignments(run);
           } else if (event.type === 'MODEL_PROGRESS') {
             const loading = run.controller?.getLoadSnapshot();
             if (loading && !loading.ready) {
@@ -84,6 +124,8 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
             if (String(event.payload.code) === 'CAD_COMPONENT_FAILED' &&
                 String(event.payload.operation).startsWith('CAD_')) {
               update(run, { message: 'The client model is ready; a CAD component could not be displayed.' });
+            } else if (event.payload.code === 'TRAY_ASSIGNMENTS_UNAVAILABLE' && event.payload.operation === 'SET_TRAY_ASSIGNMENTS') {
+              update(run, { message: 'The model is ready; tray assignments could not be displayed in Properties.' });
             } else fail(run, String(event.payload.code));
           }
         };
@@ -95,11 +137,14 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
       }
     };
     void start();
+    const onFocus = () => { void restoreAssignments(run); };
+    window.addEventListener('focus', onFocus);
     return () => {
+      window.removeEventListener('focus', onFocus);
       run.closed = true; run.metadata.abort(); run.controller?.dispose('unmount');
       if (runRef.current === run) runRef.current = null;
     };
-  }, [scope, retryId, container, current, update, fail]);
+  }, [scope, retryId, container, current, update, fail, restoreAssignments]);
 
   const retry = useCallback(() => {
     const run = runRef.current;

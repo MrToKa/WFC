@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectModelApiError, type ProjectModelSnapshot } from '@/api/projectModels';
 import type { ViewerEvent, ViewerLoadSnapshot } from '@/viewer/ViewerController';
 import { useRoutingsViewer } from './useRoutingsViewer';
+import { PreparationApiError, type PreparationContext } from '@/api/pathfinderPreparation';
 
 type ControllerFixture = {
   options: { onEvent(event: ViewerEvent): void }; snapshot: { -readonly [Key in keyof ViewerLoadSnapshot]: ViewerLoadSnapshot[Key] };
@@ -12,8 +13,10 @@ type ControllerFixture = {
   pickPoint: ReturnType<typeof vi.fn>; showCadComponent: ReturnType<typeof vi.fn>; moveCadComponent: ReturnType<typeof vi.fn>;
   removeCadComponent: ReturnType<typeof vi.fn>; focusCadComponent: ReturnType<typeof vi.fn>;
   setCadComponentColor: ReturnType<typeof vi.fn>; setCadComponentProperties: ReturnType<typeof vi.fn>;
+  setTrayAssignments: ReturnType<typeof vi.fn>;
 };
-const mocks = vi.hoisted(() => ({ metadata: vi.fn(), controllers: [] as ControllerFixture[] }));
+const mocks = vi.hoisted(() => ({ metadata: vi.fn(), preparation: vi.fn(), controllers: [] as ControllerFixture[] }));
+vi.mock('@/api/pathfinderPreparation', async original => ({ ...await original<typeof import('@/api/pathfinderPreparation')>(), fetchPreparationContext: mocks.preparation }));
 vi.mock('@/api/projectModels', async original => ({ ...await original<typeof import('@/api/projectModels')>(), fetchProjectModels: mocks.metadata }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   options; snapshot;
@@ -28,11 +31,17 @@ vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   showCadComponent = vi.fn(async () => {}); moveCadComponent = vi.fn(async () => {});
   removeCadComponent = vi.fn(async () => {}); focusCadComponent = vi.fn(async () => {});
   setCadComponentColor = vi.fn(async () => {}); setCadComponentProperties = vi.fn(async () => {});
+  setTrayAssignments = vi.fn(async () => {});
   getLoadSnapshot() { return { ...this.snapshot }; }
 } }));
 const projectId = '11111111-1111-4111-8111-111111111111';
 const modelId = '22222222-2222-4222-8222-222222222222';
 const stamp = '2026-10-16T12:00:00Z';
+const preparation = (name = 'B002') => {
+  const scope = { modelVersionId: modelId, selectionRevision: '1', contentFingerprint: 'b'.repeat(64) };
+  return { projectId, scope, trays: [{ projectTrayId: projectId, rawName: name }],
+    resolutions: [{ projectTrayId: projectId, mode: 'roots', rootObjectIds: ['dbid:23'], scope }] } as unknown as PreparationContext;
+};
 const snapshot = (): ProjectModelSnapshot => ({ selection: { projectId, activeModelVersionId: modelId, selectionRevision: 1, updatedAt: stamp }, versions: [{
   id: modelId, projectId, label: 'Aalborg', source: { name: 'source.nwd', bytes: 1, sha256: 'a'.repeat(64), identityBasis: 'observed-local-file' },
   state: 'ready', health: 'healthy', preparedAt: stamp, importedAt: stamp,
@@ -54,7 +63,7 @@ async function loaded(hook: Pick<ReturnType<typeof start>, 'result'>, controller
   expect(hook.result.current.canShow).toBe(true);
   return controller;
 }
-beforeEach(() => { vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) }); vi.clearAllMocks(); mocks.controllers.length = 0; mocks.metadata.mockResolvedValue(snapshot()); });
+beforeEach(() => { vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) }); vi.clearAllMocks(); mocks.controllers.length = 0; mocks.metadata.mockResolvedValue(snapshot()); mocks.preparation.mockResolvedValue(preparation()); });
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -194,5 +203,82 @@ describe('Draw trays viewer lifecycle', () => {
     await waitFor(() => expect(h.result.current.phase).toBe(status === 401 ? 'login-required' : 'access-denied'));
     expect(mocks.controllers).toHaveLength(0);
     expect(h.result.current.canShow).toBe(false);
+  });
+});
+
+describe('Routing builder source assignment Properties', () => {
+  it('restores existing assignments when the model loads, without entering Path Finding', async () => {
+    const h = start(), viewer = await loaded(h);
+    await waitFor(() => expect(viewer.setTrayAssignments).toHaveBeenCalledExactlyOnceWith([{ name: 'B002', objectIds: [23] }]));
+    expect(mocks.preparation).toHaveBeenCalledWith(projectId, 'current-token', expect.any(AbortSignal));
+    expect(h.result.current.canShow).toBe(true);
+  });
+  it.each(['project', 'model', 'selection'] as const)('discards assignments from a different %s', async mismatch => {
+    const value = preparation();
+    if (mismatch === 'project') value.projectId = modelId;
+    if (mismatch === 'model') value.scope.modelVersionId = projectId;
+    if (mismatch === 'selection') value.scope.selectionRevision = '2';
+    mocks.preparation.mockResolvedValue(value);
+    const h = start(), viewer = await loaded(h);
+    await act(async () => {});
+    expect(viewer.setTrayAssignments).not.toHaveBeenCalled();
+    expect(h.result.current.canShow).toBe(true);
+  });
+  it('reloads changed assignments and clears removed assignments on window focus', async () => {
+    const h = start(), viewer = await loaded(h);
+    await waitFor(() => expect(viewer.setTrayAssignments).toHaveBeenCalledTimes(1));
+    mocks.preparation.mockResolvedValueOnce(preparation('B003'));
+    act(() => window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(viewer.setTrayAssignments).toHaveBeenLastCalledWith([{ name: 'B003', objectIds: [23] }]));
+    mocks.preparation.mockResolvedValueOnce({ ...preparation(), resolutions: [] });
+    act(() => window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(viewer.setTrayAssignments).toHaveBeenLastCalledWith([]));
+    expect(viewer.dispose).not.toHaveBeenCalled();
+  });
+  it('discards an earlier read after reloading the same model', async () => {
+    const old = deferred<PreparationContext>(); mocks.preparation.mockReturnValueOnce(old.promise);
+    const h = start(), viewer = await loaded(h);
+    const signal = mocks.preparation.mock.calls[0][2] as AbortSignal;
+    act(() => { viewer.snapshot.ready = false; emit(viewer, 'MODEL_LOADING'); });
+    expect(signal.aborted).toBe(true);
+    act(() => { viewer.snapshot.loadId = generateId(); viewer.snapshot.ready = true; emit(viewer, 'MODEL_LOADED'); });
+    await waitFor(() => expect(viewer.setTrayAssignments).toHaveBeenCalledTimes(1));
+    await act(async () => old.resolve(preparation('OLD')));
+    expect(viewer.setTrayAssignments).toHaveBeenCalledExactlyOnceWith([{ name: 'B002', objectIds: [23] }]);
+  });
+  it('aborts annotation reads and ignores late results after unmount', async () => {
+    const old = deferred<PreparationContext>(); mocks.preparation.mockReturnValueOnce(old.promise);
+    const h = start(), viewer = await loaded(h);
+    const signal = mocks.preparation.mock.calls[0][2] as AbortSignal;
+    h.unmount(); expect(signal.aborted).toBe(true);
+    await act(async () => old.resolve(preparation()));
+    expect(viewer.setTrayAssignments).not.toHaveBeenCalled();
+  });
+  it('clears obsolete labels when a refreshed assignment snapshot cannot be displayed', async () => {
+    const h = start(), viewer = await loaded(h);
+    await waitFor(() => expect(viewer.setTrayAssignments).toHaveBeenCalledTimes(1));
+    const oversized = preparation();
+    oversized.resolutions[0].rootObjectIds = Array.from({ length: 513 }, (_, i) => `dbid:${i + 1}`);
+    mocks.preparation.mockResolvedValueOnce(oversized);
+    act(() => window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(viewer.setTrayAssignments).toHaveBeenLastCalledWith([]));
+    expect(h.result.current.canShow).toBe(true);
+  });
+  it('preserves ordinary builder viewing when preparation annotations require administrator access', async () => {
+    mocks.preparation.mockRejectedValueOnce(new PreparationApiError('ACCESS_DENIED', 403));
+    const h = start(), viewer = await loaded(h);
+    await act(async () => {});
+    expect(h.result.current.phase).toBe('ready');
+    expect(viewer.setTrayAssignments).not.toHaveBeenCalled(); expect(viewer.dispose).not.toHaveBeenCalled();
+  });
+  it('keeps the model ready after a metadata or recoverable assignment display failure', async () => {
+    mocks.preparation.mockRejectedValueOnce(new Error('private failure'));
+    const h = start(), viewer = await loaded(h);
+    await waitFor(() => expect(h.result.current.message).toContain('tray assignments could not be displayed'));
+    expect(h.result.current.phase).toBe('ready'); expect(viewer.dispose).not.toHaveBeenCalled();
+    act(() => emit(viewer, 'ERROR', { code: 'TRAY_ASSIGNMENTS_UNAVAILABLE', operation: 'SET_TRAY_ASSIGNMENTS' }));
+    expect(h.result.current.canShow).toBe(true);
+    act(() => emit(viewer, 'ERROR', { code: 'TRAY_ASSIGNMENTS_UNAVAILABLE', operation: 'LOAD_MODEL' }));
+    expect(h.result.current.phase).toBe('error');
   });
 });
