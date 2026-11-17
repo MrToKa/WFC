@@ -10,6 +10,7 @@ import { endpointBindingFixture } from '@/test/endpointBindingFixtures';
 import { PathFinderCableRoutingPanel, type PathFinderCableRoutingPanelProps } from './PathFinderCableRoutingPanel';
 import type { PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
 import { cableComparisonInputSchema } from '../../../shared/pathfinderCableComparison';
+import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
 
 vi.mock('@/hooks/useCableEndpointSelection', () => ({ useCableEndpointSelection: vi.fn() }));
 vi.mock('@/hooks/useCableEndpointPairSelection', () => ({ useCableEndpointPairSelection: vi.fn() }));
@@ -88,6 +89,23 @@ describe('verified live popup endpoint foreground publisher', () => {
 });
 
 describe('exact selected-cable calculation failure diagnostics', () => {
+  it('places a single numbered obstacle list directly below the current calculated route', () => {
+    const p = props(), evidence = barrierCalculationFixture(id, true).barriers;
+    evidence.obstacleReport = { status: 'complete', crossedParentSelectionIds: [id(118)], blockingParentSelectionIds: [],
+      checkedSegments: 1, totalSegments: 1, reasonCode: 'OBSTACLE_REPORT_COMPLETE', selectedParents: [
+        { selectionId: id(118), dbId: 18, objectId: 'dbid:18', name: 'Floor slab', kind: 'floor', externalId: null,
+          identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' },
+      ] };
+    p.cable = { ...p.cable!, calculation: { ...p.cable!.calculation, jobId: id(71), jobStatus: 'complete', itemState: 'complete', outcome: 'calculated', proposalId: id(80), proposalHash: 'b'.repeat(64) } };
+    p.review = { ...reviewController(p), barriers: evidence };
+    p.calculatedRouting = '/NEW'; p.calculatedDesignLength = '46'; p.onDrillThroughWallsChange = vi.fn();
+    render(<PathFinderCableRoutingPanel {...p} />);
+    const list = screen.getByRole('region', { name: 'Numbered obstacle findings' });
+    expect(within(list).getByRole('heading', { name: 'Obstacles crossed by this route (1)' })).toBeVisible();
+    expect(within(list).getByText('Obstacle #18 · Floor slab (floor)')).toBeVisible();
+    expect(screen.getAllByRole('region', { name: 'Numbered obstacle findings' })).toHaveLength(1);
+    expect(list.compareDocumentPosition(screen.getByRole('checkbox', { name: 'Drill through the walls' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
   it('keeps numbered blocking obstacles visible beside the failed calculation', () => {
     const p = props();
     p.calculationDiagnostics = { cableId: id(3), jobId: id(71), jobStatus: 'complete', itemStatus: 'no_path', itemState: 'blocked',

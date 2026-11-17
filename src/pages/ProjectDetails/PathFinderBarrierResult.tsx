@@ -2,9 +2,9 @@ import { Body1, Caption1 } from '@fluentui/react-components';
 import { supportedBarrierExecutionSchema as barrierExecutionSchema, type AnyBarrierExecution as BarrierExecution,
   sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent, type AnyBarrierAdmissionIntent as BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierSupported';
 import { MIXED_BARRIER_POLICY } from '../../../shared/pathfinderBarrierMixed';
-import { ObstacleModelLink } from '@/components/pathfinder/ObstacleModelLink';
+import { PathFinderObstacleList } from './PathFinderObstacleList';
 
-type Props = { execution?: BarrierExecution | null; stale?: boolean; currentIntent?: BarrierAdmissionIntent | null };
+type Props = { execution?: BarrierExecution | null; stale?: boolean; currentIntent?: BarrierAdmissionIntent | null; showObstacleList?: boolean };
 const label = (value: BarrierExecution) => {
   switch (value.diagnostics.status) {
     case 'clear': return 'Clear against registered barriers';
@@ -24,7 +24,7 @@ const explanation = (value: BarrierExecution) => {
       : value.proof?.routePointCount === 1 ? 'The final point was checked for occupancy against the registered selected objects.'
       : 'Every final route segment was checked against the registered selected objects.';
     case 'bypassed': return value.obstacleReport
-      ? 'Drill through the walls was enabled for this calculation. Registered obstacles were allowed during routing. The separate intersection check below records any detected crossings.'
+      ? 'Drill through the walls was enabled for this calculation. Registered obstacles were allowed during routing. The separate intersection list records any detected crossings.'
       : 'Drill through the walls was enabled for this calculation. Checks against all registered obstacles were bypassed, including pipes and tanks. This result does not certify a collision-free route.';
     case 'no-barriers-declared': return 'The administrator declared an empty registered scope. This does not certify that the model has no walls, floors, ceilings or other obstacles.';
     case 'blocked': return value.proof?.status === 'blocked'
@@ -42,13 +42,15 @@ const explanation = (value: BarrierExecution) => {
 
 /** Recorded result metadata only. This component performs no collision math,
  * chooses no model objects and never authorizes engineering acceptance or Apply. */
-export function PathFinderBarrierResult({ execution, stale = false, currentIntent }: Props) {
+export function PathFinderBarrierResult({ execution, stale = false, currentIntent, showObstacleList = true }: Props) {
   if (execution === null || execution === undefined) return <section aria-label="Barrier routing result">
     <h5>Barrier check not recorded</h5>
+    {showObstacleList ? <PathFinderObstacleList execution={execution} /> : null}
     <Caption1>This historical or unchecked result has no recorded barrier check. Calculate a fresh route with the current barrier settings.</Caption1>
   </section>;
   const parsed = barrierExecutionSchema.safeParse(execution);
   if (!parsed.success) return <section aria-label="Barrier routing result"><h5>Barrier check unavailable</h5>
+    {showObstacleList ? <PathFinderObstacleList execution={execution} /> : null}
     <Caption1>The recorded barrier evidence could not be read. Refresh this result and calculate again.</Caption1></section>;
   const value = parsed.data, { binding } = value.context, proof = value.proof;
   const recordedIntent = { ...(value.schemaVersion === 'wfc.pf.barrier-execution.v2'
@@ -64,27 +66,7 @@ export function PathFinderBarrierResult({ execution, stale = false, currentInten
   return <section aria-label="Barrier routing result">
     <h5>{outdated ? 'Recorded barrier check is outdated' : label(value)}</h5>
     <Body1>{explanation(value)}</Body1>
-    {value.obstacleReport ? <section aria-label="Numbered obstacle findings">
-      {value.obstacleReport.crossedParentSelectionIds.length ? <>
-        <h5>Obstacles crossed by this route</h5>
-        <ul>{value.obstacleReport.crossedParentSelectionIds.map(selectionId => {
-          const parent = value.obstacleReport!.selectedParents.find(item => item.selectionId === selectionId);
-          return <li key={selectionId}>{parent ? <>Obstacle <ObstacleModelLink dbId={parent.dbId} scope={binding.scope} />{` · ${parent.name} (${parent.kind})`}</> : `Registered obstacle ${selectionId}`}</li>;
-        })}</ul>
-        <Caption1>Crossings are recorded in the cable Remarks when this route is saved.</Caption1>
-      </> : value.obstacleReport.status === 'complete' && value.proof && value.obstacleReport.totalSegments > 0 && value.obstacleReport.checkedSegments === value.obstacleReport.totalSegments ? <Caption1>No registered obstacles intersect this route.</Caption1> : null}
-      {value.obstacleReport.blockingParentSelectionIds.length ? <>
-        <h5>{value.obstacleReport.blockingAttribution === 'component-membership' ? 'Selected objects associated with blocking geometry' : 'Obstacles blocking checked routing candidates'}</h5>
-        <ul>{value.obstacleReport.blockingParentSelectionIds.map(selectionId => {
-          const parent = value.obstacleReport!.selectedParents.find(item => item.selectionId === selectionId);
-          return <li key={selectionId}>{parent ? <>Obstacle <ObstacleModelLink dbId={parent.dbId} scope={binding.scope} />{` · ${parent.name} (${parent.kind})`}</> : `Registered obstacle ${selectionId}`}</li>;
-        })}</ul>
-        <Caption1>{value.obstacleReport.blockingAttribution === 'component-membership'
-          ? 'The blocking geometry was built from these objects. The check cannot identify which individual object was touched. A successful route may avoid this geometry.'
-          : 'These obstacles blocked checked candidates. A successful route may avoid them.'}</Caption1>
-      </> : null}
-      {value.obstacleReport.status !== 'complete' ? <p role="status">Obstacle identification is {value.obstacleReport.status}. Additional intersections may exist.</p> : null}
-    </section> : null}
+    {showObstacleList ? <PathFinderObstacleList execution={value} /> : null}
     {fallback ? <Caption1>{fallback}</Caption1> : null}
     {outdated ? <Caption1 role="status">The model, barrier scope or calculation policy changed. Calculate again before using this result.</Caption1> : null}
     {currentIntent === null ? <Caption1>Current barrier settings are unavailable. This is a recorded result.</Caption1> : null}

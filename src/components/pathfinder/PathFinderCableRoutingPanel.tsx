@@ -11,6 +11,8 @@ import { PathFinderCableComparison } from './PathFinderCableComparison';
 import { CableAutoCalculatedLength } from './CableAutoCalculatedLength';
 import { PathFinderBarrierResult } from '@/pages/ProjectDetails/PathFinderBarrierResult';
 import { CalculationObstacleText } from './ObstacleModelLink';
+import { PathFinderObstacleList } from '@/pages/ProjectDetails/PathFinderObstacleList';
+import { useCableObstacleReport } from './useCableObstacleReport';
 import type { PathFinderEndpointForegroundContexts } from '@/pages/ProjectDetails/pathFinderEndpointVisibility';
 import { cableEndpointConfirmedDisplaySelectionSchema } from '../../../shared/pathfinderCableEndpoints';
 import type { CanonicalPoint } from '../../../viewer-runtime/protocol.mjs';
@@ -172,6 +174,10 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   // supply calculation, barrier acceptance or review authority.
   const hasCalculatedRouting = typeof calculatedRouting === 'string' && calculatedRouting.trim().length > 0;
   const usingSavedExactPath = pathSource === 'saved-exact' && hasCalculatedRouting && !calculationPending && !unsaved;
+  const obstacleReport = useCableObstacleReport({ active, projectId: access.projectId, accountId: access.accountId, token: access.token,
+    cableId: cable.cable.id, current: cable.calculation, pending: calculationPending, stopped: stoppedCalculation,
+    diagnostics, review: currentReview, useSaved: usingSavedExactPath || storedRouteSelected,
+    saved: cable.savedRoute ?? (hasVerifiedSavedCableRoute(cable) ? cable.calculation : null) });
   const storedRouting = cable.cable.routing?.trim() ? cable.cable.routing : null;
   const showingStoredRouting = (storedRouteSelected||!hasCalculatedRouting) && storedRouting !== null;
   const previousStoredRouting = !storedRouteSelected&&showingStoredRouting && (calculationPending || unsaved || Boolean(calculationFeedback)
@@ -293,6 +299,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         </> : calculatedDesignLength !== undefined ? <p className={styles.note}>{usingSavedExactPath ? 'Cable list' : 'Calculated'} design length: {calculatedDesignLength ?? 'Not available'} m</p> : null}
         {storedRouteSelected&&hasCalculatedRouting?<section aria-label="Automatic routing result"><h4>Automatically calculated routing</h4><textarea aria-label="Automatically calculated routing" className={styles.value} readOnly value={calculatedRouting} rows={3}/><p className={styles.note}>Automatically calculated design length: {calculatedDesignLength??'Not available'} m. Show displays the saved Cable list route above.</p></section>:null}
         {usingSavedExactPath ? <Caption1>Saved route. Show displays its saved path without recalculating.</Caption1> : null}
+        <PathFinderObstacleList execution={obstacleReport.execution} loading={obstacleReport.loading} error={obstacleReport.error} onRetry={obstacleReport.retry} />
         {onDrillThroughWallsChange ? <>
           <Checkbox label="Drill through the walls" checked={drillThroughWalls}
             disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || calculationPending || Boolean(currentReview?.pending)}
@@ -350,7 +357,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <a href={`/projects/${access.projectId}/cables/${cable.cable.id}`}>Edit route and protection in Cable details</a>
         <h4 className={styles.heading}>{pairSaved ? 'Routing and length saved' : automaticStopped ? 'Cable list update not saved' : usingSavedExactPath ? 'Routing and length saved' : automaticRecoveryRequired ? 'Cable update needs confirmation' : automaticWriting ? 'Updating cable values' : 'Review and Apply'}</h4>
         {currentReview?.recordedDrillThroughWalls !== null && currentReview?.recordedDrillThroughWalls !== undefined ? <p className={styles.note}>Recorded result: Drill through the walls {currentReview.recordedDrillThroughWalls ? 'enabled' : 'disabled'}. This setting belongs to the exact calculated proposal.</p> : null}
-        {currentReview?.barriers ? <PathFinderBarrierResult execution={currentReview.barriers} /> : null}
+        {obstacleReport.execution ? <PathFinderBarrierResult execution={obstacleReport.execution} showObstacleList={false} /> : null}
         {currentReview?.autoLength || currentReview?.autoLengthLoading || currentReview?.autoLengthError ? <section aria-label="Automatic length from Cable list">
           <h4 className={styles.heading}>Auto calculated length [m]</h4>
           {currentReview.autoLengthLoading ? <Spinner size="tiny" label="Reading automatic cable length…" /> : null}

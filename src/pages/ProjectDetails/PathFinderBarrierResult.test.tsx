@@ -52,6 +52,12 @@ function mixedExecution(blocked = false): MixedBarrierExecution {
 afterEach(cleanup);
 
 describe('recorded barrier calculation explanation', () => {
+  it('lets a popup show the obstacle list beside routing without duplicating it in the proof details', () => {
+    render(<PathFinderBarrierResult execution={execution()} showObstacleList={false} />);
+    expect(screen.queryByRole('region', { name: 'Numbered obstacle findings' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Clear against registered barriers' })).toBeVisible();
+    expect(screen.getByText('Barrier calculation details')).toBeVisible();
+  });
   it('shows numbered crossings and blocked candidates from the recorded model, including drilling', () => {
     const value = execution('bypassed');
     value.obstacleReport = { status: 'complete', crossedParentSelectionIds: [id(8)], blockingParentSelectionIds: [id(9)],
@@ -75,7 +81,7 @@ describe('recorded barrier calculation explanation', () => {
           identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' },
       ] };
     render(<PathFinderBarrierResult execution={value} />);
-    expect(screen.getByRole('heading', { name: 'Selected objects associated with blocking geometry' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Selected objects associated with blocking geometry (1)' })).toBeVisible();
     expect(screen.getByText(/cannot identify which individual object was touched/)).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Obstacles blocking checked routing candidates' })).toBeNull();
     expect(screen.queryByText(/No registered obstacles intersect/)).toBeNull();
@@ -120,8 +126,8 @@ describe('recorded barrier calculation explanation', () => {
   it('does not call an explicit drilling bypass clear', () => {
     render(<PathFinderBarrierResult execution={execution('bypassed')} />);
     expect(screen.getByRole('heading', { name: 'Barrier checks bypassed for drilling' })).toBeVisible();
-    expect(screen.getByText(/Drill through the walls was enabled/)).toHaveTextContent('does not certify a collision-free route');
-    expect(screen.getByText(/Drill through the walls was enabled/)).toHaveTextContent('for this calculation. Checks against all registered obstacles were bypassed, including pipes and tanks');
+    expect(screen.getByText(/^Drill through the walls was enabled/)).toHaveTextContent('does not certify a collision-free route');
+    expect(screen.getByText(/^Drill through the walls was enabled/)).toHaveTextContent('for this calculation. Checks against all registered obstacles were bypassed, including pipes and tanks');
     expect(screen.getByText(/Calculation policy:/)).toHaveTextContent('enabled');
     expect(screen.queryByRole('heading', { name: 'Clear against registered barriers' })).not.toBeInTheDocument();
   });
