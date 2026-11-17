@@ -1413,6 +1413,18 @@ it('a recoverable saved-point refusal or timeout keeps the ready model', async (
     expect(s.send.mock.calls.find(call => call[0].type === 'BEGIN_COMPUTED_PATH')![0].payload.pointCount).toBe(1);
     expect(s.send.mock.calls.find(call => call[0].type === 'APPEND_COMPUTED_PATH')![0].payload.points).toEqual([[1, 0, 0.5]]);
   });
+
+it('placement picker detaches selection IDs and rejects a hit outside the allowed section', async () => {
+ const s=await loaded(),cadInstanceId=generateId(), ids=[cadInstanceId];
+ s.send.mockImplementation(value=>{if(value.type==='PICK_PLACEMENT_POINT')s.message('PLACEMENT_POINT_PICKED',{cadInstanceId,point:[1,2,3],derivation:'picked-surface-point'},value.requestId,s.identity);});
+ const pending=s.c.pickPlacementPoint({cadInstanceIds:ids});ids[0]=generateId();expect((await pending).cadInstanceId).toBe(cadInstanceId);
+ expect(s.send.mock.calls.find(call=>call[0].type==='PICK_PLACEMENT_POINT')![0].payload).toEqual({allowSource:false,cadInstanceIds:[cadInstanceId]});
+ s.send.mockImplementation(value=>{if(value.type==='PICK_PLACEMENT_POINT')s.message('PLACEMENT_POINT_PICKED',{objectId:23,point:[1,2,3],derivation:'picked-surface-point'},value.requestId,s.identity);});
+ await expect(s.c.pickPlacementPoint({cadInstanceIds:[cadInstanceId]})).rejects.toThrow('outside the placement selection');
+ expect((await s.c.pickPlacementPoint({allowSource:true,cadInstanceIds:[]})).objectId).toBe(23);
+ await expect(s.c.pickPlacementPoint({cadInstanceIds:[]})).rejects.toThrow('Invalid placement selection');
+});
+
   it('one-shot picking and metadata retain typed load identity and reject mismatched pages', async () => {
     const s = await loaded();
     s.send.mockImplementation(value => {

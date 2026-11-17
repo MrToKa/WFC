@@ -23,6 +23,7 @@ type Props = {
   modelVersionId: string | null;
   ready: boolean;
   onPick: ViewerController['pickPoint'];
+  onPickPlacement?: ViewerController['pickPlacementPoint'];
   onShow: ViewerController['showCadComponent'];
   onMove: ViewerController['moveCadComponent'];
   onFocus?: ViewerController['focusCadComponent'];
@@ -40,6 +41,7 @@ export function CadComponentsPanel({
   modelVersionId,
   ready,
   onPick,
+  onPickPlacement,
   onShow,
   onMove,
   onFocus,
@@ -315,6 +317,7 @@ export function CadComponentsPanel({
           modelVersionId={modelVersionId}
           catalogue={items}
           onPick={onPick}
+          onPickPlacement={onPickPlacement}
           onShow={onShow}
           onMove={onMove}
           onFocus={onFocus}

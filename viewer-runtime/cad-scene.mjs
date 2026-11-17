@@ -366,6 +366,12 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   }
 
   return {
+    resolveHit(hit) {
+      if (disposed || !dynamicModel || hit?.model !== dynamicModel) return undefined;
+      for (const componentId of registry.keys())
+        if (tree.objectId(componentId) === hit.dbId) return componentId;
+      return undefined;
+    },
     add,
     update,
     remove,

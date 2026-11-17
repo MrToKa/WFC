@@ -28,7 +28,7 @@ const messages = {
   SESSION_EXPIRED: 'The viewer session has expired.', ACCESS_REVOKED: 'Access to the model has been revoked.',
   MODEL_SELECTION_CHANGED: 'The selected model has changed.', INVALID_MESSAGE: 'The response does not match the requested model.',
   PATH_INVALID: 'The computed path is incomplete or invalid.', COORDINATES_UNSUPPORTED: 'The model coordinate convention is not supported for PathFinder.',
-  EXTRACTION_FAILED: 'The requested model metadata could not be read completely.', PICK_UNAVAILABLE: 'Point picking is unavailable for this model.', PICK_TIMEOUT: 'Point picking timed out. Start picking again.',
+  EXTRACTION_FAILED: 'The requested model metadata could not be read completely.', PICK_UNAVAILABLE: 'Point picking is unavailable for this model.', PICK_TIMEOUT: 'Point picking timed out. Start picking again.', PICK_CANCELLED: 'Point picking cancelled.',
   LOOKUP_GEOMETRY_NOT_FOUND: 'No display-visible route geometry matches the lookup. Check the route names and model visibility.',
   CAPTURE_RELOAD_REQUIRED: 'Reload the model before preparing another snapshot; this viewer has reached its bounded command budget.',
   PREPARATION_SCOPE_INVALID: 'The requested project preparation scope is invalid for this model.',
@@ -102,6 +102,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     const recoverableModelCapture = ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(command.type) && modelCaptureErrorMessage(code) !== null && code !== 'MODEL_CAPTURE_MODEL_CHANGED';
     const recoverableLocation = ['SHOW_LOCATION', 'SHOW_LOCATION_POINT'].includes(command.type) && code === 'LOCATION_UNAVAILABLE';
     const recoverableGuid = command.type === 'READ_OBJECT_GUID' && code === 'OBJECT_GUID_UNAVAILABLE';
+    const recoverablePick = command.type === 'PICK_PLACEMENT_POINT' && ['PICK_CANCELLED', 'PICK_TIMEOUT', 'PICK_UNAVAILABLE'].includes(code);
     const recoverableCad = command.type.startsWith('CAD_') && code === 'CAD_COMPONENT_FAILED';
     const recoverableTray = command.type === 'SHOW_TRAY' && code === 'TRAY_UNAVAILABLE'
       || command.type === 'SET_TRAY_ASSIGNMENTS' && code === 'TRAY_ASSIGNMENTS_UNAVAILABLE';
@@ -113,9 +114,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     // a real SDK resource/access/model failure keeps its terminal identity.
     const recoverableTrayIdentity = command.type === 'RESOLVE_TRAY_IDENTITIES' && code.startsWith('TRAY_IDENTITY_');
     const recoverableDiscovery = command.type === 'READ_PREPARATION_OBJECTS' && code.startsWith('PREPARATION_') && Object.hasOwn(messages, code);
-    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableRoute || recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type, ...(modelCaptureErrorMessage(code) ? modelCaptureErrorContext(cause) : {}) });
+    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverablePick || recoverableRoute || recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type, ...(modelCaptureErrorMessage(code) ? modelCaptureErrorContext(cause) : {}) });
     finish(command);
-    onState({ phase: recoverableRoute || recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
+    onState({ phase: recoverablePick || recoverableRoute || recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;
@@ -193,7 +194,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     computed = undefined;
     for (const [id, controller] of capabilities) {
       const entry = requests.get(id);
-      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type.includes('BARRIER_CAPTURE') || ['PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY'].includes(entry?.command.type))) {
+      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type.includes('BARRIER_CAPTURE') || ['PICK_POINT', 'PICK_PLACEMENT_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY'].includes(entry?.command.type))) {
         if (entry?.status === 'pending') entry.status = 'cancelled';
         if (['START_MODEL_CAPTURE', 'START_BARRIER_CAPTURE'].includes(entry?.command.type)) releaseCapture(entry.captureScope, true);
         controller.abort();
@@ -359,10 +360,10 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         if (!live()) return;
         if (!emit(command, command.type === 'READ_SELECTION' ? 'MODEL_SELECTION' : command.type === 'READ_PREPARATION_OBJECTS' ? 'PREPARATION_OBJECTS' : 'MODEL_OBJECTS', result)) throw failure('EXTRACTION_FAILED');
       } else {
-        const result = await handle.pickPoint(signal);
+        const result = command.type === 'PICK_PLACEMENT_POINT' ? await handle.pickPlacementPoint(command.payload, signal) : await handle.pickPoint(signal);
         await requirePathFinder(command, signal);
         if (!live()) return;
-        if (!emit(command, 'POINT_PICKED', result)) throw failure('PICK_UNAVAILABLE');
+        if (!emit(command, command.type === 'PICK_PLACEMENT_POINT' ? 'PLACEMENT_POINT_PICKED' : 'POINT_PICKED', result)) throw failure('PICK_UNAVAILABLE');
       }
       finish(command);
     } catch (cause) {
@@ -552,7 +553,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     try { switch (command.type) {
-      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'RESOLVE_TRAY_IDENTITIES': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'READ_OBJECT_GUID': case 'SHOW_LOCATION': case 'SHOW_LOCATION_POINT': case 'SHOW_TRAY': case 'SET_TRAY_ASSIGNMENTS': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'PICK_PLACEMENT_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'RESOLVE_TRAY_IDENTITIES': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'READ_OBJECT_GUID': case 'SHOW_LOCATION': case 'SHOW_LOCATION_POINT': case 'SHOW_TRAY': case 'SET_TRAY_ASSIGNMENTS': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
       case 'READ_BARRIER_MULTIPART_FRAME': case 'START_BARRIER_MULTIPART': case 'STATUS_BARRIER_MULTIPART': case 'CANCEL_BARRIER_MULTIPART': case 'RECONCILE_BARRIER_MULTIPART':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;

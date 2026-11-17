@@ -25,6 +25,7 @@ function fixture(options = {}) {
   const handle = { finish() { facts.finishes++; }, prepareIndex: options.prepareIndex ?? (async () => {}),
     clearRoute(clearOptions) { facts.clears++; return options.clearRoute?.(clearOptions); }, fitRoute() { facts.fits++; },
     showComputedPath(value) { facts.computedPath = structuredClone(value); },
+    pickPlacementPoint: options.pickPlacementPoint,
     pickPoint: options.pickPoint ?? (async () => ({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' })),
     readModelObjects: options.readModelObjects ?? (async ({ cursor, query }) => ({ cursor, nextCursor: null, complete: true, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
     readPreparationObjects: options.readPreparationObjects ?? (async request => ({schemaVersion:request.schemaVersion,mode:request.mode,names:request.names,rootObjectId:request.rootObjectId,cursor:request.cursor,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScope:{...preparationVisibilityScope},indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true})),
@@ -1314,4 +1315,16 @@ test('CAD tray Ghost request keeps all component UUIDs and rechecks authority at
  const rejected=fixture({fetchImpl:async url=>url.endsWith('/pathfinder-authorization')?++calls===1?Response.json({authorized:true,loadId:uuid(4)}):new Response(null,{status:403}):descriptorResponse(),showCadTray:async (_ids,_signal,beforeCommit)=>{await wait.promise;await beforeCommit();displayed++;}});
  await rejected.loaded();rejected.send('SHOW_TRAY',{cadComponentIds:[uuid(201)]});await turn();wait.resolve();await turn();
  assert.equal(displayed,0);assert.equal(rejected.messages('ERROR').at(-1).payload.code,'ACCESS_REVOKED');rejected.bridge.dispose();
+});
+
+
+test('placement picks reauthorize after SDK work and cancellation suppresses late CAD hits', async () => {
+ const point=deferred();let count=0;
+ const f=fixture({pickPlacementPoint:()=>point.promise,fetchImpl:async url=>url.endsWith('/pathfinder-authorization') ? ++count===1 ? Response.json({authorized:true,loadId:uuid(4)}) : new Response(null,{status:403}) : Response.json({projectId:uuid(2),modelVersionId:uuid(3),loadId:uuid(4),contentFingerprint:'b'.repeat(64),supportProfile:'svf-local-7.130.0-v1',format:'svf',sdkVersion:'7.130.0',entrypoint:'resources/output/0/0.svf',resourceCount:1,totalBytes:1})});
+ await f.loaded();f.send('PICK_PLACEMENT_POINT',{allowSource:false,cadInstanceIds:[uuid(10)]});await turn();point.resolve({cadInstanceId:uuid(10),point:[1,2,3],derivation:'picked-surface-point'});await turn();assert.equal(f.messages('PLACEMENT_POINT_PICKED').length,0);assert.equal(f.messages('ERROR').at(-1).payload.code,'ACCESS_REVOKED');f.bridge.dispose();
+ const delayed=deferred(),g=fixture({pickPlacementPoint:()=>delayed.promise});await g.loaded();const request=g.send('PICK_PLACEMENT_POINT',{allowSource:true});await turn();g.send('CANCEL_REQUEST',{targetRequestId:request.requestId});delayed.resolve({objectId:2,point:[1,2,3],derivation:'picked-surface-point'});await turn();assert.equal(g.messages('PLACEMENT_POINT_PICKED').length,0);g.bridge.dispose();
+});
+
+test('placement Escape refusal preserves the loaded model', async () => {
+ const f=fixture({pickPlacementPoint:async()=>{throw Object.assign(new Error('private'),{code:'PICK_CANCELLED'});}});await f.loaded();f.send('PICK_PLACEMENT_POINT',{allowSource:true});await turn();assert.equal(f.messages('ERROR').at(-1).payload.retryable,true);assert.equal(f.states.at(-1).phase,'loaded');f.bridge.dispose();
 });

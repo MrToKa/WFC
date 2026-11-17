@@ -1,7 +1,7 @@
 import { validateCadProperties, type CadSectionMetadata, type CadSectionRoute } from '../../viewer-runtime/cad-properties.mjs';
 import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
-import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isUuid, isCanonicalPoint, validateEnvelope, validateTrayAssignments, type ViewerTrayAssignment, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
+import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isUuid, isCanonicalPoint, validateEnvelope, validateTrayAssignments, type ViewerTrayAssignment, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type PlacementPickOptions, type PlacementPickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateBarrierFrameObservation, barrierFrameObservationHashInput, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
 import { validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl,
@@ -168,7 +168,7 @@ export class ViewerController {
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
     // A discovery page may build the bounded model-wide property index (300s
     // inside the frame). Allow its terminal reply to arrive before failing load.
-    }, pending.envelope.type === 'READ_TRAY_ROOT_SELECTION' ? 15_000 : pending.envelope.type.includes('BARRIER_MULTIPART') ? 195_000 : ['READ_PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES'].includes(pending.envelope.type) ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
+    }, pending.envelope.type === 'READ_TRAY_ROOT_SELECTION' ? 15_000 : pending.envelope.type.includes('BARRIER_MULTIPART') ? 195_000 : ['READ_PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES'].includes(pending.envelope.type) ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : ['PICK_POINT', 'PICK_PLACEMENT_POINT'].includes(pending.envelope.type) ? 125_000 : 10_000);
   }
 
   private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject' | 'quietRecoverableErrors' | 'discoveryProgress'> = {}): string {
@@ -329,7 +329,7 @@ export class ViewerController {
       pending.reject?.(new ViewerAccessError(String(message.payload.code), 0, typeof message.payload.objectId === 'number' ? message.payload.objectId : undefined, typeof message.payload.fragmentId === 'number' ? message.payload.fragmentId : undefined));
       if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'MODEL_CAPTURE_MODEL_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
         this.fail(String(message.payload.code));
-      } else if (!(['READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID'].includes(pending.envelope.type) && pending.quietRecoverableErrors)) this.emit('ERROR', message.payload, message.requestId, identity);
+      } else if (!(['READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'PICK_PLACEMENT_POINT'].includes(pending.envelope.type) && pending.quietRecoverableErrors)) this.emit('ERROR', message.payload, message.requestId, identity);
       return;
     }
     if (message.type === 'RUNTIME_READY') {
@@ -630,7 +630,7 @@ export class ViewerController {
 
   async showRoute(rawRouting: string, source: 'manual' | 'cable' = 'manual', cableId: string | null = null): Promise<string | null> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'PICK_PLACEMENT_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
     // Clear immediately, even for malformed input or a superseded access check.
@@ -671,6 +671,19 @@ export class ViewerController {
     if (this.disposed || !this.loaded || !await this.checkSelection()) throw new Error('Model is not ready');
     const reply = await this.sendAsync('PICK_POINT', {}, 'POINT_PICKED');
     return reply.payload as unknown as PickedPoint;
+  }
+
+  /** Pick a section surface in canonical project metres; CAD IDs are scoped to this load. */
+  async pickPlacementPoint(options: PlacementPickOptions = {}): Promise<PlacementPickedPoint> {
+    const cadInstanceIds = options.cadInstanceIds === undefined ? undefined : [...options.cadInstanceIds];
+    const allowSource = options.allowSource ?? false;
+    if (cadInstanceIds && (!allowSource && !cadInstanceIds.length || cadInstanceIds.length > 200 || new Set(cadInstanceIds).size !== cadInstanceIds.length || !cadInstanceIds.every(isUuid))) throw new Error('Invalid placement selection');
+    if (typeof allowSource !== 'boolean') throw new Error('Invalid placement selection');
+    if (this.disposed || !this.loaded || !await this.checkSelection()) throw new Error('Model is not ready');
+    const reply = await this.sendAsync('PICK_PLACEMENT_POINT', { allowSource, ...(cadInstanceIds ? { cadInstanceIds } : {}) }, 'PLACEMENT_POINT_PICKED', { quietRecoverableErrors: true });
+    const result = reply.payload as unknown as PlacementPickedPoint;
+    if (result.cadInstanceId ? cadInstanceIds && !cadInstanceIds.includes(result.cadInstanceId) : !allowSource) throw new Error('Picked point is outside the placement selection');
+    return result;
   }
 
   async readModelObjects(cursor = 0, query = '', limit = 16): Promise<ViewerModelObjectsPage> {
@@ -863,7 +876,7 @@ export class ViewerController {
   }
 
   cancelPicking(): void {
-    for (const pending of [...this.pending.values()]) if (pending.envelope.type === 'PICK_POINT') this.cancel(pending.envelope.requestId);
+    for (const pending of [...this.pending.values()]) if (['PICK_POINT', 'PICK_PLACEMENT_POINT'].includes(pending.envelope.type)) this.cancel(pending.envelope.requestId);
   }
 
   /** Small controls only. Geometry pages stay inside the protected cookie path;
@@ -1168,7 +1181,7 @@ export class ViewerController {
     this.trayDisplayGeneration = null;
     ++this.routeGeneration;
     this.routeRequestId = null;
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'PICK_PLACEMENT_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
   }
   clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user', options: { preserveCamera?: boolean; preserveSelection?: boolean } = {}): string {
     this.resetRouteRequests();

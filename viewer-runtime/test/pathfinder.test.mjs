@@ -969,3 +969,32 @@ test('complete capture envelopes keep escaped non-ASCII text below 64KiB without
   assert.ok(validateEnvelope(envelope('TRAY_SHOWN',{cadComponentIds:[uuid(10),uuid(11)]}),'frame-to-parent'));
   for(const payload of [{cadComponentIds:[]},{cadComponentIds:[uuid(10),uuid(10)]},{cadComponentIds:['bad']},{cadComponentIds:[uuid(10)],sdkObjectIds:[1]}]) assert.equal(validateEnvelope(envelope('SHOW_TRAY',payload),'parent-to-frame'),null);
  });
+
+
+test('placement picking respects CAD identity restrictions and leaves equipment picking source-only', async () => {
+  const f = fixture(), cad = {}, wanted = uuid(10), other = uuid(11);
+  const click = () => { for (const type of ['pointerdown', 'click']) { const event = new Event(type, { cancelable: true }); Object.assign(event, { button: 0, clientX: 13, clientY: 24 }); f.canvas.dispatchEvent(event); } };
+  let component = other, resolved = false;
+  f.viewer.hitTest = () => ({ model: cad, dbId: 2, intersectPoint: [4, 5, 6] });
+  const pending = f.controller.pickPlacementPoint({cadInstanceIds:[wanted], allowSource:false}, hit => hit.model === cad ? component : undefined).then(value => { resolved = true; return value; });
+  click(); await Promise.resolve(); assert.equal(resolved, false);
+  component = wanted; click();
+  assert.deepEqual(await pending, {cadInstanceId:wanted, point:modelCoordinates(f.model).toCanonical([4,5,6]), derivation:'picked-surface-point'});
+  const abort = new AbortController(), sourceOnly = f.controller.pickPoint(abort.signal); click(); abort.abort(); await assert.rejects(sourceOnly, {name:'AbortError'});
+  const target = f.controller.pickPlacementPoint({allowSource:true,cadInstanceIds:[]}, () => wanted);
+  click(); await Promise.resolve();
+  f.viewer.hitTest = () => ({model:f.model, dbId:2, intersectPoint:[4,5,6]}); click();
+  assert.equal((await target).objectId, 2); f.controller.dispose();
+});
+
+test('placement Escape and replacement cancel the one-shot listeners', async () => {
+  const f=fixture(), document = new EventTarget();
+  const controller=createPathFinderController(f.viewer,{window:{document}});
+  const first=controller.pickPlacementPoint({allowSource:true},()=>undefined);
+  const second=controller.pickPlacementPoint({allowSource:true},()=>undefined);
+  await assert.rejects(first,{name:'AbortError'});
+  const event=new Event('keydown',{cancelable:true});Object.assign(event,{key:'Escape'});document.dispatchEvent(event);
+  await assert.rejects(second,{code:'PICK_CANCELLED'}); assert.equal(event.defaultPrevented,true);
+  const unrelated=new Event('keydown',{cancelable:true});Object.assign(unrelated,{key:'Escape'});document.dispatchEvent(unrelated);assert.equal(unrelated.defaultPrevented,false);
+  controller.dispose();f.controller.dispose();
+});

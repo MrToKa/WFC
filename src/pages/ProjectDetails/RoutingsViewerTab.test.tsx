@@ -28,6 +28,7 @@ beforeEach(() => {
     lifecycleKey: 'test-lifecycle', model: { id: modelId, label: 'Current project model' } as NonNullable<State['model']>, canShow: true,
     retry: vi.fn(), showCadComponent: vi.fn(async () => {}),
     pickCadAnchor: vi.fn(async () => ({ objectId: 1, point: [1, 2, 3] as [number, number, number], derivation: 'picked-surface-point' as const })),
+    pickPlacementPoint: vi.fn(async () => ({ objectId: 1, point: [1, 2, 3] as [number, number, number], derivation: 'picked-surface-point' as const })),
     moveCadComponent: vi.fn(async () => {}), setCadComponentProperties: vi.fn(async () => {}), setCadComponentColor: vi.fn(async () => {}), setCadComponentVisibility: vi.fn(async () => {}),
     removeCadComponent: vi.fn(async () => {}), focusCadComponent: vi.fn(async () => {}),
   };

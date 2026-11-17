@@ -50,6 +50,8 @@ export type ModelCaptureRequest = { equipmentNames: string[] } & (
   { preparationSlice:import('./preparation-input.mjs').PreparationSlice;routeCodes?:never;routeRules?:never;lookupRouteCodes?:never;allowedCategories?:never }
 );
 export interface ModelCaptureProgress { index: number; type: string; objectCount?: number }
+export interface PlacementPickOptions { cadInstanceIds?: string[]; allowSource?: boolean }
+export type PlacementPickedPoint = { point: CanonicalPoint; derivation: 'picked-surface-point' } & ({ cadInstanceId: string; objectId?: never } | { objectId: number; cadInstanceId?: never });
 export interface PickedPoint { objectId: number; point: CanonicalPoint; derivation: 'picked-surface-point' }
 export interface ViewerModelObject {
   objectId: number; parentId: number | null; name: string; externalId: string | null;

@@ -110,6 +110,106 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function mountManualPlacement(withRoute = false, failRefresh = false) {
+  const routeId = '00000000-0000-4000-8000-000000000080';
+  const row = { id: instanceId, catalogItemId: catalogId, partNumber: 'CUSTOM-SECTION', manufacturer: 'Niedax',
+    revision: 1, xMm: 100, yMm: 200, zMm: 300, qx: 0, qy: 0, qz: 0, qw: 1 };
+  const route = { id: routeId, name: 'ANCHOR-ROUTE', tag: 'ANCHOR-ROUTE', color: '#112233',
+    purpose: 'Low voltage cable tray', revision: 1, status: 'draft', instanceIds: [instanceId], projectTrayId: null };
+  let saved = false;
+  const json = (payload: unknown) => ({ ok: true, json: async () => structuredClone(payload) });
+  const request = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.endsWith('/translate-selection') && options?.method === 'POST') {
+      const input = JSON.parse(String(options.body));
+      row.xMm = input.targetPointMm.x - input.anchor.localPointMm.x;
+      row.yMm = input.targetPointMm.y - input.anchor.localPointMm.y;
+      row.zMm = input.targetPointMm.z - input.anchor.localPointMm.z;
+      row.revision++; route.revision++; saved = true;
+      return json({ instances: [{ id: row.id, revision: row.revision }], route: { id: routeId, revision: route.revision } });
+    }
+    if (url.endsWith('/designs')) {
+      if (saved && failRefresh) throw new Error('Refresh connection unavailable.');
+      return json({ designs: [{ id: designId, modelVersionId, activeModel: true, status: 'proposed' }] });
+    }
+    if (url.endsWith('/instances')) return json({ instances: [{ ...row }] });
+    if (url.endsWith('/connections')) return json({ connections: [] });
+    if (url.endsWith('/routes')) return json({ routes: withRoute ? [{ ...route }] : [] });
+    if (url.endsWith('/placement-targets')) return json({ targets: [] });
+    if (url.endsWith('/auto-attachments')) return json({ status: 'network-required', attachments: [] });
+    return json({ schemaVersion: 1, units: 'mm' });
+  });
+  vi.stubGlobal('fetch', request);
+  const onShow = vi.fn<ComponentProps<typeof CadPlacementPanel>['onShow']>().mockResolvedValue(undefined);
+  const onMove = vi.fn<ComponentProps<typeof CadPlacementPanel>['onMove']>().mockResolvedValue(undefined);
+  const onPickPlacement = vi.fn<NonNullable<ComponentProps<typeof CadPlacementPanel>['onPickPlacement']>>()
+    .mockResolvedValue({ point: [0.11, 0.22, 0.33], cadInstanceId: instanceId, derivation: 'picked-surface-point' });
+  render(<FluentProvider theme={webLightTheme}><CadPlacementPanel
+    projectId={projectId} modelVersionId={modelVersionId} token="test-token"
+    catalogue={[{ id: catalogId, partNumber: 'CUSTOM-SECTION', manufacturer: 'Niedax', originalFilename: 'custom.step',
+      sourceSha256: 'a'.repeat(64), conversionStatus: 'ready', materialAssetId: catalogId, cadRevision: 1 }]}
+    onPick={vi.fn()} onPickPlacement={onPickPlacement} onShow={onShow} onMove={onMove}
+    onColor={withRoute ? vi.fn().mockResolvedValue(undefined) : undefined}
+  /></FluentProvider>);
+  return { request, onShow, onMove, onPickPlacement, routeId };
+}
+
+async function pickManualPointAndMove(x = '1000', y = '2000', z = '3000') {
+  const picker = screen.getByRole('button', { name: 'Pick moving point' });
+  await waitFor(() => expect(picker).toBeEnabled());
+  fireEvent.click(picker);
+  await waitFor(() => expect(screen.getByLabelText('Point X (mm)')).toBeEnabled());
+  for (const [axis, value] of [['X', x], ['Y', y], ['Z', z]])
+    fireEvent.change(screen.getByLabelText(`Point ${axis} (mm)`), { target: { value } });
+  fireEvent.click(screen.getByRole('button', { name: 'Move and save' }));
+}
+
+describe('manual point placement integration', { timeout: 20000 }, () => {
+  it('persists the point translation, reloads the moved mesh and clears the saved section selection', async () => {
+    const { request, onShow, onMove, onPickPlacement } = mountManualPlacement();
+    await waitFor(() => expect(onShow).toHaveBeenCalledOnce());
+    fireEvent.click(await screen.findByRole('button', { name: /Niedax CUSTOM-SECTION — X/ }));
+    await pickManualPointAndMove();
+    await screen.findByText('Selected sections moved and saved at the destination point.');
+    expect(onPickPlacement).toHaveBeenCalledWith({ cadInstanceIds: [instanceId] });
+    const write = request.mock.calls.find(([url]) => url.endsWith('/translate-selection'))!;
+    expect(JSON.parse(String(write[1]!.body))).toEqual({
+      anchor: { instanceId, localPointMm: { x: 10, y: 20, z: 30 } },
+      targetPointMm: { x: 1000, y: 2000, z: 3000 }, instances: [{ id: instanceId, expectedRevision: 1 }],
+    });
+    await waitFor(() => expect(onMove).toHaveBeenCalledWith(instanceId, {
+      positionMm: { x: 990, y: 1980, z: 2970 }, rotation: { x: 0, y: 0, z: 0, w: 1 },
+    }));
+    expect(screen.queryByRole('region', { name: 'Move by selected point' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Catalogue component')).toHaveValue('');
+  });
+
+  it('refreshes the selected route revision before the next whole-route movement', async () => {
+    const { request, onShow, onPickPlacement, routeId } = mountManualPlacement(true);
+    await waitFor(() => expect(onShow).toHaveBeenCalledOnce());
+    fireEvent.click(await screen.findByRole('button', { name: /ANCHOR-ROUTE · 1 components/ }));
+    expect(screen.getByLabelText('Move selection')).toHaveValue('route');
+    await pickManualPointAndMove();
+    await screen.findByText('Selected sections moved and saved at the destination point.');
+    onPickPlacement.mockResolvedValueOnce({ point: [1, 2, 3], cadInstanceId: instanceId, derivation: 'picked-surface-point' });
+    await pickManualPointAndMove('1100', '2200', '3300');
+    await waitFor(() => expect(request.mock.calls.filter(([url]) => url.endsWith('/translate-selection'))).toHaveLength(2));
+    const writes = request.mock.calls.filter(([url]) => url.endsWith('/translate-selection'));
+    expect(JSON.parse(String(writes[1][1]!.body))).toMatchObject({
+      route: { id: routeId, expectedRevision: 2 }, instances: [{ id: instanceId, expectedRevision: 2 }],
+    });
+  });
+
+  it('reports a committed move whose refresh fails after clearing the section selection', async () => {
+    const { onShow, request } = mountManualPlacement(false, true);
+    await waitFor(() => expect(onShow).toHaveBeenCalledOnce());
+    fireEvent.click(await screen.findByRole('button', { name: /Niedax CUSTOM-SECTION — X/ }));
+    await pickManualPointAndMove();
+    expect(await screen.findByText(/Position saved, but refresh failed\. Reload the view before moving again\. Refresh connection unavailable\./)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Move by selected point' })).not.toBeInTheDocument();
+    expect(request.mock.calls.filter(([url]) => url.endsWith('/translate-selection'))).toHaveLength(1);
+  });
+});
+
 describe('saved CAD component focus', { timeout: 20000 }, () => {
   it('waits for the display acknowledgement and focuses only the selected saved component UUID', async () => {
     let complete!: () => void;

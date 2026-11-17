@@ -507,6 +507,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         },
         setPathTransparency: pathfinder.setTransparency,
         pickPoint: pathfinder.pickPoint,
+        pickPlacementPoint: (options, operationSignal) => pathfinder.pickPlacementPoint(options, hit => cadScene?.resolveHit(hit), operationSignal),
         async startModelCapture(request, operationSignal, onProgress, { startedAt = Date.now() } = {}) {
           cancelCapture();
           if (!descriptor) throw safeError('EXTRACTION_FAILED');
