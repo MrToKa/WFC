@@ -226,6 +226,7 @@ function mountScoped(
   unassignedOnly = false,
   verifiedPorts: boolean | 'tee' = false,
   failMembership = false,
+  holdRoutes = false,
 ) {
   const secondId = '00000000-0000-4000-8000-000000000006';
   const freeId = '00000000-0000-4000-8000-000000000007';
@@ -284,6 +285,7 @@ function mountScoped(
     onPick = vi.fn();
   const onVisibility = vi.fn(async (_id: string, _visible: boolean) => {});
   const downloads: string[] = [];
+  let finishRoutes: (() => void) | undefined;
   let finishExport: ((response: unknown) => void) | undefined;
   const exportResponse = { ok: true, blob: async () => new Blob(['test export']) };
   const jsonResponse = (data: unknown) => {
@@ -291,6 +293,9 @@ function mountScoped(
     return { ok: true, json: async () => structuredClone(snapshot) };
   };
   const request = vi.fn(async (url: string, options: RequestInit = {}) => {
+    if (holdRoutes && url.endsWith('/routes') && !options.method) {
+      return new Promise((resolve) => { finishRoutes = () => resolve(jsonResponse({ routes: groups })); });
+    }
     if (url.includes('/instances/') && options?.method === 'PATCH') {
       const row = rows.find((row) => url.endsWith('/' + row.id));
       if (!row) throw new Error('Unknown test component');
@@ -482,6 +487,11 @@ function mountScoped(
     routeB,
     newId,
     freeId,
+    finishRoutes: () => {
+      holdRoutes = false;
+      if (!finishRoutes) throw new Error('No route request is pending');
+      finishRoutes();
+    },
     finishExport: () => {
       if (!finishExport) throw new Error('No export is pending');
       finishExport(exportResponse);
@@ -724,6 +734,19 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
     );
     expect(fixture.onRemove).not.toHaveBeenCalled();
     await act(async () => {});
+  });
+
+  it('keeps assigned sections out of CAD routes while the route list is still loading', async () => {
+    const fixture = mountScoped(false, true, false, false, false, true);
+    const list = screen.getByRole('list', { name: 'Placed tray components' });
+    expect(await within(list).findByRole('button', { name: /FREE-PART/ })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'CAD routes' })).toBeVisible();
+    expect(within(list).queryByRole('button', { name: /A-PART|B-PART/ })).toBeNull();
+    await act(async () => { fixture.finishRoutes(); });
+    fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
+    expect(within(list).getByRole('button', { name: /A-PART/ })).toBeVisible();
+    expect(within(list).queryByRole('button', { name: /FREE-PART|B-PART/ })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'CAD routes' })).toBeNull();
   });
 
   it('shows unassigned components by default while keeping named-route members scoped', async () => {

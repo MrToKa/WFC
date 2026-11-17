@@ -51,6 +51,21 @@ describe('simple project tray preparation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show tray BC902' }));
     expect(pf.showCadTray).toHaveBeenCalledWith(state.context.scope, state.context.trays[1].projectTrayId, undefined);
   });
+  it('keeps draft and published CAD sections under their assigned tray rather than separate source groups', () => {
+    const { state, pf } = setup();
+    state.context.trays = [
+      { ...state.context.trays[0], rawName: 'BC901', geometrySource: 'published-cad-route', inNetwork: false },
+      { ...state.context.trays[0], projectTrayId: '10000000-0000-4000-8000-000000000099', rawName: 'BC902', geometrySource: 'saved-cad-route', inNetwork: true },
+    ];
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(within(screen.getByRole('article', { name: 'Tray BC901' })).getByText(
+      'CAD sections assigned to BC901. Generate network to include this tray in cable calculations.',
+    )).toBeVisible();
+    expect(within(screen.getByRole('article', { name: 'Tray BC902' })).getByText(
+      'CAD sections assigned to BC902. Included in the calculation network.',
+    )).toBeVisible();
+    expect(screen.queryByText(/Manually added|CAD routes/)).toBeNull();
+  });
   it('does not retain a network check when the loaded model changes', () => {
     const { state, pf } = setup();
     state.context.trays[0].inNetwork = true;
@@ -67,9 +82,9 @@ describe('simple project tray preparation', () => {
     expect(within(card).getByText('Assigned')).toBeVisible();
     expect(card.style.backgroundColor).toBe('');
     expect(within(card).queryByText('Not assigned')).toBeNull();
-    expect(within(card).getByText(/Assigned to saved CAD geometry/)).toBeVisible();
+    expect(within(card).getByText(/CAD sections assigned to CAD001/)).toBeVisible();
     expect(within(card).queryByRole('img', { name: 'Included in calculation network' })).toBeNull();
-    expect(screen.getByText(/CAD routes are assigned to their saved STEP geometry/)).toHaveTextContent('CAD001');
+    expect(screen.queryByText(/CAD routes are assigned|Manually added trays/)).toBeNull();
     expect(screen.getByRole('button',{name:'Use current model selection for CAD001'})).toBeDisabled();
   });
   it('shows a manually published tray as assigned without requiring source model objects', () => {

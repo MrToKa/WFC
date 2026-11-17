@@ -189,7 +189,7 @@ export function CadPlacementPanel({
     if (selectedRoute) return selectedRoute.instanceIds;
     const assigned = new Set(routeGroups.flatMap((route) => route.instanceIds));
     return instances
-      .filter((instance) => !assigned.has(instance.id))
+      .filter((instance) => !instance.route?.id && !assigned.has(instance.id))
       .map((instance) => instance.id);
   }, [managedCreation, instances, selectedRoute, routeGroups]);
   const visibleInstances = instances.filter((instance) => visibleIds.includes(instance.id));
@@ -1299,6 +1299,7 @@ export function CadPlacementPanel({
               : `Unassigned components: ${visibleInstances.length}. Select a component to edit, or choose a complete route below.`}
         </Caption1>
       ) : null}
+      {managedCreation && !selectedRoute ? <h4>CAD routes</h4> : null}
       <ul aria-label="Placed tray components">
         {visibleInstances.map((instance) => (
           <li key={instance.id}>

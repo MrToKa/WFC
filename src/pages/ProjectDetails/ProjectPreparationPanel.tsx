@@ -109,8 +109,6 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     return Boolean(plan?.requestedScope.trays.some(item => item.projectTrayId === trayId && item.orderedRootObjectIds.some(root => !claimedElsewhere.has(root))));
   };
   const modelTrays=context?.trays.filter(tray=>!tray.geometrySource)??[];
-  const cadTrays=context?.trays.filter(tray=>tray.geometrySource==='saved-cad-route')??[];
-  const publishedCadTrays=context?.trays.filter(tray=>tray.geometrySource==='published-cad-route')??[];
   const found = modelTrays.filter(tray => assigned(tray.projectTrayId)).length;
   const networkStatus = (() => {
     if (saved) return `Network saved in the database. Ready for routing calculations. ${found} of ${modelTrays.length} trays assigned${found < modelTrays.length ? `; ${modelTrays.length - found} still need a model selection` : ''}.`;
@@ -260,8 +258,6 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
       {state.unknown ? state.busy ? 'Checking tray update…' : 'Retry tray update' : 'Discover project tray candidates'}
     </Button>
     <p>Discover checks the project Trays records against model names and Properties, then saves unique matches. Generate network builds from the assigned trays.</p>
-    {publishedCadTrays.length ? <p>Manually added trays use their published geometry and are assigned without a model selection: {publishedCadTrays.map(tray => tray.rawName).join(', ')}.</p> : null}
-    {cadTrays.length?<p>CAD routes are assigned to their saved STEP geometry when added to the Trays list: {cadTrays.map(tray=>tray.rawName).join(', ')}. Generate network includes these assigned CAD routes and verifies them for cable calculations.</p>:null}
     {state.busy ? <Button onClick={state.pause} style={{ marginLeft: 8 }}>Stop checking</Button> : null}
     {disabledReason ? <p>{disabledReason}</p> : null}
     {working ? <Spinner size="tiny" label={state.progress ?? (reading ? 'Reading and saving the selected tray…'
@@ -287,8 +283,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
         {filtered.map(tray => {
           const isAssigned = assigned(tray.projectTrayId);
           const target = trayDisplayTarget({ trayId: tray.projectTrayId, context, plan, discovery });
-          const unavailable = !modelCurrent ? 'Load the matching model before showing this tray.' : tray.geometrySource === 'saved-cad-route'
-            ? 'Assigned to saved CAD geometry. Generate network to include it in cable calculations.' : tray.geometrySource ? null : target.message;
+          const unavailable = !modelCurrent ? 'Load the matching model before showing this tray.' : tray.geometrySource ? null : target.message;
           const showing = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'showing';
           const hiding = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'hiding';
           const canHide = currentDisplay?.trayId === tray.projectTrayId && ['shown', 'hiding', 'hide-failed'].includes(currentDisplay.status);
@@ -301,6 +296,8 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
             <h4 style={{ margin: '0 0 8px' }}>{modelCurrent && tray.inNetwork === true ? <span role="img" aria-label="Included in calculation network" title="Included in calculation network" style={{ color: tokens.colorPaletteGreenForeground1, marginRight: 6 }}>✓</span> : null}{tray.rawName}</h4>
             <span>{isAssigned ? 'Assigned' : 'Not assigned'}</span>
           </div>
+          {tray.geometrySource ? <p>CAD sections assigned to {tray.rawName}. {modelCurrent && tray.inNetwork === true
+            ? 'Included in the calculation network.' : 'Generate network to include this tray in cable calculations.'}</p> : null}
           {isAssigned ? <dl style={{ display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', gap: '4px 8px', margin: '0 0 12px' }}>
             <dt>Type</dt><dd style={{ margin: 0 }}>{tray.details ? tray.details.type || 'Not specified' : 'Not available'}</dd>
             <dt>Width × height</dt><dd style={{ margin: 0 }}>{tray.details?.widthMm ?? '—'} × {tray.details?.heightMm ?? '—'} mm</dd>
