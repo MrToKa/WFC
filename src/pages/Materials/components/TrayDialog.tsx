@@ -90,8 +90,14 @@ export const TrayDialog = ({
               >
                 <Input value={form.type} onChange={onFieldChange('type')} required />
               </Field>
-              <Field label='Order number'>
+              <Field
+                label='Order number'
+                required
+                validationState={formErrors.orderNumber ? 'error' : undefined}
+                validationMessage={formErrors.orderNumber}
+              >
                 <Input
+                  required
                   value={form.orderNumber}
                   maxLength={200}
                   onChange={onFieldChange('orderNumber')}

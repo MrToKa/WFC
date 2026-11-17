@@ -225,6 +225,15 @@ export const MaterialEditDialog = ({
       return;
     }
 
+    if (category === 'tray' && !form.orderNumber.trim()) {
+      setError('Order number is required.');
+      return;
+    }
+    if (category === 'tray' && form.orderNumber.trim().length > 200) {
+      setError('Order number must be at most 200 characters.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -277,7 +286,7 @@ export const MaterialEditDialog = ({
         case 'tray':
           if (!form.type.trim()) throw new Error('Type is required.');
           await updateMaterialTray(token, material.id, {
-            orderNumber: nullableText(form.orderNumber),
+            orderNumber: form.orderNumber.trim(),
             type: form.type.trim(),
             manufacturer: nullableText(form.manufacturer),
             heightMm: optionalNumber(form.heightMm, 'Height'),
@@ -373,8 +382,9 @@ export const MaterialEditDialog = ({
                 </>
               ) : category === 'tray' ? (
                 <>
-                  <Field label="Order number">
+                  <Field label="Order number" required>
                     <Input
+                      required
                       value={form.orderNumber}
                       maxLength={200}
                       onChange={(_, data) => setField('orderNumber', data.value)}

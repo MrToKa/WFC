@@ -83,7 +83,7 @@ describe('Material catalog validators', () => {
     },
     {
       schema: createMaterialTraySchema,
-      input: { type: 'Tray' },
+      input: { type: 'Tray', orderNumber: 'TRAY-001' },
     },
     {
       schema: createMaterialSupportSchema,

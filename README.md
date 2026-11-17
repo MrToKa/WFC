@@ -106,10 +106,11 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
     again does not create extra revisions.
   - Administrators can manage all project data; Engineers can manage assigned projects. Administrators, Engineers, and Technicians can export their accessible project tables.
 - **Tray management** – CRUD, import, and export flows similar to the cable lists.
-  Materials → Trays supports an optional **Order number** in the catalog, forms, details,
+  Materials → Trays includes an **Order number** in the catalog, forms, details,
   search, Excel export and upload template. Order numbers are text, preserving leading
-  zeros. Legacy imports without this column preserve existing numbers; a blank cell in
-  an included **Order number** column clears the value.
+  zeros. Creating or editing a tray requires a nonblank number. Excel imports require
+  this column and a nonblank value on every data row.
+  Existing records without a number remain readable and must be completed when edited.
 - **Change Orders and Internal NCRs** – Materials open in **Detailed view**. Switch to
   **Export view** for the Excel summary: matching materials, including inherited Standard
   Materials, are grouped with combined quantities, recalculated packages, and a total price.

@@ -105,6 +105,7 @@ const catalogCases: CatalogCase[] = [
     row: {
       Manufacturer: 'Legacy maker',
       Type: 'Legacy tray',
+      'Order number': 'TRAY-001',
       'Height [mm]': 60,
       'Rung height [mm]': 15,
       'Width [mm]': 300,
