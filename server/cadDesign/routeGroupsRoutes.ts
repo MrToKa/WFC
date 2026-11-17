@@ -5,9 +5,12 @@ import { z } from 'zod';
 import { cadRouteGroupInputSchema, cadRouteGroupUpdateSchema, cadRouteGroupDeleteSchema, type CadRouteGroup } from '../../shared/cadRouteGroups.js';
 import { pool } from '../db.js';
 import { requireProjectEdit } from '../middleware.js';
+import { PublicationError } from './routePublication.js';
+import { synchronizeCadTrayExportsAfterTransfer } from './routeTrayExports.js';
 
 export const cadRouteGroupsRouter = Router({ mergeParams: true });
 const uuid = z.string().uuid();
+const synchronizeTraysSchema = z.object({ expectedModelVersionId: uuid }).strict();
 const sectionAssignmentSchema = z.object({
   instanceId: uuid,
   expectedRevision: z.number().int().positive().max(2147483646),
@@ -22,6 +25,7 @@ const safe = (handler: (req: Request, res: Response) => Promise<void>) =>
   (req: Request, res: Response, next: NextFunction): void => {
     void handler(req,res).catch((error: unknown) => {
       if (error instanceof RouteGroupError) { res.status(error.status).json({ code: error.code }); return; }
+      if (error instanceof PublicationError) { res.status(error.status).json({ code: error.code, message: error.message }); return; }
       const code = (error as { code?: string })?.code;
       if (code === '23505') { res.status(409).json({ code: 'CAD_ROUTE_TAG_OR_MEMBER_CONFLICT' }); return; }
       if (code === '23503' && (error as { constraint?: string }).constraint?.startsWith('cad_route_tray_exports')) {
@@ -95,6 +99,25 @@ cadRouteGroupsRouter.get('/designs/:designId/routes', safe(async (req,res) => {
   res.setHeader('Cache-Control','private, no-store');
   res.json({ routes });
 }));
+// Repair earlier saved draft projections before a new base network captures its
+// catalogue. Context reads and the later immutable network proof stay read-only.
+cadRouteGroupsRouter.post('/designs/:designId/synchronize-trays', requireProjectEdit, safe(async (req,res) => {
+  validateParams(req);
+  const parsed=synchronizeTraysSchema.safeParse(req.body);
+  if(!parsed.success) throw new RouteGroupError('INVALID_CAD_TRAY_SYNCHRONIZATION',400);
+  const {projectId,designId}=req.params;
+  const result=await withCadRouteDesignTransaction(projectId,designId,async client=>{
+    const design=(await client.query<{model_version_id:string}>('SELECT model_version_id FROM cad_designs WHERE project_id=$1 AND id=$2',[projectId,designId])).rows[0];
+    if(!design||design.model_version_id.toLowerCase()!==parsed.data.expectedModelVersionId.toLowerCase()) throw new RouteGroupError('INACTIVE_DESIGN');
+    const routes=(await client.query<{id:string}>(`SELECT g.id FROM cad_route_groups g JOIN cad_route_tray_exports e
+      ON e.project_id=g.project_id AND e.design_id=g.design_id AND e.route_group_id=g.id
+      WHERE g.project_id=$1 AND g.design_id=$2 AND g.status='draft' ORDER BY g.id LIMIT 1001 FOR UPDATE OF g`,[projectId,designId])).rows;
+    if(routes.length>1000) throw new RouteGroupError('CAD_ROUTE_GROUP_LIMIT');
+    for(const route of routes) await synchronizeCadTrayExportsAfterTransfer(client,projectId,designId,null,route.id,req.userId!);
+    return {designId,modelVersionId:design.model_version_id,synchronizedRoutes:routes.length};
+  });
+  res.setHeader('Cache-Control','private, no-store');res.json(result);
+}));
 cadRouteGroupsRouter.post('/designs/:designId/routes', requireProjectEdit, safe(async (req,res) => {
   validateParams(req);
   const parsed = cadRouteGroupInputSchema.safeParse(req.body);
@@ -149,6 +172,7 @@ cadRouteGroupsRouter.post('/designs/:designId/routes/:routeId/sections', require
       WHERE project_id=$1 AND design_id=$2 AND id=$3 AND revision=$4 AND status='draft' RETURNING id`,
     [projectId,designId,id,value.expectedRevision]);
     if (!changedTarget.rows[0]) throw new RouteGroupError('STALE_CAD_ROUTE');
+    await synchronizeCadTrayExportsAfterTransfer(client,projectId,designId,sourceId,id,req.userId!);
     await touchDesign(client,projectId,designId);
     return readRoute(client,projectId,designId,id);
   });
@@ -185,6 +209,7 @@ cadRouteGroupsRouter.patch('/designs/:designId/routes/:routeId', requireProjectE
     [projectId,designId,id,value.expectedRevision,value.name,value.tag,value.color,value.purpose]);
     if (!updated.rows[0]) throw new RouteGroupError('STALE_CAD_ROUTE');
     await replaceMembers(client,projectId,designId,id,value.instanceIds);
+    await synchronizeCadTrayExportsAfterTransfer(client,projectId,designId,null,id,req.userId!);
     await touchDesign(client,projectId,designId);
     return readRoute(client,projectId,designId,id);
   });

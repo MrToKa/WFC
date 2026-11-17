@@ -69,12 +69,10 @@ const safe=(work:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Re
     next(error);
   });
 };
-cadRouteTrayExportsRouter.post('/designs/:designId/routes/:routeId/trays-list',requireAdmin,safe(async(req,res)=>{
-  const parsed=input.safeParse(req.body);if(!parsed.success){res.status(400).json({code:'INVALID_CAD_ROUTE_TRAY_EXPORT',message:'A current saved route revision is required.'});return;}
-  const result=await publicationTransaction(req,async client=>{
-    const {projectId,designId,routeId}=req.params;
+/** Caller owns the design transaction; refresh only the exact owned Trays row. */
+export async function writeCadTrayExport(client:PoolClient,projectId:string,designId:string,routeId:string,userId:string,expectedRevision?:number) {
     const {group,instances,chain,transitions}=await groupInputs(client,projectId,designId,routeId);
-    if(group.revision!==parsed.data.expectedRevision)return fail('STALE_CAD_ROUTE','The route changed. Refresh before adding it to the Trays list.');
+    if(expectedRevision!==undefined&&group.revision!==expectedRevision)return fail('STALE_CAD_ROUTE','The route changed. Refresh before adding it to the Trays list.');
     const desired=deriveCadTrayExport(projectId,designId,group,instances,chain,transitions);
     let saved=await readCadTrayExport(client,projectId,designId,routeId);
     let adoptedPublishedRow=false;
@@ -104,12 +102,42 @@ cadRouteTrayExportsRouter.post('/designs/:designId/routes/:routeId/trays-list',r
       await client.query<TrayRow>(`INSERT INTO trays(project_id,id,name,purpose,tray_type,width_mm,height_mm,length_mm,length_source,length_calculation)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,'auto',$9::jsonb) RETURNING *`,values);
     const row=written.rows[0];if(!row)return fail('CAD_ROUTE_TRAY_CONFLICT','The Trays row changed. Refresh and retry.');
-    await recordTrayChanges(client,req.userId!,saved?.row??null,row);
+    await recordTrayChanges(client,userId,saved?.row??null,row);
     const proof={source:desired.source,capturedRouteRevision:group.revision,calculatedAt:calculation.calculatedAt};
     await client.query(`INSERT INTO cad_route_tray_exports(project_id,design_id,route_group_id,tray_id,source_sha256,source_proof,projection,created_by)
       VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8)
       ON CONFLICT(project_id,design_id,route_group_id) DO UPDATE SET source_sha256=EXCLUDED.source_sha256,source_proof=EXCLUDED.source_proof,
-        projection=EXCLUDED.projection,updated_at=now()`,[projectId,designId,routeId,trayId,desired.sourceSha256,JSON.stringify(proof),JSON.stringify(cadTrayProjection(row)),req.userId??null]);
+        projection=EXCLUDED.projection,updated_at=now()`,[projectId,designId,routeId,trayId,desired.sourceSha256,JSON.stringify(proof),JSON.stringify(cadTrayProjection(row)),userId]);
     return response(trayId,!saved,false);
+}
+
+/** Membership and both derived list projections commit together. A listed
+ * section stays listed when moved into a previously unlisted destination. */
+export async function synchronizeCadTrayExportsAfterTransfer(client:PoolClient,projectId:string,designId:string,sourceRouteId:string|null,targetRouteId:string,userId:string):Promise<void> {
+  const source=sourceRouteId?await readCadTrayExport(client,projectId,designId,sourceRouteId):null;
+  const target=await readCadTrayExport(client,projectId,designId,targetRouteId);
+  if(!source&&!target)return;
+  const refresh=async(routeId:string,saved:Awaited<ReturnType<typeof readCadTrayExport>>)=>{
+    const group=(await client.query<{status:string}>('SELECT status FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND id=$3 FOR UPDATE',[projectId,designId,routeId])).rows[0];
+    if(!group||group.status!=='draft')return fail('CAD_ROUTE_PUBLISHED','Withdraw the route before transferring its listed sections.');
+    const membership=(await client.query<{member_count:number}>(`SELECT COUNT(*)::int AS member_count FROM cad_route_group_members
+      WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3`,[projectId,designId,routeId])).rows[0];
+    if(!membership)return fail('CAD_ROUTE_TRAY_CONFLICT','The route membership is unavailable. Retry the transfer.');
+    if(membership.member_count===0){
+      if(!saved)return;
+      await client.query(`DELETE FROM cad_route_tray_exports WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 AND tray_id=$4`,[projectId,designId,routeId,saved.row.id]);
+      const removed=await client.query('DELETE FROM trays WHERE project_id=$1 AND id=$2 RETURNING id',[projectId,saved.row.id]);
+      if(!removed.rows[0])return fail('CAD_ROUTE_TRAY_CONFLICT','The Trays row changed. Retry the transfer.');
+    }else await writeCadTrayExport(client,projectId,designId,routeId,userId);
+  };
+  if(source&&sourceRouteId)await refresh(sourceRouteId,source);
+  await refresh(targetRouteId,target);
+}
+
+cadRouteTrayExportsRouter.post('/designs/:designId/routes/:routeId/trays-list',requireAdmin,safe(async(req,res)=>{
+  const parsed=input.safeParse(req.body);if(!parsed.success){res.status(400).json({code:'INVALID_CAD_ROUTE_TRAY_EXPORT',message:'A current saved route revision is required.'});return;}
+  const result=await publicationTransaction(req,async client=>{
+    const {projectId,designId,routeId}=req.params;
+    return writeCadTrayExport(client,projectId,designId,routeId,req.userId!,parsed.data.expectedRevision);
   });res.setHeader('Cache-Control','private, no-store');res.json(result);
 }));

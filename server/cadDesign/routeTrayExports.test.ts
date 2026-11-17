@@ -18,7 +18,7 @@ vi.mock('../middleware.js',()=>({requireAdmin:(req:express.Request,res:express.R
 }}));
 vi.mock('./routePublication.js',async original=>({...await original<typeof import('./routePublication.js')>(),groupInputs:mocks.inputs,publicationTransaction:mocks.transaction}));
 import { buildCadChain } from './routePublication.js';
-import { cadRouteTrayExportsRouter, deriveCadTrayExport, compatibleCadTrayExport, cadTrayProjection } from './routeTrayExports.js';
+import { cadRouteTrayExportsRouter, deriveCadTrayExport, compatibleCadTrayExport, cadTrayProjection, writeCadTrayExport, synchronizeCadTrayExportsAfterTransfer } from './routeTrayExports.js';
 
 const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const projectId=id(1),designId=id(2),routeId=id(3),actorId=id(4);
@@ -192,5 +192,119 @@ describe('Add CAD route to ordinary project Trays list',()=>{
     expect((await compatibleCadTrayExport(client,projectId,designId,group,instances,chain()))?.row.id).toBe(row!.id);
     instances[0]={...instances[0],revision:2};
     await expect(compatibleCadTrayExport(client,projectId,designId,group,instances,chain())).rejects.toMatchObject({code:'CAD_ROUTE_TRAY_EXPORT_STALE'});
+  });
+});
+
+describe('automatic list synchronization after section ownership changes',()=>{
+  const sourceId=id(60),targetId=routeId;
+  async function fixture(listSource=true,listTarget=true){
+    const routes=new Map<string,Group>([
+      [sourceId,{...group,id:sourceId,name:'SOURCE',revision:3}],
+      [targetId,{...group,name:'TARGET',revision:5}],
+    ]);
+    const moved=instance(11);
+    const members=new Map([[sourceId,[instance(10),moved]],[targetId,[instance(12)]]]);
+    const rows=new Map<string,TrayRow>(),exports=new Map<string,Link>();
+    let failureRoute:string|null=null;
+    mocks.inputs.mockImplementation(async(_client,_project,_design,selected:string)=>{
+      const placed=members.get(selected)!;
+      return {group:routes.get(selected)!,instances:placed,chain:buildCadChain(placed,[]),transitions:[]};
+    });
+    mocks.query.mockImplementation(async(sql:string,values:unknown[]=[])=>{
+      if(sql.startsWith('SELECT * FROM cad_route_tray_exports'))return {rows:exports.has(String(values[2]))?[exports.get(String(values[2]))]:[]};
+      if(sql.startsWith('SELECT * FROM trays'))return {rows:rows.has(String(values[1]))?[rows.get(String(values[1]))]:[]};
+      if(sql.startsWith('SELECT status FROM cad_route_groups'))return {rows:[routes.get(String(values[2]))!]};
+      if(sql.startsWith('SELECT COUNT(*)'))return {rows:[{member_count:members.get(String(values[2]))!.length}]};
+      if(sql.startsWith('SELECT id FROM trays'))return {rows:[]};
+      if(sql.startsWith('INSERT INTO trays')||sql.startsWith('UPDATE trays')){
+        const trayId=String(values[1]),derived=tray(trayId,values);
+        const {name,purpose,tray_type,width_mm,height_mm,length_mm,length_source,length_calculation}=derived;
+        const written=sql.startsWith('INSERT')?derived:{...rows.get(trayId)!,name,purpose,tray_type,width_mm,height_mm,length_mm,length_source,length_calculation};
+        rows.set(trayId,written);return {rows:[written]};
+      }
+      if(sql.startsWith('INSERT INTO cad_route_tray_exports')){
+        if(values[2]===failureRoute)throw Object.assign(Error('Export write failed'),{code:'23505'});
+        exports.set(String(values[2]),{project_id:String(values[0]),design_id:String(values[1]),route_group_id:String(values[2]),tray_id:String(values[3]),
+          source_sha256:String(values[4]),source_proof:JSON.parse(String(values[5])),projection:JSON.parse(String(values[6]))});
+      }
+      if(sql.startsWith('DELETE FROM cad_route_tray_exports'))exports.delete(String(values[2]));
+      if(sql.startsWith('DELETE FROM trays')){
+        const removed=rows.delete(String(values[1]));return {rows:removed?[{id:values[1]}]:[]};
+      }
+      return {rows:[]};
+    });
+    const client={query:mocks.query} as unknown as Parameters<typeof writeCadTrayExport>[0];
+    if(listSource)await writeCadTrayExport(client,projectId,designId,sourceId,actorId);
+    if(listTarget)await writeCadTrayExport(client,projectId,designId,targetId,actorId);
+    const sync=()=>synchronizeCadTrayExportsAfterTransfer(client,projectId,designId,sourceId,targetId,actorId);
+    const move=()=>{
+      members.set(sourceId,[members.get(sourceId)![0]]);members.get(targetId)!.push(moved);
+      routes.get(sourceId)!.revision++;routes.get(targetId)!.revision++;
+    };
+    mocks.query.mockClear();mocks.audit.mockClear();mocks.inputs.mockClear();
+    return {routes,members,rows,exports,client,sync,move,setFailure:(selected:string)=>{failureRoute=selected;}};
+  }
+  it('refreshes both exact owned rows and proofs and can be repeated without duplicate writes',async()=>{
+    const state=await fixture(),sourceTray=state.exports.get(sourceId)!.tray_id,targetTray=state.exports.get(targetId)!.tray_id;
+    const hashes=[state.exports.get(sourceId)!.source_sha256,state.exports.get(targetId)!.source_sha256];
+    state.rows.get(sourceTray)!.include_grounding_cable=false;
+    state.move();await state.sync();
+    expect(state.rows.size).toBe(2);
+    expect(state.exports.get(sourceId)!.tray_id).toBe(sourceTray);expect(state.exports.get(targetId)!.tray_id).toBe(targetTray);
+    expect(state.rows.get(sourceTray)).toMatchObject({length_mm:1500,include_grounding_cable:false});
+    expect(state.rows.get(targetTray)).toMatchObject({length_mm:3000});
+    expect(state.exports.get(sourceId)!.source_sha256).not.toBe(hashes[0]);
+    expect(state.exports.get(targetId)!.source_sha256).not.toBe(hashes[1]);
+    for(const selected of [sourceId,targetId]){
+      const saved=await compatibleCadTrayExport(state.client,projectId,designId,state.routes.get(selected)!,state.members.get(selected)!,buildCadChain(state.members.get(selected)!,[]));
+      expect(saved?.row.id).toBe(state.exports.get(selected)!.tray_id);
+    }
+    expect(mocks.audit).toHaveBeenCalledTimes(2);
+    mocks.query.mockClear();await state.sync();expect(writes()).toEqual([]);
+  });
+  it('keeps transferred listed geometry included by creating the target list row automatically',async()=>{
+    const state=await fixture(true,false);state.move();await state.sync();
+    expect(state.rows.size).toBe(2);expect(state.exports.has(targetId)).toBe(true);
+    expect(state.rows.get(state.exports.get(targetId)!.tray_id)).toMatchObject({name:'TARGET',length_mm:3000});
+    expect(writes().filter(([sql])=>String(sql).startsWith('INSERT INTO trays'))).toHaveLength(1);
+  });
+  it('removes the verified generated source row when its final member leaves, retaining the empty draft',async()=>{
+    const state=await fixture(true,false),oldTray=state.exports.get(sourceId)!.tray_id;
+    state.members.set(sourceId,[]);state.members.get(targetId)!.push(instance(10),instance(11));
+    await state.sync();
+    expect(state.rows.has(oldTray)).toBe(false);expect(state.exports.has(sourceId)).toBe(false);
+    expect(state.routes.get(sourceId)).toMatchObject({id:sourceId,status:'draft'});
+    expect(state.exports.has(targetId)).toBe(true);expect(state.rows.size).toBe(1);
+    expect(mocks.inputs.mock.calls.map(call=>call[3])).not.toContain(sourceId);
+  });
+  it('removes an empty listed target after a membership edit without building empty geometry',async()=>{
+    const state=await fixture(false,true),oldTray=state.exports.get(targetId)!.tray_id;
+    state.members.set(targetId,[]);
+    await synchronizeCadTrayExportsAfterTransfer(state.client,projectId,designId,null,targetId,actorId);
+    expect(state.rows.has(oldTray)).toBe(false);expect(state.exports.size).toBe(0);expect(mocks.inputs).not.toHaveBeenCalled();
+  });
+  it('does not turn unlisted drafts into Trays rows',async()=>{
+    const state=await fixture(false,false);state.move();await state.sync();
+    expect(state.rows.size).toBe(0);expect(state.exports.size).toBe(0);expect(writes()).toEqual([]);expect(mocks.inputs).not.toHaveBeenCalled();
+  });
+  it('updates a listed target when the transferred component had no old export',async()=>{
+    const state=await fixture(false,true);state.move();await state.sync();
+    expect(state.exports.size).toBe(1);expect(state.exports.has(sourceId)).toBe(false);
+    expect(state.rows.get(state.exports.get(targetId)!.tray_id)?.length_mm).toBe(3000);
+  });
+  it.each([sourceId,targetId])('preserves manually edited derived values before changing either export: %s',async selected=>{
+    const state=await fixture(),edited=state.rows.get(state.exports.get(selected)!.tray_id)!;
+    edited.length_mm=999;state.move();
+    await expect(state.sync()).rejects.toMatchObject({code:'CAD_ROUTE_TRAY_EDITED'});
+    expect(edited.length_mm).toBe(999);expect(writes()).toEqual([]);
+    expect(mocks.query.mock.calls.some(([sql])=>String(sql).startsWith('DELETE'))).toBe(false);
+  });
+  it('propagates failed target writes so the owning transaction can roll back the complete transfer',async()=>{
+    const state=await fixture();state.move();state.setFailure(targetId);
+    await expect(state.sync()).rejects.toMatchObject({code:'23505'});
+  });
+  it('keeps publication immutability when asked to synchronize a published route',async()=>{
+    const state=await fixture();state.routes.get(sourceId)!.status='published';state.move();
+    await expect(state.sync()).rejects.toMatchObject({code:'CAD_ROUTE_PUBLISHED'});expect(writes()).toEqual([]);
   });
 });
