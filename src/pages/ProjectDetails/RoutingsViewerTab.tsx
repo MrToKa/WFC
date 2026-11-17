@@ -33,7 +33,7 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTr
         </div>
         {drawingEnabled ? <CadComponentsPanel key={JSON.stringify([projectId, token])}
           projectId={projectId} token={token} modelVersionId={viewer.model?.id ?? null}
-          ready={viewer.phase === 'ready'} onPick={viewer.pickCadAnchor} onShow={viewer.showCadComponent}
+          ready={viewer.phase === 'ready'} onPick={viewer.pickCadAnchor} onPickPlacement={viewer.pickPlacementPoint} onShow={viewer.showCadComponent}
           onMove={viewer.moveCadComponent} onFocus={viewer.focusCadComponent} onRemove={viewer.removeCadComponent}
           onColor={viewer.setCadComponentColor} onVisibility={viewer.setCadComponentVisibility} onProperties={viewer.setCadComponentProperties} onTraysChanged={onTraysChanged} />
           : <Body1>{canDrawTrays ? 'Tray drawing is disabled.' : 'You do not have permission to draw trays in this project.'}</Body1>}

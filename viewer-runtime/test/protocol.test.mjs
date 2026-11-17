@@ -312,3 +312,15 @@ test('source tray assignment snapshots and acknowledgements are exact, bounded a
   assert.equal(validateEnvelope(envelope('TRAY_ASSIGNMENTS_UPDATED', {}), 'parent-to-frame'), null);
   assert.equal(validateEnvelope(envelope('TRAY_ASSIGNMENTS_UPDATED', { count: 1 })), null);
 });
+
+
+test('placement point commands are closed and preserve explicit CAD versus source identity', () => {
+ assert.ok(validateEnvelope(envelope('PICK_PLACEMENT_POINT',{allowSource:false,cadInstanceIds:[uuid(10)]}),'parent-to-frame'));
+ assert.ok(validateEnvelope(envelope('PICK_PLACEMENT_POINT',{allowSource:true}),'parent-to-frame'));
+ assert.ok(validateEnvelope(envelope('PICK_PLACEMENT_POINT',{allowSource:true,cadInstanceIds:[]}),'parent-to-frame'));
+ for(const payload of [{allowSource:false,cadInstanceIds:[]},{allowSource:false,cadInstanceIds:[uuid(10),uuid(10)]},{allowSource:false,cadInstanceIds:['bad']},{allowSource:false,extra:true},{cadInstanceIds:[uuid(10)]}]) assert.equal(validateEnvelope(envelope('PICK_PLACEMENT_POINT',payload)),null);
+ const point={point:[1,2,3],derivation:'picked-surface-point'};
+ for(const identity of [{cadInstanceId:uuid(10)},{objectId:2}]) assert.ok(validateEnvelope(envelope('PLACEMENT_POINT_PICKED',{...point,...identity}),'frame-to-parent'));
+ for(const identity of [{},{objectId:0},{cadInstanceId:'bad'},{cadInstanceId:uuid(10),objectId:2}]) assert.equal(validateEnvelope(envelope('PLACEMENT_POINT_PICKED',{...point,...identity})),null);
+ assert.equal(validateEnvelope(envelope('PLACEMENT_POINT_PICKED',{...point,cadInstanceId:uuid(10)},{loadId:null,modelVersionId:null})),null);
+});

@@ -772,10 +772,16 @@ describe('route command toaster feedback', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: button })).toBeEnabled());
     expect(showToast).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: button }));
-    if (button === 'Remove route group')
-      fireEvent.click(
-        await within(await screen.findByRole('dialog')).findByRole('button', { name: 'Remove group' }),
-      );
+    if (button === 'Remove route group') {
+      // Re-query the portal after Fluent's modal focus/visibility handoff.
+      const confirm = await waitFor(() => {
+        const dialog = screen.getByRole('dialog', { name: 'Remove route group?' });
+        const remove = within(dialog).getByRole('button', { name: 'Remove group' });
+        expect(remove).toBeEnabled();
+        return remove;
+      });
+      fireEvent.click(confirm);
+    }
     await waitFor(() =>
       expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ title, intent })),
     );

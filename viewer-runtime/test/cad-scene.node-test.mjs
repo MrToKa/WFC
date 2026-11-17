@@ -743,3 +743,12 @@ test('CAD tray peek keeps every member solid, ghosts other CAD, fits the whole r
  assert.ok([...model.instances.records.values()].every(row=>row.material.opacity===1));
  assert.equal(model.getObjectTree().isNodeHidden(f.viewer.focused.at(-1).ids[0]),true);
 });
+
+
+test('placement CAD hit resolution checks model identity and survives instance replacement', () => {
+ const f=fixture(), scene=createCadSceneController(f.viewer,{window:f.window,sourceModel:f.sourceModel});
+ scene.add('tray-1',f.mesh,f.transform); const model=f.viewer.shown[0], dbId=model.instances.fragments.fragId2dbId[0];
+ assert.equal(scene.resolveHit({model,dbId}),'tray-1');assert.equal(scene.resolveHit({model:f.sourceModel,dbId}),undefined);assert.equal(scene.resolveHit({model,dbId:999}),undefined);
+ scene.add('tray-1',f.mesh,f.transform);assert.equal(scene.resolveHit({model,dbId}),'tray-1');
+ scene.remove('tray-1');assert.equal(scene.resolveHit({model,dbId}),undefined);scene.dispose();
+});

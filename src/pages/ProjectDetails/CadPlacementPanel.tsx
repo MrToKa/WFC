@@ -30,6 +30,7 @@ import { MATE_OPPOSING_FACE, type PocPort } from '@/viewer/pocConnectorCatalog';
 import { supportsStraightCut, getInstanceCadPorts } from '../../../shared/cadLengths';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { CadRoutesPanel } from './CadRoutesPanel';
+import { ManualSectionPlacement } from './ManualSectionPlacement';
 import type { CadRouteGroup } from '../../../shared/cadRouteGroups';
 
 type CatalogueItem = {
@@ -81,6 +82,7 @@ type Props = {
   token: string;
   catalogue: CatalogueItem[];
   onPick: ViewerController['pickPoint'];
+  onPickPlacement?: ViewerController['pickPlacementPoint'];
   onShow: ViewerController['showCadComponent'];
   onMove: ViewerController['moveCadComponent'];
   onFocus?: ViewerController['focusCadComponent'];
@@ -121,6 +123,7 @@ export function CadPlacementPanel({
   token,
   catalogue,
   onPick,
+  onPickPlacement,
   onShow,
   onMove,
   onFocus,
@@ -283,8 +286,8 @@ export function CadPlacementPanel({
       if (!response.ok) {
         let code = `HTTP ${response.status}`;
         try {
-          const payload: { code?: string } = await response.json();
-          if (payload.code) code = payload.code;
+          const payload: { code?: string; message?: string } = await response.json();
+          if (payload.message || payload.code) code = payload.message || payload.code!;
         } catch {
           /* Safe error only */
         }
@@ -323,6 +326,9 @@ export function CadPlacementPanel({
       });
     return () => controller.abort();
   }, [api, selectedId, canSetLength]);
+
+  const placementRequest = useCallback((path: string, init?: RequestInit) =>
+    api(`/designs/${designId}${path}`, init), [api, designId]);
 
   const reload = useCallback(
     async (signal?: AbortSignal) => {
@@ -913,6 +919,31 @@ export function CadPlacementPanel({
             </Button>
           ) : null}
         </div>
+      ) : null}
+      {designId && onPickPlacement && (editingId || selectedRoute) ? (
+        <ManualSectionPlacement
+          key={`${projectId}:${modelVersionId}:${designId}`}
+          instances={instances} catalogue={catalogue} editingId={editingId} route={selectedRoute}
+          disabled={busy || routeBusy || externalBusy || displaying || routeDirty}
+          pick={onPickPlacement} request={placementRequest} onBusyChange={setBusy}
+          onMoved={async () => {
+            try {
+              if (selectedRoute) {
+                const response = await api(`/designs/${designId}/routes`);
+                const data: { routes: CadRouteGroup[] } = await response.json();
+                setRouteGroups(data.routes);
+                const fresh = data.routes.find(row => row.id === selectedRoute.id) ?? null;
+                setSelectedRoute(fresh); setUpdatedRoute(fresh ?? undefined);
+              }
+              await reload();
+              setNotice('Selected sections moved and saved at the destination point.');
+            } catch (error) {
+              setNotice(`Position saved, but refresh failed. Reload the view before moving again. ${error instanceof Error ? error.message : ''}`);
+            } finally {
+              setEditingId(''); setSelectedId(''); setCoordinates(empty); setPendingSnap(null);
+            }
+          }}
+        />
       ) : null}
       {toolsOpen ? (
         <fieldset

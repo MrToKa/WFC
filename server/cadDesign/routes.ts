@@ -15,6 +15,7 @@ import { getObjectStream, getProjectBucket } from '../services/objectStorageServ
 import { MAX_STEP_ASSEMBLY_PARTS } from '../../shared/cadExportLimits.js';
 import { assertCadExportCurrent, cadAssemblyParts, cadSectionProperties, cadExportFilename, cadMaterialRows, CadExportError, parseCadExportScope, readCadExportSnapshot, type CadExportSnapshot } from './scopedExports.js';
 import { cadRouteGroupsRouter } from './routeGroupsRoutes.js';
+import { cadAnchorTranslationRouter } from './anchorTranslation.js';
 import { cadRoutePublicationRouter } from './routePublication.js';
 import { cadRouteAlignmentRouter } from './routeAlignment.js';
 import { cadRouteAutoConnectionsRouter } from './routeAutoConnections.js';
@@ -23,6 +24,7 @@ import { cadNetworkPreparationRouter } from './networkPreparation.js';
 
 export const cadDesignRouter = Router({ mergeParams: true });
 cadDesignRouter.use(cadRouteGroupsRouter);
+cadDesignRouter.use(cadAnchorTranslationRouter);
 cadDesignRouter.use(cadRoutePublicationRouter);
 cadDesignRouter.use(cadRouteAlignmentRouter);
 cadDesignRouter.use(cadRouteAutoConnectionsRouter);

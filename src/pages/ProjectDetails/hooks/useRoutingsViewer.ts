@@ -159,6 +159,12 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     }
     return run.controller.pickPoint();
   }, [scope, current]);
+  const pickPlacementPoint = useCallback(async (...args: Parameters<ViewerController['pickPlacementPoint']>): ReturnType<ViewerController['pickPlacementPoint']> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready)
+      throw new Error('Active model unavailable for point selection.');
+    return run.controller.pickPlacementPoint(...args);
+  }, [scope, current]);
   const showCadComponent = useCallback(async (...args: Parameters<ViewerController['showCadComponent']>): Promise<void> => {
     const run = runRef.current;
     if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
@@ -195,6 +201,6 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     await run.controller.setCadComponentProperties(...args);
   }, [scope, current]);
   const visible = state.scope === scope ? state : initial(scope);
-  return { ...visible, pickCadAnchor, showCadComponent, moveCadComponent, removeCadComponent, focusCadComponent,
+  return { ...visible, pickCadAnchor, pickPlacementPoint, showCadComponent, moveCadComponent, removeCadComponent, focusCadComponent,
     setCadComponentColor, setCadComponentVisibility, setCadComponentProperties, retry, canShow: visible.phase === 'ready' };
 }

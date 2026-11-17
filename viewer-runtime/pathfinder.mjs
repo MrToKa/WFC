@@ -612,7 +612,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     if (JSON.stringify(trayRootSelectionIds(operationSignal)) !== JSON.stringify(ids)) throw fail('TRAY_ROOT_SELECTION_CHANGED');
     return { objects: ids.map(objectId => ({ objectId })) };
   }
-  function pickPoint(operationSignal) {
+  function pickPoint(operationSignal, placement) {
     active(operationSignal); pick?.cancel();
     const coordinates = modelCoordinates(model), canvas = viewer.canvas;
     if (!canvas || typeof viewer.hitTest !== 'function') throw fail('PICK_UNAVAILABLE');
@@ -622,27 +622,40 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
         if (pick?.finish !== finish) return;
         pick = undefined; clearTimeout(timer);
         canvas.removeEventListener('pointerdown', down, true); canvas.removeEventListener('click', click, true);
+        window.document?.removeEventListener('keydown', keydown, { capture: true });
         signal?.removeEventListener('abort', abort); operationSignal?.removeEventListener('abort', abort);
         error ? reject(error) : resolve(result);
       };
       const abort = () => finish(abortError());
+      const keydown = event => { if (placement && event.key === 'Escape') { event.preventDefault(); finish(fail('PICK_CANCELLED')); } };
       const down = event => { start = event.button === 0 ? [event.clientX, event.clientY] : undefined; };
       const click = event => {
         if (event.button !== 0 || !start || Math.hypot(event.clientX - start[0], event.clientY - start[1]) > 5) return;
         try {
           active(operationSignal);
           const rectangle = canvas.getBoundingClientRect(), hit = viewer.hitTest(event.clientX - rectangle.left, event.clientY - rectangle.top, false);
-          if (!hit || hit.model !== model || !positiveId(hit.dbId)) return;
+          if (!hit) return;
+          let identity;
+          if (placement) {
+            const cadInstanceId = placement.resolveCad?.(hit);
+            if (cadInstanceId && (!placement.cadInstanceIds || placement.cadInstanceIds.includes(cadInstanceId))) identity = { cadInstanceId };
+            else if (placement.allowSource && hit.model === model && positiveId(hit.dbId)) identity = { objectId: hit.dbId };
+            else return;
+          } else {
+            if (hit.model !== model || !positiveId(hit.dbId)) return;
+            identity = { objectId: hit.dbId };
+          }
           const point = coordinates.toCanonical(hit.intersectPoint ?? hit.point);
           event.preventDefault(); event.stopImmediatePropagation();
-          finish(null, { objectId: hit.dbId, point, derivation: 'picked-surface-point' });
+          finish(null, { ...identity, point, derivation: 'picked-surface-point' });
         } catch (error) { finish(error); }
       };
       const timer = setTimeout(() => finish(fail('PICK_TIMEOUT')), 120000);
       pick = { finish, cancel: abort };
       canvas.addEventListener('pointerdown', down, true); canvas.addEventListener('click', click, true);
+      if (placement) window.document?.addEventListener('keydown', keydown, { capture: true });
       signal?.addEventListener('abort', abort, { once: true }); operationSignal?.addEventListener('abort', abort, { once: true });
     });
   }
-  return { showPath, showTray, showCadTray, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
+  return { showPath, showTray, showCadTray, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint, pickPlacementPoint: (options, resolveCad, operationSignal) => pickPoint(operationSignal, { ...options, resolveCad }), dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
 }
