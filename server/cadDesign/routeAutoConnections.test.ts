@@ -104,6 +104,30 @@ describe('physical CAD internal connection inference',()=>{
     expect(()=>inferCadConnections([row(10)],[pair()])).toThrow('outside this group');
     expect(()=>inferCadConnections([row(10),row(11,1502)],[pair()])).toThrow('no longer aligned');
   });
+  it.each([
+    {role:'source',gapMm:0}, {role:'target',gapMm:0},
+    {role:'source',gapMm:171}, {role:'target',gapMm:171},
+  ])('reserves a boundary mate in the $role role from another internal join across a $gapMm mm gap',({role,gapMm})=>{
+    const external=role==='source'?pair(10,99):{
+      source_instance_id:id(99),source_name:'start',target_instance_id:id(10),target_name:'end',
+    };
+    const instances=[row(10),row(12,1500+gapMm)],before=JSON.stringify(instances);
+    const result=inferCadConnections(instances,[],[],[external]);
+    expect(result.missing).toEqual([]);expect(result.missingTransitions).toEqual([]);
+    expect(result.connected).toBe(false);expect(result.diagnostics.nearestGaps).toHaveLength(2);
+    expect(result.diagnostics.nearestGaps[0].gapMm).toBeGreaterThanOrEqual(1500);
+    expect(result.diagnostics.nearestGaps.every(gap=>
+      !(gap.sourceInstanceId===id(10)&&gap.sourcePortName==='end')&&
+      !(gap.targetInstanceId===id(10)&&gap.targetPortName==='end'))).toBe(true);
+    expect(result.endpoints).toHaveLength(4);
+    expect(result.endpoints).toContainEqual(expect.objectContaining({instanceId:id(10),portName:'end'}));
+    expect(JSON.stringify(instances)).toBe(before);
+  });
+  it('keeps both ends of a reassigned single member exposed while retaining its external physical mate',()=>{
+    const result=inferCadConnections([row(10)],[],[],[pair(10,99)]);
+    expect(result).toMatchObject({connected:true,missing:[],missingTransitions:[]});
+    expect(result.endpoints.map(endpoint=>endpoint.portName)).toEqual(['start','end']);
+  });
   it('does not admit unsupported source geometry or unbounded groups',()=>{
     expect(()=>inferCadConnections([{...row(10),source_sha256:'0'.repeat(64)}],[])).toThrow('verified straight');
     expect(()=>inferCadConnections([],[])).toThrow('1–32');
@@ -194,6 +218,22 @@ beforeEach(()=>{
 const connect=(body:unknown={expectedRevision:3},admin=true)=>fetch(`${base}/auto-connect`,{method:'POST',headers:{'Content-Type':'application/json','x-test-admin':admin?'yes':'no'},body:JSON.stringify(body)});
 const writes=()=>mocks.query.mock.calls.filter(([sql])=>/^INSERT|^UPDATE|^DELETE/.test(String(sql)));
 describe('automatic connection endpoints',()=>{
+  it('accepts auto-connect and attachment reads after a single connected member moves to another route',async()=>{
+    mocks.raw.mockResolvedValue({group:{id:routeId,revision:3,status:'draft'},instances:[row(10)],connections:[],externalConnections:[pair(10,99)]});
+    const fallback=mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async(sql:string,...args:unknown[])=>{
+      if(sql.startsWith('SELECT instance_id FROM'))return {rows:[{instance_id:id(10)}]};
+      return fallback(sql,...args);
+    });
+    const response=await connect();expect(response.status).toBe(200);
+    const result=await response.json();
+    expect(result).toMatchObject({connectionsCreated:0,routingTransitionsCreated:0,connected:true,revision:3});
+    expect(result.endpoints).toHaveLength(2);expect(writes()).toEqual([]);
+    const attachments=await fetch(`${base}/auto-attachments`,{headers:{'x-test-admin':'yes'}});
+    expect(attachments.status).toBe(200);
+    expect(await attachments.json()).toMatchObject({status:'network-required',diagnostics:{networkRequired:true},endpoints:result.endpoints});
+    expect(writes()).toEqual([]);
+  });
   it('loads persisted branch port identities before saving an inferred tee connection',async()=>{
     mocks.raw.mockResolvedValue({group:{id:routeId,revision:3,status:'draft'},instances:teeBranchPair(),connections:[],transitions:[]});
     mocks.query.mockImplementation(async(sql:string)=>{

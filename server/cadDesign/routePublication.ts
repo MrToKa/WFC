@@ -225,12 +225,18 @@ export async function groupRawInputs(client:PoolClient,projectId:string,designId
   if(!membership||membership.member_count!==instances.length)
     return refuse('CAD_ROUTE_UNSUPPORTED_GEOMETRY','Every route member must reference a verified Materials CAD revision. Legacy or unbacked members cannot be omitted.');
   const ids=instances.map(row=>row.id);
-  const connections=(await client.query<PublicationConnection>(`SELECT cc.source_instance_id,cc.target_instance_id,s.name AS source_name,t.name AS target_name
+  const touchingConnections=(await client.query<PublicationConnection>(`SELECT cc.source_instance_id,cc.target_instance_id,s.name AS source_name,t.name AS target_name
     FROM cad_design_connections cc JOIN cad_catalog_ports s ON s.id=cc.source_port_id JOIN cad_catalog_ports t ON t.id=cc.target_port_id
     WHERE cc.project_id=$1 AND cc.design_id=$2 AND (cc.source_instance_id=ANY($3::uuid[]) OR cc.target_instance_id=ANY($3::uuid[]))`,[projectId,designId,ids])).rows;
   const transitions=(await client.query<PublicationTransition>(`SELECT id,kind,source_instance_id,target_instance_id,source_port_name AS source_name,target_port_name AS target_name
     FROM cad_route_transition_links WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 ORDER BY id FOR SHARE`,[projectId,designId,routeId])).rows;
-  return {group,instances,connections,transitions};
+  // Physical mates belong to the design and survive section reassignment. Only
+  // mates within this group's current membership form its route topology; keep
+  // boundary mates separately so automatic inference can respect occupied ports.
+  const members=new Set(ids);
+  const internal=(edge:PublicationConnection)=>members.has(edge.source_instance_id)&&members.has(edge.target_instance_id);
+  const connections=touchingConnections.filter(internal),externalConnections=touchingConnections.filter(edge=>!internal(edge));
+  return {group,instances,connections,externalConnections,transitions};
 }
 export async function groupInputs(client:PoolClient,projectId:string,designId:string,routeId:string) {
   const {group,instances,connections,transitions}=await groupRawInputs(client,projectId,designId,routeId);

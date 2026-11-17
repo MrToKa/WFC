@@ -24,7 +24,7 @@ const world=(row:PublicationInstance):RigidTransform=>({position:{x:row.x_mm,y:r
 
 /** Preserve physical mates and separately describe bounded logical installation joins.
  * Neither kind translates or rotates a member or invents a manufacturer fitting. */
-export function inferCadConnections(instances:PublicationInstance[],existing:Connection[],transitions:PublicationTransition[]=[]) {
+export function inferCadConnections(instances:PublicationInstance[],existing:Connection[],transitions:PublicationTransition[]=[],externalConnections:Connection[]=[]) {
   if(instances.length<1||instances.length>32)fail('CAD_ROUTE_PART_LIMIT','Choose 1–32 verified components for automatic connection.');
   const rows=new Map(instances.map(row=>[row.id,row]));
   if(rows.size!==instances.length)fail('CAD_ROUTE_INVALID_MEMBERS','The route contains duplicate component identities.');
@@ -53,7 +53,15 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
     for(const port of [first,last]){const id=key(port.row.id,port.portName);if(used.has(id))fail('CAD_ROUTE_AUTO_CONNECT_AMBIGUOUS','A component port already has multiple connections.');used.add(id);}
     unite(first.row.id,last.row.id);
   }
-  const open=ports.filter(port=>!used.has(key(port.row.id,port.portName)));
+  // A physical mate crossing the route boundary stays in the design. Its local
+  // port is still a route endpoint, but cannot accept another internal join.
+  const reserved=new Set<string>();
+  for(const connection of externalConnections){
+    if(rows.has(connection.source_instance_id))reserved.add(key(connection.source_instance_id,connection.source_name));
+    if(rows.has(connection.target_instance_id))reserved.add(key(connection.target_instance_id,connection.target_name));
+  }
+  const available=(port:typeof ports[number])=>!used.has(key(port.row.id,port.portName))&&!reserved.has(key(port.row.id,port.portName));
+  const open=ports.filter(available);
   const candidates=new Map<string,typeof ports>();
   for(const first of open)for(const last of open){
     if(first.row.id===last.row.id||!aligned(first,last))continue;
@@ -71,7 +79,7 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
   const missingTransitions:PublicationTransition[]=[],ambiguousPorts=new Set<string>();
   for(let pass=0;pass<instances.length;pass++){
     ambiguousPorts.clear();
-    const free=ports.filter(port=>!used.has(key(port.row.id,port.portName)));
+    const free=ports.filter(available);
     const nearest=new Map<string,typeof ports[number]>();
     for(const first of free){
       const possible=free.filter(last=>find(first.row.id)!==find(last.row.id)&&gapBetween(first,last)<=MAX_CAD_TRANSITION_GAP_MM+1e-6)
@@ -96,8 +104,8 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
   const connected=components.size===1;
   // A complete result must satisfy the identical publication network validator.
   if(connected)buildCadChain(instances,[...existing,...missing],[...transitions,...missingTransitions]);
-  const free=ports.filter(port=>!used.has(key(port.row.id,port.portName)));
-  const endpoints:Endpoint[]=free.map(port=>({instanceId:port.row.id,portName:port.portName,pointMetres:port.frame.pointMetres}));
+  const endpoints:Endpoint[]=ports.filter(port=>!used.has(key(port.row.id,port.portName))).map(port=>({instanceId:port.row.id,portName:port.portName,pointMetres:port.frame.pointMetres}));
+  const free=ports.filter(available);
   const nearestGaps=[];
   for(let firstIndex=0;firstIndex<free.length;firstIndex++)for(let lastIndex=firstIndex+1;lastIndex<free.length;lastIndex++){
     const first=free[firstIndex],last=free[lastIndex];
@@ -171,12 +179,12 @@ cadRouteAutoConnectionsRouter.post(`${prefix}/auto-connect`,requireAdmin,safe(as
   const parsed=input.safeParse(req.body);if(!parsed.success){res.status(400).json({code:'INVALID_CAD_ROUTE_AUTO_CONNECT',message:'A current saved route revision is required.'});return;}
   const result=await publicationTransaction(req,async client=>{
     const {projectId,designId,routeId}=req.params;
-    const {group,instances,connections,transitions=[]}=await groupRawInputs(client,projectId,designId,routeId);
+    const {group,instances,connections,transitions=[],externalConnections=[]}=await groupRawInputs(client,projectId,designId,routeId);
     if(group.revision!==parsed.data.expectedRevision)fail('STALE_CAD_ROUTE','The route changed. Refresh before connecting.');
     if(group.status!=='draft')fail('CAD_ROUTE_PUBLISHED','Withdraw the published route before changing connections.');
     const members=(await client.query<{instance_id:string}>('SELECT instance_id FROM cad_route_group_members WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3',[projectId,designId,routeId])).rows;
     if(members.length!==instances.length)fail('CAD_ROUTE_UNSUPPORTED_GEOMETRY','Some group members have no verified Materials CAD reference. No automatic changes were made.');
-    const inferred=inferCadConnections(instances,connections,transitions);
+    const inferred=inferCadConnections(instances,connections,transitions,externalConnections);
     if(inferred.missing.length){
       const portRows=(await client.query<{id:string;catalog_item_id:string;name:string;port_type:string}>(`SELECT id,catalog_item_id,name,port_type FROM cad_catalog_ports
         WHERE project_id=$1 AND catalog_item_id=ANY($2::uuid[]) AND name IN('start','end','branch') FOR SHARE`,[projectId,[...new Set(instances.map(row=>row.catalog_item_id))]])).rows;
@@ -202,8 +210,8 @@ cadRouteAutoConnectionsRouter.post(`${prefix}/auto-connect`,requireAdmin,safe(as
 cadRouteAutoConnectionsRouter.get(`${prefix}/auto-attachments`,requireAdmin,safe(async(req,res)=>{
   const result=await publicationTransaction(req,async client=>{
     const {projectId,designId,routeId}=req.params;
-    const {group,instances,connections,transitions=[]}=await groupRawInputs(client,projectId,designId,routeId);
-    const inferred=inferCadConnections(instances,connections,transitions);
+    const {group,instances,connections,transitions=[],externalConnections=[]}=await groupRawInputs(client,projectId,designId,routeId);
+    const inferred=inferCadConnections(instances,connections,transitions,externalConnections);
     // A read suggests internal joins but never saves them or invents a two-end chain.
     if(!inferred.connected||inferred.missing.length||inferred.missingTransitions.length)return {status:'incomplete',attachments:[],routeId,revision:group.revision,endpoints:inferred.endpoints,
       diagnostics:{...inferred.diagnostics,message:inferred.missing.length||inferred.missingTransitions.length?'Internal physical joins or bounded logical installation transitions are available. Use Auto-select connection points to save them without moving components.':inferred.diagnostics.message}};
