@@ -79,8 +79,10 @@ namespace AddinRibbon.Routing
         public string RouteCode { get; private set; }
         public CableCategory AllowedCategories { get; private set; }
         public IReadOnlyList<RoutePoint> Points { get; private set; }
-        /// <summary>Cross-tray connections use only the physical first/last ports; object projection may use the interior.</summary>
+        /// <summary>Cross-tray connections originate at the physical first/last ports. Explicit straight CAD side-entry targets may receive them in their interior.</summary>
         public bool ConnectionsAtEndsOnly { get; private set; }
+        /// <summary>Current straight CAD rails may receive a genuine neighbouring end within the configured gap. Interior crossings remain disconnected.</summary>
+        public bool AllowsSideConnections { get; private set; }
         /// <summary>A separately published CAD chain cannot borrow proximity connections to another tray.</summary>
         public bool Independent { get; private set; }
         public IReadOnlyList<RouteConnectionPort> VerifiedPorts { get; private set; }
@@ -106,6 +108,11 @@ namespace AddinRibbon.Routing
         public TraySegment(string id, string name, CableCategory allowedCategories,
             IEnumerable<RoutePoint> points, bool connectionsAtEndsOnly, IEnumerable<RouteConnectionPort> verifiedPorts,
             IEnumerable<TrayMeshClearance> connectionSurfaces, bool independent)
+            : this(id, name, allowedCategories, points, connectionsAtEndsOnly, verifiedPorts, connectionSurfaces, independent, false) { }
+
+        public TraySegment(string id, string name, CableCategory allowedCategories,
+            IEnumerable<RoutePoint> points, bool connectionsAtEndsOnly, IEnumerable<RouteConnectionPort> verifiedPorts,
+            IEnumerable<TrayMeshClearance> connectionSurfaces, bool independent, bool allowsSideConnections)
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("A tray needs a stable identifier.", "id");
             if (points == null) throw new ArgumentNullException("points");
@@ -129,6 +136,28 @@ namespace AddinRibbon.Routing
             if (surfaces.Any(s => s == null) || (surfaces.Length != 0 && surfaces.Length != (connectionsAtEndsOnly ? 2 : 1)))
                 throw new ArgumentException("Connection surfaces must describe one straight body or both bend end sections.", "connectionSurfaces");
             ConnectionSurfaces = new ReadOnlyCollection<TrayMeshClearance>(surfaces);
+            if (allowsSideConnections && (!connectionsAtEndsOnly || independent || surfaces.Length != 0 || !IsStraightCenterline(copy)))
+                throw new ArgumentException("Side connections require a nonisolated straight port-only CAD centerline without fitted mesh surfaces.", "allowsSideConnections");
+            AllowsSideConnections = allowsSideConnections;
+        }
+
+        /// <summary>A nondegenerate monotone straight line; repeated stations are allowed, bends and backtracking are not.</summary>
+        public static bool IsStraightCenterline(IReadOnlyList<RoutePoint> points)
+        {
+            if (points == null || points.Count < 2) return false;
+            var first = points[0]; var last = points[points.Count - 1];
+            double x = last.X - first.X, y = last.Y - first.Y, z = last.Z - first.Z;
+            double squared = x * x + y * y + z * z;
+            if (!RoutePoint.IsFinite(squared) || squared <= 1e-18) return false;
+            double previous = 0;
+            foreach (var point in points)
+            {
+                double station = ((point.X - first.X) * x + (point.Y - first.Y) * y + (point.Z - first.Z) * z) / squared;
+                if (!RoutePoint.IsFinite(station) || station < previous - 1e-12 || station < -1e-12 || station > 1 + 1e-12
+                    || point.DistanceTo(RoutePoint.Interpolate(first, last, station)) > 1e-9) return false;
+                previous = station;
+            }
+            return true;
         }
     }
 

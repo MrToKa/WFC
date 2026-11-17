@@ -22,7 +22,7 @@ internal static class Program
         if (args is ["--fingerprint-contract"]) return FingerprintContract();
         if (args is ["--benchmark"]) return Benchmark();
         if (args.Length != 0) return 2;
-        PlainParity(); SelectionInputs(); LimitsAndCancellation(); ScopeAndBounds(); Persistence(); ConstrainedParity();
+        PlainParity(); SelectionInputs(); LimitsAndCancellation(); ScopeAndBounds(); Persistence(); ConstrainedParity(); CadSideConnections();
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             schemaVersion = "wfc.pf.graph-reuse-checks.v1", status = failures == 0 ? "PASS" : "FAIL",
@@ -78,6 +78,35 @@ internal static class Program
     private sealed record Timing(double WholeMilliseconds, long AllocatedBytes, long BasisBuilds, long MemoryHits, long SurfaceQueries,
         long SurfaceHits, long CandidatePairs, double FingerprintMilliseconds, double TreeMilliseconds, double SurfaceMilliseconds,
         double GraphMilliseconds, long RetainedBytes);
+    private static void CadSideConnections()
+    {
+        Test("current CAD side-entry policy partitions cold warm and persisted graph recipes", () =>
+        {
+            TraySegment[] Network(bool side) => [
+                new("DROP", "/BC903", CableCategory.Control, [P(.8, 0, -2), P(.8)], true),
+                new("RAIL", "/BC027-2", CableCategory.Control, [P(0, -3), P(0, 3)], true, null, null, false, side)
+            ];
+            var from = P(.8, 0, -2); var to = P(0, 2); var options = Options(1);
+            var cache = new GraphPreparationCache();
+            using (cache.BeginRequest(Identity)) Need(!Route(Network(false), from, to, options).Success);
+            using (var changed = cache.BeginRequest(Identity))
+            {
+                Need(Route(Network(true), from, to, options).Success);
+                Equal(0L, changed.Diagnostics.BasisMemoryHits, "Legacy recipe was reused for current side-entry policy.");
+            }
+            using (var warm = cache.BeginRequest(Identity))
+            {
+                Need(Route(Network(true), from, to, options).Success);
+                Need(warm.Diagnostics.BasisMemoryHits > 0, "Current policy recipe was not reusable.");
+            }
+            using (cache.BeginRequest(Identity)) Need(!Route(Network(false), from, to, options).Success);
+            var persisted = cache.Export(Identity); var restored = new GraphPreparationCache();
+            Need(restored.Import(Identity, persisted!), "Current/legacy cache could not be imported.");
+            using (restored.BeginRequest(Identity)) Need(!Route(Network(false), from, to, options).Success);
+            using (restored.BeginRequest(Identity)) Need(Route(Network(true), from, to, options).Success);
+        });
+    }
+
     private static int FingerprintContract()
     {
         object Capture(string label, TraySegment[] trays, RoutePoint from, RoutePoint to)

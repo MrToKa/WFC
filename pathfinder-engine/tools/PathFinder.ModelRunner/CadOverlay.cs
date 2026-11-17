@@ -52,7 +52,11 @@ internal static partial class Program
             foreach (var port in ends)
                 if (Math.Min(CadDistance(port.Point, line[0]), CadDistance(port.Point, line[^1])) > 0.001)
                     throw new ArgumentException("CAD port is not on a published chain endpoint.");
-            segments.Add(new TraySegment(id, name, (CableCategory)mask, line, true, ends, null, independent));
+            // Historical v1/v2 replay remains port-to-port. The current policy
+            // admits a neighbouring genuine end onto a straight CAD rail only;
+            // bends retain their complete curve and physical end restrictions.
+            bool sideConnections = payloadVersion == "wfc.pf.cad-overlay-payload.v3" && TraySegment.IsStraightCenterline(line);
+            segments.Add(new TraySegment(id, name, (CableCategory)mask, line, true, ends, null, independent, sideConnections));
         }
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("wfc.pf.cad-composite.v1\n" + prepared.Key + "\n" + envelope.Sha256))).ToLowerInvariant();
         return prepared with { Key = key, Segments = segments };

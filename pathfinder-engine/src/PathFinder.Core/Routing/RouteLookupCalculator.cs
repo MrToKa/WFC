@@ -94,7 +94,7 @@ namespace AddinRibbon.Routing
                         return RouteResult.Failure("The selected tray geometry contains a length outside the supported coordinate range.");
                     if (length > 0)
                         pieces.Add(new Piece(segment, start, end, along, length, tray.ConnectionsAtEndsOnly,
-                            pieces.Count == offset, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
+                            pieces.Count == offset, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent, tray.AllowsSideConnections));
                     if (ordered.Count == 0 || nodes[ordered[ordered.Count - 1]].Along != along)
                     {
                         if (nodes.Count >= maxNodes) return NodeLimitFailure(maxNodes);
@@ -105,7 +105,7 @@ namespace AddinRibbon.Routing
                 }
                 if (pieces.Count == offset)
                     pieces.Add(new Piece(segment, tray.Points[0], tray.Points[0], 0, 0,
-                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
+                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent, tray.AllowsSideConnections));
                 var lastPiece = pieces[pieces.Count - 1];
                 lastPiece.SetEndPort();
                 pieces[pieces.Count - 1] = lastPiece;

@@ -86,13 +86,13 @@ namespace AddinRibbon.Routing
                     if (!RoutePoint.IsFinite(length))
                         return RouteResult.Failure("The selected tray geometry contains a length outside the supported coordinate range.");
                     if (length > 0) pieces.Add(new Piece(segmentIndex, start, end, along, length,
-                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
+                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent, tray.AllowsSideConnections));
                     vertices.Add(new Vertex(along, start));
                     along += length;
                 }
                 if (pieces.Count == pieceOffset)
                     pieces.Add(new Piece(segmentIndex, tray.Points[0], tray.Points[0], 0, 0,
-                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
+                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent, tray.AllowsSideConnections));
                 var lastPiece = pieces[pieces.Count - 1];
                 lastPiece.SetEndPort();
                 pieces[pieces.Count - 1] = lastPiece;
@@ -384,6 +384,14 @@ namespace AddinRibbon.Routing
             {
                 if (first.HasStartPort && !AddPortContact(first, last, 0, graph, tolerance)) return false;
                 if (first.HasEndPort && !AddPortContact(first, last, 1, graph, tolerance)) return false;
+                // Each side entry still starts at a genuine chain end. Consider
+                // both directions so graph ordering cannot hide a vertical drop
+                // arriving at the middle of a current straight CAD rail.
+                if (first.AllowsSideConnections && last.EndsOnly)
+                {
+                    if (last.HasStartPort && !graph.AddContact(first, last, ProjectionFraction(first, last.Start), 0, tolerance)) return false;
+                    if (last.HasEndPort && !graph.AddContact(first, last, ProjectionFraction(first, last.End), 1, tolerance)) return false;
+                }
                 return true;
             }
             if (last.HasStartPort && !graph.AddContact(first, last,
@@ -400,6 +408,11 @@ namespace AddinRibbon.Routing
             {
                 if (last.HasStartPort && !graph.AddContact(first, last, firstFraction, 0, tolerance)) return false;
                 if (last.HasEndPort && !graph.AddContact(first, last, firstFraction, 1, tolerance)) return false;
+                if (last.AllowsSideConnections)
+                {
+                    var source = firstFraction == 0 ? first.Start : first.End;
+                    if (!graph.AddContact(first, last, firstFraction, ProjectionFraction(last, source), tolerance)) return false;
+                }
                 return true;
             }
             var point = firstFraction == 0 ? first.Start : first.End;
@@ -586,18 +599,19 @@ namespace AddinRibbon.Routing
             internal readonly RoutePoint Start, End;
             internal readonly double Along, Length;
             internal Bounds Bounds;
-            internal readonly bool EndsOnly, HasStartPort, Independent;
+            internal readonly bool EndsOnly, HasStartPort, Independent, AllowsSideConnections;
             internal readonly IReadOnlyList<RouteConnectionPort> VerifiedPorts;
             internal readonly IReadOnlyList<TrayMeshClearance> Surfaces;
             internal bool HasEndPort;
             internal Piece(int segment, RoutePoint start, RoutePoint end, double along, double length,
                 bool endsOnly, bool hasStartPort, IReadOnlyList<RouteConnectionPort> verifiedPorts,
-                IReadOnlyList<TrayMeshClearance> surfaces, bool independent)
+                IReadOnlyList<TrayMeshClearance> surfaces, bool independent, bool allowsSideConnections)
             {
                 Segment = segment; Start = start; End = end; Along = along; Length = length;
                 Bounds = new Bounds(start, end);
                 EndsOnly = endsOnly; HasStartPort = hasStartPort; HasEndPort = false;
                 Independent = independent;
+                AllowsSideConnections = allowsSideConnections;
                 VerifiedPorts = verifiedPorts;
                 Surfaces = surfaces;
                 if (surfaces.Count != 0 && (!endsOnly || hasStartPort))

@@ -27,6 +27,7 @@ internal static class Program
             Run("Parallel overlapping centreline contacts avoid artificial detours", ParallelOverlap);
             Run("Physical bend ports retain all curve vertices and interior object attachment", PhysicalBendPorts);
             Run("Port-only segments retain port projections, gaps and paired curves", PortContacts);
+            Run("BC903 reaches the interior of the current BC027-2 straight", CadSideJunction);
             Run("Shorter physical cable wins over a longer one-gap corridor", ConnectionGapCountPreference);
             Run("Shorter physical cable wins over a smaller summed gap distance", ConnectionGapDistancePreference);
             Run("Tied gap count and gap distance choose the shortest cable", ConnectionGapLengthTiebreaker);
@@ -305,6 +306,42 @@ internal static class Program
             new TraySegment("b", "B002", CableCategory.LV, new[] { P(5, -5), P(5, 5) }, true) };
         Assert(!Calculator.Calculate(crossing, P(0), P(5, 5), CableCategory.LV).Success,
             "Two port-only segments crossing at their interiors must not connect.");
+    }
+
+    private static void CadSideJunction()
+    {
+        var from = new RoutePoint(5.633498219775822, 70.5099999010227, 17.079999968424254);
+        var to = new RoutePoint(4.825416188525821, 72.94217177602272, 17.069999968424256);
+        var vertical = new TraySegment("cad:vertical", "BC903", CableCategory.Control,
+            new[] { new RoutePoint(5.4, 70.68, 17.5), new RoutePoint(5.4, 70.68, 19.3) }, true);
+        var horizontal = new TraySegment("cad:horizontal", "BC027-2", CableCategory.Control,
+            new[] { new RoutePoint(4.61, 68.54, 19.33), new RoutePoint(4.61, 74.54, 19.33) }, true, null, null, false, true);
+        var route = Calculator.Calculate(new[] { vertical, horizontal }, from, to, CableCategory.Control,
+            new RoutingOptions { ConnectionToleranceMeters = 1.2, SecondaryDistanceMeters = 2 });
+        Assert(route.Success, "BC903 has a 0.790569m end-to-side gap, but no endpoint pair is within 1.2m: " + route.Message);
+        Assert(route.RouteText == "/BC903/BC027-2/SECONDARY", "Expected BC903 with its measured 0.509727m approach: " + route.RouteText);
+        var swapped = Calculator.Calculate(new[] { horizontal, vertical }, from, to, CableCategory.Control,
+            new RoutingOptions { ConnectionToleranceMeters = 1.2, SecondaryDistanceMeters = 2 });
+        Assert(swapped.Success && swapped.RouteText == route.RouteText, "Side junction depends on segment order.");
+        var reversed = Calculator.Calculate(new[] { horizontal, vertical }, to, from, CableCategory.Control,
+            new RoutingOptions { ConnectionToleranceMeters = 1.2, SecondaryDistanceMeters = 2 });
+        Assert(reversed.Success && reversed.RouteText == "/SECONDARY/BC027-2/BC903", "Side junction lost the reverse route.");
+        Assert(!Calculator.Calculate(new[] { vertical, horizontal }, from, to, CableCategory.Control,
+            new RoutingOptions { ConnectionToleranceMeters = .79 }).Success, "Side gap above the threshold was admitted.");
+        var legacy = new TraySegment("legacy", "BC027-2", CableCategory.Control, horizontal.Points, true);
+        Assert(!Calculator.Calculate(new[] { vertical, legacy }, from, to, CableCategory.Control,
+            new RoutingOptions { ConnectionToleranceMeters = 1.2 }).Success, "A legacy port-only rail gained an interior entry.");
+        var crossing = new[] {
+            new TraySegment("x", "X", CableCategory.Control, new[] { P(-5), P(5) }, true, null, null, false, true),
+            new TraySegment("y", "Y", CableCategory.Control, new[] { P(0, -5), P(0, 5) }, true, null, null, false, true)
+        };
+        Assert(!Calculator.Calculate(crossing, P(-5), P(0, 5), CableCategory.Control).Success,
+            "Two opted-in rail interiors crossed without a genuine endpoint.");
+        Assert(!TraySegment.IsStraightCenterline(QuarterCurve()), "A curved CAD path was admitted for side entry.");
+        Assert(!TraySegment.IsStraightCenterline(new[] { P(0), P(2), P(1) }), "A backtracking CAD path was admitted for side entry.");
+        Assert(TraySegment.IsStraightCenterline(new[] { P(0), P(1), P(1), P(2) }), "Repeated collinear stations lost their straight CAD classification.");
+        Throws<ArgumentException>(() => new TraySegment("curve", "C", CableCategory.Control, QuarterCurve(), true, null, null, false, true));
+        Throws<ArgumentException>(() => new TraySegment("isolated", "I", CableCategory.Control, new[] { P(0), P(1) }, true, null, null, true, true));
     }
 
     private static TraySegment Port(string id, string code, params RoutePoint[] points)

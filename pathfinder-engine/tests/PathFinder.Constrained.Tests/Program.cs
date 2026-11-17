@@ -17,6 +17,7 @@ internal static class Program
         LegacyParity(); PhysicalRoutes(); ConnectorGeometry(); DirectStrategy(); BypassedAlternatives(); RefusalAndBudgets(); SearchReuse(); CompleteCandidateDomain();
         IndependentNetworkChecks.Run(Run);
         ShortestAdmissibleChecks.Run(Run);
+        CadSideConnections();
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             schemaVersion = "wfc.pf.constrained-routing-checks.v1", status = failures == 0 ? "PASS" : "FAIL",
@@ -25,6 +26,38 @@ internal static class Program
             engineeringAccepted = false, nativeParity = "not-performed", physicalCableRadiusChecked = false, checks = Checks
         }));
         return failures == 0 ? 0 : 1;
+    }
+
+    private static void CadSideConnections()
+    {
+        TraySegment[] Network() => [
+            new("DROP", "/BC903", CableCategory.Control, [P(.79, 0, -1.8), P(.79)], true),
+            new("RAIL", "/BC027-2", CableCategory.Control, [P(0, -2.14, .03), P(0, 3.86, .03)], true, null, null, false, true)
+        ];
+        var from = P(1.023498219775822, -.1700000989773, -2.220000031575746);
+        var to = P(.215416188525821, 2.26217177602272, -2.230000031575744);
+        Run("straight CAD side junction retains the real gap and constrained route proof", () =>
+        {
+            var kernel = Kernel(Box("far", x0: 100, x1: 101));
+            var route = Route(Network(), from, to, Query(kernel), Options(tolerance: 1.2));
+            Clear(route, kernel);
+            Equal("/BC903/BC027-2/SECONDARY", route.Route.RouteText);
+            Need(Math.Abs(route.Route.ConnectionGapLengthMeters - Math.Sqrt(.79 * .79 + .03 * .03)) < 1e-12, "Side gap was relabelled as proved physical contact.");
+        });
+        Run("a real solid in the CAD side junction cannot be bypassed by new topology", () =>
+        {
+            var kernel = Kernel(Box("side-gap-solid", x0: .3, x1: .5, y0: -.1, y1: .1, z0: -.1, z1: .1));
+            bool observed = false;
+            var query = Query(kernel, (a, b) =>
+            {
+                if ((a.DistanceTo(P(.79)) < 1e-9 && b.DistanceTo(P(0, 0, .03)) < 1e-9)
+                    || (b.DistanceTo(P(.79)) < 1e-9 && a.DistanceTo(P(0, 0, .03)) < 1e-9)) observed = true;
+            });
+            var route = Route(Network(), from, to, query, Options(tolerance: 1.2));
+            Need(observed, "The new end-to-side connector was not collision checked.");
+            if (route.Route.Success) Clear(route, kernel);
+            Need(!route.Route.Success || route.Route.RouteText != "/BC903/BC027-2/SECONDARY", "Blocked side junction remained traversable.");
+        });
     }
 
     private static void Run(string name, Action body)
