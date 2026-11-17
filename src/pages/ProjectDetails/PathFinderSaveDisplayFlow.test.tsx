@@ -21,7 +21,7 @@ const transport = vi.hoisted(() => ({ row: null as CableWorkflowRow | null, impa
   realProgress: false, realRevisionResults: false, revisionAdmission: null as { id: string; jobId: string; kind: string; generation: null; createdAt: string } | null,
   viewerPath: vi.fn(), viewerClear: vi.fn(),
   view: { camera: { position: [0, 0, 100], target: [0, 0, 0], up: [0, 1, 0] }, pathId: null as string | null },
-  save: vi.fn(), refresh: vi.fn(), saved: vi.fn() }));
+  save: vi.fn(), refresh: vi.fn(), saved: vi.fn(), displayChanged: vi.fn() }));
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinder', async original => ({ ...await original<typeof import('@/api/pathfinder')>(), fetchPathFinderJob: vi.fn(),
   fetchPathFinderProposal: vi.fn(), fetchPathFinderState: vi.fn(), submitPathFinderCalculation: vi.fn(), pathFinderRequest: vi.fn() }));
@@ -149,7 +149,10 @@ function Flow({ f, configuration = true }: { f: Fixture; configuration?: boolean
   const receive = useCallback((row: CableWorkflowRow) => { setSelected(row); setSelectedId(row.cable.id); }, []);
   const started = useCallback((cableId: string) => { setSelected(null); setDisplay({ ...emptyDisplay, cableId }); setReview(null);
     setRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1, action: 'hide' })); }, []);
-  const displayChanged = useCallback((value: PathFinderWorkflowDisplay) => setDisplay(previous => JSON.stringify(previous) === JSON.stringify(value) ? previous : value), []);
+  const displayChanged = useCallback((value: PathFinderWorkflowDisplay) => {
+    transport.displayChanged(value);
+    setDisplay(previous => JSON.stringify(previous) === JSON.stringify(value) ? previous : value);
+  }, []);
   return <>
     <PathFinderCableWorkspace projectId={id(1)} loadedProjectId={id(1)} accountId={id(2)} token="transport-only-token" isAdmin active pf={f.pf}
       preferences={configuration ? f.preferences : null} readPreferences={configuration ? f.preferences : { secondaryDistanceMeters: 17, preferVerticalApproach: false }}
@@ -184,6 +187,10 @@ beforeEach(() => { vi.resetAllMocks(); transport.realProgress = false; transport
   sessionStorage.clear(); vi.spyOn(window, 'open').mockReturnValue(null); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); sessionStorage.clear(); });
 const button = (name: string) => screen.getByText(name, { selector: 'button' });
+// Stored-route Show can be enabled independently. Observe the real Results
+// callback to wait for the verified exact path before exercising its handoff.
+const waitForExactDisplay = () => waitFor(() => expect(transport.displayChanged).toHaveBeenLastCalledWith(
+  expect.objectContaining({ cableId: id(4), proposalId: id(3), ready: true, routing: '/NEW' })));
 describe('real cable popup Workspace → Results → Panel handoff with synthetic transport', () => {
   it('restores Show for the identical saved result after exhausted reads through Refresh alone', async () => {
     vi.useFakeTimers(); const f = fixture(true); wire(f, true);
@@ -250,10 +257,15 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     await waitFor(() => expect(finishProposal).toBeTypeOf('function'));
     expect(transport.viewerClear).toHaveBeenCalled();
     expect(transport.view.pathId).toBeNull(); expect(transport.view.camera).toEqual(closeCamera);
-    expect(button('Show')).toBeDisabled();
-    await act(async () => finishProposal(f.proposal));
-    await waitFor(() => expect(button('Show')).toBeEnabled());
+    // The saved Cable list route remains inspectable while the exact new
+    // proposal is loading. Show alone no longer signals proposal readiness.
+    expect(button('Show')).toBeEnabled();
     expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
+    expect(screen.getByText('Show inspects the saved cable route using current model trays. It does not validate barriers or recalculate its length.')).toBeVisible();
+    expect(transport.displayChanged).not.toHaveBeenLastCalledWith(expect.objectContaining({ ready: true }));
+    await act(async () => finishProposal(f.proposal));
+    await waitForExactDisplay();
+    expect(button('Show')).toBeEnabled();
     expect(transport.view.camera).toEqual(closeCamera); expect(transport.view.pathId).toBeNull();
     for (const call of transport.viewerClear.mock.calls) expect(call).toEqual(['user', { preserveCamera: true }]);
     expect(transport.save).toHaveBeenCalledOnce(); expect(submitPathFinderCalculation).not.toHaveBeenCalled();
@@ -317,8 +329,11 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     fireEvent.click(await screen.findByText('Open test cable', { selector: 'button' }));
     fireEvent.click(await screen.findByText('Assign From', { selector: 'button' }));
     await waitFor(() => expect(button('Save')).toBeEnabled()); fireEvent.click(button('Save'));
-    await waitFor(() => expect(button('Show')).toBeEnabled());
+    // Wait for the exact result, rather than the independently available
+    // stored-route Show action, before checking the controller handoff.
+    await waitForExactDisplay();
     expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
+    expect(button('Show')).toBeEnabled();
     expect(button('Assign From')).toBeEnabled(); expect(button('Calculate routing')).toBeEnabled();
     const automaticRefreshes = transport.refresh.mock.calls.length;
     fireEvent.click(button('Show'));
@@ -344,14 +359,16 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     await waitFor(() => expect(button('Save')).toBeEnabled()); fireEvent.click(button('Save'));
     await waitFor(() => expect(fetchPathFinderJob).toHaveBeenCalledTimes(2));
     const displaySignal = vi.mocked(fetchPathFinderJob).mock.calls[1][3]!;
-    expect(displaySignal.aborted).toBe(false); expect(button('Show')).toBeDisabled();
+    expect(displaySignal.aborted).toBe(false); expect(button('Show')).toBeEnabled();
+    expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
+    expect(transport.displayChanged).not.toHaveBeenLastCalledWith(expect.objectContaining({ ready: true }));
     transport.revisionAdmission = { id: id(81), jobId: id(7), kind: 'location-impact', generation: null, createdAt: f.parent.createdAt };
     view.rerender(<LiveControllerFlow f={f} />);
     expect(fetchPathFinderJob).toHaveBeenCalledTimes(2);
     expect(displaySignal.aborted).toBe(false);
     await act(async () => { finishDisplay(f.parent); });
-    await waitFor(() => expect(button('Show')).toBeEnabled());
-    expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
+    await waitForExactDisplay();
+    expect(button('Show')).toBeEnabled();
     fireEvent.click(button('Show'));
     await waitFor(() => expect(transport.viewerPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
     expect(fetchPathFinderJob).toHaveBeenCalledTimes(2); expect(submitPathFinderCalculation).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
@@ -372,7 +389,9 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(screen.getByText('Cable list design length: 7 m')).toBeVisible();
     expect(screen.getByText('Saved route. Show displays its saved path without recalculating.')).toBeVisible();
     expect(button('Assign From')).toBeEnabled(); expect(button('Calculate routing')).toBeEnabled();
-    expect(button('Review proposed routing')).toBeDisabled(); expect(button('Apply reviewed routing')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Review proposed routing' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apply reviewed routing' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Routing and length saved' })).toBeVisible();
     fireEvent.click(button('Show'));
     await waitFor(() => expect(button('Hide')).toBeEnabled());
     fireEvent.click(button('Hide'));
