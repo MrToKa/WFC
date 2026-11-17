@@ -38,14 +38,17 @@ export function jobDto(row:Row) {
 export async function proposalDto(client:PoolClient,row:Row,detail:boolean,readCurrent?:TransactionDependencyReadCollector) {
   const dependencies = row.dependencies as DependencySnapshot;
   let current:Awaited<ReturnType<typeof collectDependenciesForVersion>>|null;
-  let unavailable: 'cable' | 'barriers' | null = null;
+  let unavailable: 'cable' | 'barriers' | 'cad-network' | null = null;
   try {current=await (readCurrent ? readCurrent(row.cable_id,dependencies.options,dependencies.schemaVersion)
     : collectDependenciesForVersion(client,row.project_id,row.cable_id,dependencies.options,dependencies.schemaVersion));}
   catch(error){
     // Readability is independent from current applicability. Only explicit
-    // missing-cable/barrier-currentness refusals become stale history here;
+    // missing-cable/network/barrier-currentness refusals become stale history here;
     // authority, implementation and unknown failures still refuse the request.
     if(error instanceof PathFinderError&&error.code==='CABLE_NOT_FOUND'){current=null;unavailable='cable';}
+    else if(error instanceof PathFinderError&&error.status===409&&['CAD_ROUTE_BASE_CHANGED','CAD_ROUTE_CATALOG_CHANGED'].includes(error.code)){
+      current=null;unavailable='cad-network';
+    }
     else if(dependencies.schemaVersion==='pathfinder.dependencies.v8'&&isExpectedBarrierCurrentnessError(error)){current=null;unavailable='barriers';}
     else throw error;
   }
@@ -72,6 +75,7 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean,readC
     itemApplicability:applicability.evidence,
     compatibilityIssue,routingPreferences,
     message:unavailable==='cable' ? 'The cable no longer exists. This historical result remains available for inspection and cannot be applied.'
+      : unavailable==='cad-network' ? 'The published CAD routes no longer match the current prepared network or tray catalog. This historical result remains available for inspection and cannot be applied. Withdraw and republish the affected CAD routes, then calculate again.'
       : unavailable==='barriers' ? barrierHistoricalUnavailableMessage : stale ? 'Dependencies changed. Calculate a fresh proposal.' : result.message,
     engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : (dependencies.schemaVersion === 'pathfinder.dependencies.v6'||dependencies.schemaVersion === 'pathfinder.dependencies.v7'||dependencies.schemaVersion==='pathfinder.dependencies.v8')&&(isAutomaticEndpointCalculationPoint(dependencies.from)||isAutomaticEndpointCalculationPoint(dependencies.to))
       ? 'Automatic model endpoint candidates use approximate bounding-box anchors. Review their positions, route and length before explicit Apply. These endpoints have not been manually confirmed. Native engineering parity has not been performed.'

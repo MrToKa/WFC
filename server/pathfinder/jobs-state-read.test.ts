@@ -11,7 +11,9 @@ import type { PathFinderRepository } from './repository.js';
 
 const seams = vi.hoisted(() => ({ active: vi.fn(), artifact: vi.fn(), context: vi.fn(), routing: vi.fn(), settings: vi.fn(),
   comparison: vi.fn(), barriers: vi.fn(), binding: vi.fn(), automatic: vi.fn(), identity: vi.fn(), barrierIdentity: vi.fn(),
-  seal: vi.fn(), enrollment: vi.fn(), applicability: vi.fn(), versionedScope: vi.fn(), geometryRead: vi.fn() }));
+  seal: vi.fn(), enrollment: vi.fn(), applicability: vi.fn(), versionedScope: vi.fn(), geometryRead: vi.fn(), catalog: vi.fn(), purposes: vi.fn() }));
+vi.mock('./catalog.js', async importOriginal => ({ ...await importOriginal<typeof import('./catalog.js')>(), readRoutingCatalog: seams.catalog }));
+vi.mock('./purposePolicy.js', async importOriginal => ({ ...await importOriginal<typeof import('./purposePolicy.js')>(), readProjectCablePurposes: seams.purposes }));
 vi.mock('./repository.js', () => ({ activeModel: seams.active, latestArtifact: seams.artifact }));
 vi.mock('./endpointBindingRepository.js', () => ({ readCurrentEndpointBindingContext: seams.context, readEndpointBindingScope: seams.binding }));
 vi.mock('./routingScope.js', () => ({ requirePreparedRoutingScope: seams.routing, requireVersionedCalculationScope: seams.versionedScope }));
@@ -59,6 +61,8 @@ function fixture() {
     if (sql.startsWith('SELECT user_id,expires_at')) return { rows: [{ user_id: who.userId, expires_at: new Date(who.loginExpiresAt), revoked_at: state.revoked ? new Date() : null }] };
     if (sql.startsWith('SELECT * FROM pf_jobs')) return { rows: [] };
     if (sql.startsWith('SELECT p.*,j.state AS job_state')) return { rows: proposals };
+    if (sql.startsWith('/* cable-purpose:locked-scope-types */')) return { rows: cables.filter(cable => (args[1] as string[]).includes(cable.id)).map(cable => ({ ...cable, cable_type_purpose: 'Instrumentation' })) };
+    if (sql.startsWith('SELECT r.purpose_key,r.allowed_categories')) return { rows: [{ purpose_key: 'Control', allowed_categories: ['Instrumentation'] }] };
     if (sql.includes('FROM cables WHERE')) return { rows: cables.filter(cable => cable.id === args[1]) };
     if (sql.includes('FROM pf_project_state')) return { rows: [{ registry_revision: '9' }] };
     if (sql.includes('FROM pf_location_aliases')) {
@@ -89,6 +93,8 @@ beforeEach(() => {
   seams.active.mockResolvedValue({ active_model_version_id: modelId, selection_revision: '1', state: 'ready', health: 'healthy', content_fingerprint: scope.contentFingerprint });
   seams.artifact.mockResolvedValue({ id: artifactId, content_fingerprint: scope.contentFingerprint, snapshot_sha256: 'd'.repeat(64) });
   seams.context.mockResolvedValue(current());
+  seams.catalog.mockResolvedValue({ rows: [{ projectTrayId: id(30), rawName: 'A', purposeKey: 'Control' }], diagnostics: [] });
+  seams.purposes.mockResolvedValue({ cablePurposes: ['Instrumentation'] });
   seams.routing.mockResolvedValue({ catalogRevision: '1', routingContentSha256: 'e'.repeat(64), routingPolicyRevision: '1', routingPolicySha256: 'f'.repeat(64) });
   seams.settings.mockImplementation(async (_client: unknown, _project: string, requested: EngineOptions) => ({ settings: {
     revision: '1', connectionGap: '1', secondaryTrayLength: '7', endConnectionLength: '5', additionalBendingPercent: '10' }, options: requested }));
@@ -166,6 +172,42 @@ describe('transaction-local common verification for the recent proposal state', 
     expect(seams.barriers).toHaveBeenCalledOnce(); expect(seams.binding).not.toHaveBeenCalled();
     expect(result.proposals.every(value => value.stale && !value.canApply && value.message.includes('barrier scope changed or became unavailable'))).toBe(true);
     expect(seams.seal).toHaveBeenCalledTimes(5);
+  });
+
+  it.each(['CAD_ROUTE_BASE_CHANGED', 'CAD_ROUTE_CATALOG_CHANGED'])('keeps startup and proposal details readable when %s invalidates the published CAD network', async code => {
+    const db = fixture(); await db.seed();
+    const validRouting = await seams.routing(); vi.clearAllMocks();
+    const failure = new PathFinderError(code, 409, 'Withdraw and republish CAD routes against the current prepared network.');
+    seams.routing.mockRejectedValue(failure);
+    const result = await db.jobs.state(projectId, who);
+    expect(result.proposals.map(value => value.id)).toEqual(db.proposals.map(row => row.id));
+    expect(result.proposals.every(value => value.stale && !value.canApply && value.message.includes('republish'))).toBe(true);
+    expect(result.proposals.map(value => value.design)).toEqual(db.proposals.map(row => row.result.design));
+    expect(result.proposals.map(value => value.proposalHash)).toEqual(db.proposals.map(row => row.proposal_hash));
+    expect(seams.routing).toHaveBeenCalledOnce(); expect(seams.barriers).not.toHaveBeenCalled();
+    expect(seams.binding).not.toHaveBeenCalled(); expect(seams.seal).toHaveBeenCalledTimes(5);
+    expect(seams.enrollment).toHaveBeenCalledTimes(5); expect(seams.applicability).toHaveBeenCalledTimes(5);
+    expect(db.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
+    const detail = await db.jobs.proposal(projectId, who, db.proposals[0].id);
+    expect(detail).toMatchObject({ stale: true, canApply: false, route: { points: [[0, 0, 0], [5, 0, 0]] } });
+    // The read fallback must never authorize a new calculation or weaken the
+    // dependency collector used by review/apply and other write paths.
+    await expect(collectDependenciesForVersion(db.client, projectId, db.cables[0].id, options(), 'pathfinder.dependencies.v8')).rejects.toBe(failure);
+    seams.routing.mockResolvedValue(validRouting);
+    const recovered = await db.jobs.state(projectId, who);
+    expect(recovered.proposals.every(value => !value.stale && value.canApply)).toBe(true);
+    expect(recovered.proposals.map(value => value.proposalHash)).toEqual(db.proposals.map(row => row.proposal_hash));
+  });
+
+  it.each([
+    new PathFinderError('CAD_ROUTE_BASE_CHANGED', 503),
+    new PathFinderError('CAD_ROUTE_CATALOG_CHANGED', 403),
+    new PathFinderError('CAD_ROUTE_UNKNOWN_FAILURE', 409),
+    Object.assign(new Error('Untyped CAD failure'), { code: 'CAD_ROUTE_BASE_CHANGED', status: 409 }),
+  ])('does not hide unexpected CAD failures: %s', async failure => {
+    const db = fixture(); await db.seed(); seams.routing.mockRejectedValue(failure);
+    await expect(db.jobs.state(projectId, who)).rejects.toBe(failure);
+    expect(seams.seal).not.toHaveBeenCalled(); expect(db.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
   });
 
   it('propagates an unknown verification failure and rechecks authority before another request', async () => {
