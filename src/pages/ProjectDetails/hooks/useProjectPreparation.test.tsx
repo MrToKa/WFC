@@ -16,12 +16,14 @@ import type { PreparationDiscoveryPage, PreparationDiscoveryRequest } from '../.
 import type { ProjectPreparationViewer } from './usePathFinder';
 import * as discoveryCollection from './collectPreparationDiscovery';
 import type { PreparationContext, PreparationDiscovery, PreparationSession } from '../../../../shared/pathfinderPreparation';
+import { prepareAssignedCadNetwork } from '@/api/cadNetworkPreparation';
 type HumanPreparationSession = Extract<PreparationSession, {schemaVersion:'wfc.pf.preparation-session.v1'}>;
 vi.mock('../../../../viewer-runtime/capture-evidence.mjs', async original => {
   const actual = await original<typeof import('../../../../viewer-runtime/capture-evidence.mjs')>();
   return { ...actual, bindCompletedCaptureEvidence: vi.fn(actual.bindCompletedCaptureEvidence) };
 });
 vi.mock('@/api/pathfinderGeometryTrace',async original=>({...await original<typeof import('@/api/pathfinderGeometryTrace')>(),saveCaptureEvidence:vi.fn(),createGeometryTrace:vi.fn(),fetchGeometryTraces:vi.fn(),fetchGeometryTraceManifest:vi.fn(),fetchGeometryTraceRuntime:vi.fn()}));
+vi.mock('@/api/cadNetworkPreparation', () => ({ prepareAssignedCadNetwork: vi.fn() }));
 vi.mock('@/api/pathfinderPreparation', async (original) => ({
   ...(await original<typeof api>()),
   fetchPreparationContext: vi.fn(),
@@ -35,6 +37,7 @@ vi.mock('@/api/pathfinderPreparation', async (original) => ({
 }));
 function setup() {
   const fixture = preparationFixture();
+  vi.mocked(prepareAssignedCadNetwork).mockRejectedValue(new Error('Unexpected CAD network preparation'));
   vi.mocked(fetchGeometryTraceRuntime).mockResolvedValue(geometryTraceRuntimeFixture());
   vi.mocked(fetchGeometryTraces).mockImplementation(async (projectId, _token, offset = 0) => ({ schemaVersion: 'wfc.pf.geometry-trace-list.v1', projectId, offset, nextOffset: null, traces: [] }));
   vi.mocked(fetchGeometryTraceManifest).mockRejectedValue(new GeometryTraceApiError('GEOMETRY_TRACE_NOT_FOUND', 404, 'No trace', 'refused'));
@@ -680,6 +683,93 @@ describe('automatic tray workflow', () => {
     expect(f.store.context.resolutions).toEqual(assignments); expect(api.savePreparationResolution).not.toHaveBeenCalled();
     expect(result.current.networkReady).toBe(true);
   });
+  it('includes saved and previously published CAD routes only after explicit base generation and reloads their verified network status', async () => {
+    const f = automaticSetup();
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
+      reason: 'Saved model tray selection', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.store.context.scope } }];
+    f.store.context.trays.push(...(['saved-cad-route', 'published-cad-route'] as const).map((geometrySource, at) => ({
+      ...f.context.trays[0], projectTrayId: crypto.randomUUID(), rawName: `BC90${at + 1}`, geometrySource, inNetwork: false,
+    })));
+    vi.mocked(prepareAssignedCadNetwork).mockImplementation(async (_project, _token, _model, artifactId, snapshotSha256) => {
+      for (const tray of f.store.context.trays) if (tray.geometrySource) tray.inNetwork = true;
+      return { artifactId, snapshotSha256, publishedCount: 1, revalidatedCount: 1, routeCount: 2, duplicate: false };
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    expect(prepareAssignedCadNetwork).not.toHaveBeenCalled();
+    await act(() => result.current.generateNetwork());
+    expect(result.current.error).toBeNull();
+    expect(prepareAssignedCadNetwork).toHaveBeenCalledOnce();
+    const aggregate = f.store.context.currentAggregate!;
+    expect(prepareAssignedCadNetwork).toHaveBeenCalledWith(ids.project, 'login', f.store.context.scope.modelVersionId,
+      aggregate.artifactId, aggregate.projection.sha256, expect.any(AbortSignal));
+    expect(vi.mocked(createGeometryTrace).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(prepareAssignedCadNetwork).mock.invocationCallOrder[0]);
+    expect(result.current.context?.trays.filter(tray => tray.geometrySource).every(tray => tray.inNetwork)).toBe(true);
+    expect(result.current.networkReady).toBe(true);
+  });
+  it('keeps a base with an unconfirmed assigned CAD route unready on open and never publishes it automatically', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    f.store.traces.set(f.store.context.currentAggregate!.id, f.makeTrace());
+    f.store.context.trays.push({ ...f.context.trays[0], projectTrayId: crypto.randomUUID(), geometrySource: 'saved-cad-route', inNetwork: false });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.networkTrace).not.toBeNull());
+    expect(result.current.networkReady).toBe(false); expect(prepareAssignedCadNetwork).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled();
+  });
+  it.each(['saved-cad-route', 'published-cad-route'] as const)('handles excluded %s without claiming an unchecked published overlay is ready', async geometrySource => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    f.store.traces.set(f.store.context.currentAggregate!.id, f.makeTrace());
+    f.store.context.trays.push({ ...f.context.trays[0], projectTrayId: crypto.randomUUID(), geometrySource, policyState: 'excluded', inNetwork: false });
+    vi.mocked(prepareAssignedCadNetwork).mockRejectedValue(new api.PreparationApiError('CAD_ROUTE_PURPOSE_EXCLUDED', 409,
+      'The published CAD route purpose is excluded. Withdraw it or restore routing permission.', 'refused'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.networkTrace).not.toBeNull());
+    expect(prepareAssignedCadNetwork).not.toHaveBeenCalled();
+    expect(result.current.networkReady).toBe(geometrySource === 'saved-cad-route');
+    await act(() => result.current.finishNetwork());
+    if (geometrySource === 'published-cad-route') {
+      expect(prepareAssignedCadNetwork).toHaveBeenCalledOnce();
+      expect(result.current.error).toContain('published CAD route purpose is excluded');
+      expect(result.current.networkReady).toBe(false);
+    } else {
+      expect(prepareAssignedCadNetwork).not.toHaveBeenCalled();
+      expect(result.current.error).toBeNull(); expect(result.current.networkReady).toBe(true);
+    }
+    expect(f.capture).not.toHaveBeenCalled(); expect(api.createPreparation).not.toHaveBeenCalled();
+  });
+  it('replays the exact uncertain CAD batch without recapturing its already saved base', async () => {
+    const f = automaticSetup();
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
+      reason: 'Saved model tray selection', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.store.context.scope } }];
+    f.store.context.trays.push({ ...f.context.trays[0], projectTrayId: crypto.randomUUID(), geometrySource: 'saved-cad-route', inNetwork: false });
+    vi.mocked(prepareAssignedCadNetwork).mockRejectedValue(new TypeError('CAD batch response was lost'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork());
+    expect(result.current.unknown).toBe(true); expect(result.current.networkReady).toBe(false);
+    const original = vi.mocked(prepareAssignedCadNetwork).mock.calls[0];
+    expect(vi.mocked(prepareAssignedCadNetwork).mock.calls).toHaveLength(3);
+    vi.mocked(prepareAssignedCadNetwork).mockImplementation(async (_project, _token, _model, artifactId, snapshotSha256) => {
+      for (const tray of f.store.context.trays) if (tray.geometrySource) tray.inNetwork = true;
+      return { artifactId, snapshotSha256, publishedCount: 0, revalidatedCount: 0, routeCount: 1, duplicate: true };
+    });
+    await act(() => result.current.checkTrays());
+    expect(vi.mocked(prepareAssignedCadNetwork).mock.calls.every(call => call.slice(0, 5).every((value, at) => value === original[at]))).toBe(true);
+    expect(api.createPreparation).toHaveBeenCalledOnce(); expect(f.capture).toHaveBeenCalledOnce();
+    expect(result.current.unknown).toBe(false); expect(result.current.error).toBeNull(); expect(result.current.networkReady).toBe(true);
+  });
+  it('does not claim a successful network when a CAD publication receipt is followed by missing current inclusion', async () => {
+    const f = automaticSetup();
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
+      reason: 'Saved model tray selection', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.store.context.scope } }];
+    f.store.context.trays.push({ ...f.context.trays[0], projectTrayId: crypto.randomUUID(), geometrySource: 'saved-cad-route', inNetwork: false });
+    vi.mocked(prepareAssignedCadNetwork).mockImplementation(async (_project, _token, _model, artifactId, snapshotSha256) => ({
+      artifactId, snapshotSha256, publishedCount: 1, revalidatedCount: 0, routeCount: 1, duplicate: false,
+    }));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork());
+    expect(result.current.error).toContain('could not be confirmed'); expect(result.current.networkReady).toBe(false);
+    expect(result.current.notice).not.toBe('Tray network updated.');
+  });
   it('regenerates despite a missing old projection throughout create, capture and publication reads', async () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
     f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
@@ -696,6 +786,36 @@ describe('automatic tray workflow', () => {
     expect(api.createPreparation).toHaveBeenCalledOnce(); expect(f.capture).toHaveBeenCalledOnce();
     expect(result.current.context?.currentAggregate?.id).not.toBe(old.id); expect(result.current.networkReady).toBe(true);
     expect(result.current.error).toBeNull(); expect(result.current.unknown).toBe(false);
+  });
+  it('recovers exact legacy assignments from the sealed same-model published plan before regeneration', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    f.store.context.scope = { ...f.store.context.scope, catalogRevision: '99', routingContentSha256: 'c'.repeat(64) };
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork());
+    expect(result.current.error).toBeNull();
+    expect(api.savePreparationResolution).toHaveBeenCalledOnce();
+    expect(vi.mocked(api.savePreparationResolution).mock.calls[0][2]).toMatchObject({ projectTrayId: ids.tray,
+      rootObjectIds: session.plan.requestedScope.trays[0].orderedRootObjectIds, expected: { catalogRevision: '99' } });
+    expect(vi.mocked(api.savePreparationResolution).mock.invocationCallOrder[0]).toBeLessThan(f.discover.mock.invocationCallOrder[0]);
+    expect(api.saveTrayMatches).not.toHaveBeenCalled(); expect(api.createPreparation).toHaveBeenCalledOnce();
+    expect(f.capture).toHaveBeenCalledOnce(); expect(result.current.networkReady).toBe(true);
+  });
+  it.each(['explicit-exclude', 'explicit-other-model', 'plan-hash', 'published-aggregate', 'old-model'] as const)('does not recover a legacy plan assignment over %s', async conflict => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    if (conflict === 'explicit-exclude' || conflict === 'explicit-other-model') f.store.context.resolutions = [{
+      id: crypto.randomUUID(), projectTrayId: ids.tray, mode: conflict === 'explicit-exclude' ? 'exclude' : 'roots',
+      rootObjectIds: conflict === 'explicit-exclude' ? [] : ['dbid:23'], reason: 'Later explicit decision', actorId: ids.actor,
+      createdAt: new Date().toISOString(), scope: { ...f.store.context.scope, ...(conflict === 'explicit-other-model' ? { modelVersionId: crypto.randomUUID() } : {}) },
+    }];
+    if (conflict === 'plan-hash') f.store.context.currentAggregate!.orderedPlanSha256 = 'f'.repeat(64);
+    if (conflict === 'published-aggregate') f.store.sessions.set(session.id, { ...f.store.sessions.get(session.id)!, publishedAggregateId: crypto.randomUUID() });
+    if (conflict === 'old-model') f.store.context.currentAggregate!.modelVersionId = crypto.randomUUID();
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork());
+    expect(result.current.error).toContain('No project trays are assigned');
+    expect(api.savePreparationResolution).not.toHaveBeenCalled(); expect(f.discover).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
   });
   it('resumes the same explicit generation session after a paused capture', async () => {
     const f = automaticSetup(); f.capture.mockRejectedValueOnce(new DOMException('Paused', 'AbortError'));
@@ -1311,6 +1431,42 @@ describe('automatic tray workflow', () => {
     expect(vi.mocked(api.savePreparationResolution).mock.calls.map(call => call[2].expected.resolutionRevision)).toEqual(['0', '1']);
     expect(vi.mocked(api.savePreparationResolution).mock.calls.map(call => call[2].rootObjectIds)).toEqual([['dbid:23'], ['dbid:24']]);
     expect(f.discover.mock.calls[0][0].scope.resolutionRevision).toBe('2'); expect(result.current.notice).toBe('Tray network updated.');
+  });
+  it.each(['catalogRevision', 'routingPolicyRevision'] as const)('regenerates after %s changes by renewing same-model assignments before discovery', async changed => {
+    const f = automaticSetup(), secondId = crypto.randomUUID();
+    f.store.context.trays.push({ ...f.context.trays[0], projectTrayId: secondId });
+    f.store.context.resolutions = [ids.tray, secondId].map((projectTrayId, at) => ({ id: crypto.randomUUID(), projectTrayId, mode: 'roots',
+      rootObjectIds: [`dbid:${23 + at}`], reason: 'Saved physical tray selection', actorId: ids.actor, createdAt: new Date().toISOString(),
+      scope: { ...f.context.scope, [changed]: '0' } }));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork());
+    expect(result.current.error).toBeNull();
+    expect(api.savePreparationResolution).toHaveBeenCalledTimes(2);
+    const writes = vi.mocked(api.savePreparationResolution);
+    expect(writes.mock.calls.map(call => call[2].expected.resolutionRevision)).toEqual(['0', '1']);
+    expect(writes.mock.calls.map(call => call[2].rootObjectIds)).toEqual([['dbid:23'], ['dbid:24']]);
+    expect(writes.mock.invocationCallOrder.at(-1)!).toBeLessThan(f.discover.mock.invocationCallOrder[0]);
+    expect(f.discover.mock.calls[0][0].scope.resolutionRevision).toBe('2');
+    expect(f.discover.mock.calls[0][3]).toEqual({ skipEquipment: true, assignedOnly: true });
+    expect(api.saveTrayMatches).not.toHaveBeenCalled();
+    expect(api.createPreparation).toHaveBeenCalledOnce();
+    expect(f.capture).toHaveBeenCalledOnce();
+    expect(result.current.networkReady).toBe(true);
+  });
+  it.each(['modelVersionId', 'selectionRevision', 'contentFingerprint'] as const)('never renews or captures assignments from a different %s during regeneration', async changed => {
+    const f = automaticSetup();
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:23'],
+      reason: 'Old model selection', actorId: ids.actor, createdAt: new Date().toISOString(),
+      scope: { ...f.context.scope, [changed]: changed === 'modelVersionId' ? crypto.randomUUID() : changed === 'contentFingerprint' ? 'f'.repeat(64) : '99' } }];
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork());
+    expect(result.current.error).toContain('No project trays are assigned');
+    expect(api.savePreparationResolution).not.toHaveBeenCalled();
+    expect(f.discover).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled();
+    expect(f.capture).not.toHaveBeenCalled();
   });
   it.each([false, true])('restores a previous assignment before capturing the new revision (already prepared: %s)', async alreadyPrepared => {
     const f = automaticSetup(), resolutionId = crypto.randomUUID(), oldModel = crypto.randomUUID();

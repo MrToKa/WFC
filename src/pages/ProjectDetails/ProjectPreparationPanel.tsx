@@ -99,7 +99,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     ? formatPreparationDiagnostics([...currentDiagnostics, ...(diagnosticPlan?.diagnostics ?? [])], context.trays) : [];
   const assigned = (trayId: string) => {
     if (!context || !modelCurrent) return false;
-    if (context.trays.some(tray => tray.projectTrayId === trayId && tray.geometrySource === 'published-cad-route')) return true;
+    if (context.trays.some(tray => tray.projectTrayId === trayId && Boolean(tray.geometrySource))) return true;
     const resolution = context.resolutions.find(item => item.projectTrayId === trayId && sameModel(item.scope, context.scope));
     if (resolution) return resolution.mode === 'roots' && resolution.rootObjectIds.length > 0;
     const claimedElsewhere = new Set(context.resolutions.filter(item => item.projectTrayId !== trayId
@@ -261,7 +261,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     </Button>
     <p>Discover checks the project Trays records against model names and Properties, then saves unique matches. Generate network builds from the assigned trays.</p>
     {publishedCadTrays.length ? <p>Manually added trays use their published geometry and are assigned without a model selection: {publishedCadTrays.map(tray => tray.rawName).join(', ')}.</p> : null}
-    {cadTrays.length?<p>CAD routes use their saved STEP geometry and need no model object assignment: {cadTrays.map(tray=>tray.rawName).join(', ')}. Network generation prepares the model trays; add the saved CAD routes to the routing network from Draw trays afterwards.</p>:null}
+    {cadTrays.length?<p>CAD routes are assigned to their saved STEP geometry when added to the Trays list: {cadTrays.map(tray=>tray.rawName).join(', ')}. Generate network includes these assigned CAD routes and verifies them for cable calculations.</p>:null}
     {state.busy ? <Button onClick={state.pause} style={{ marginLeft: 8 }}>Stop checking</Button> : null}
     {disabledReason ? <p>{disabledReason}</p> : null}
     {working ? <Spinner size="tiny" label={state.progress ?? (reading ? 'Reading and saving the selected tray…'
@@ -288,7 +288,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
           const isAssigned = assigned(tray.projectTrayId);
           const target = trayDisplayTarget({ trayId: tray.projectTrayId, context, plan, discovery });
           const unavailable = !modelCurrent ? 'Load the matching model before showing this tray.' : tray.geometrySource === 'saved-cad-route'
-            ? 'Saved CAD route. Use Draw trays to add it to the routing network.' : tray.geometrySource ? null : target.message;
+            ? 'Assigned to saved CAD geometry. Generate network to include it in cable calculations.' : tray.geometrySource ? null : target.message;
           const showing = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'showing';
           const hiding = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'hiding';
           const canHide = currentDisplay?.trayId === tray.projectTrayId && ['shown', 'hiding', 'hide-failed'].includes(currentDisplay.status);
@@ -299,7 +299,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
             borderRadius: 6, padding: 12, minWidth: 0, overflowWrap: 'anywhere' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
             <h4 style={{ margin: '0 0 8px' }}>{modelCurrent && tray.inNetwork === true ? <span role="img" aria-label="Included in calculation network" title="Included in calculation network" style={{ color: tokens.colorPaletteGreenForeground1, marginRight: 6 }}>✓</span> : null}{tray.rawName}</h4>
-            <span>{tray.geometrySource==='saved-cad-route'?'Saved CAD geometry':isAssigned ? 'Assigned' : 'Not assigned'}</span>
+            <span>{isAssigned ? 'Assigned' : 'Not assigned'}</span>
           </div>
           {isAssigned ? <dl style={{ display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', gap: '4px 8px', margin: '0 0 12px' }}>
             <dt>Type</dt><dd style={{ margin: 0 }}>{tray.details ? tray.details.type || 'Not specified' : 'Not available'}</dd>

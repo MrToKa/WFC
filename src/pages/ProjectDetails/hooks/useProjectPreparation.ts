@@ -38,6 +38,7 @@ import {bindCompletedCaptureEvidence,type CompletedCaptureEvidence} from '../../
 import { formatPreparationDiagnostics } from '../preparationDiagnostics';
 import { trayIdentityErrorMessage } from '@/viewer/trayIdentityErrors';
 import { validateTrayIdentityRequest, type TrayObjectIdentity, type TrayIdentityMatch } from '../../../../viewer-runtime/tray-identity.mjs';
+import { prepareAssignedCadNetwork } from '@/api/cadNetworkPreparation';
 
 type PF = ReturnType<typeof usePathFinder>;
 type PreparationModel = { modelVersionId: string | null; contentFingerprint: string | null; selectionRevision: string };
@@ -54,6 +55,7 @@ type Pending =
   | { kind: 'part'; sessionId: string; partId: string; body: PreparationPartUpload;completedEvidence?:CompletedCaptureEvidence }
   | {kind:'evidence';sessionId:string;partId:string;body:{sessionPlanSha256:string;payloadSha256:string;evidence:CompletedCaptureEvidence}}
   | { kind: 'trace'; body: GeometryTraceCreate; preparation: CurrentPreparation; invalidated?: true }
+  | { kind: 'cad-network'; body: { modelVersionId: string; artifactId: string; snapshotSha256: string } }
   | { kind: 'publish' | 'cancel'; sessionId: string; body: PreparationMutation };
 type State = {
   identity: string;
@@ -97,6 +99,8 @@ const publishedNetworkMatches = (context: PreparationContext) => Boolean(context
   context.currentAggregate.projectId === context.projectId &&
   (Object.keys(context.scope) as Array<keyof PreparationScope>).every(key =>
     key === 'locationRegistryRevision' || context.currentAggregate![key] === context.scope[key]));
+const assignedCadNetworkMatches = (context: PreparationContext) => context.trays.every(tray =>
+  !tray.geometrySource || (tray.geometrySource !== 'published-cad-route' && tray.policyState !== 'configured') || tray.inNetwork === true);
 const networkTraceMatches = (context: PreparationContext, trace: GeometryTraceManifest | null) => {
   const aggregate = context.currentAggregate;
   return Boolean(aggregate && trace && publishedNetworkMatches(context) && trace.projectId === context.projectId
@@ -528,6 +532,11 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             confirmedTrace = { ...command.preparation, networkTrace: receipt.trace };
           break;
         }
+        case 'cad-network':
+          update(value => ({ ...value, progress: 'Adding the assigned CAD routes to the prepared network…' }));
+          await prepareAssignedCadNetwork(access.projectId!, access.token!, command.body.modelVersionId,
+            command.body.artifactId, command.body.snapshotSha256, signal);
+          break;
         case 'publish':
         case 'cancel':
           await mutatePreparation(
@@ -609,6 +618,9 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       }));
       const fresh = command.kind === 'tray-matches' || command.kind === 'resolution'
         ? await readScopeOnly(signal) : await readCurrent(signal, sessionId);
+      if (command.kind === 'cad-network' && (fresh.context.currentAggregate?.artifactId !== command.body.artifactId
+        || fresh.context.currentAggregate.projection.sha256 !== command.body.snapshotSha256 || !assignedCadNetworkMatches(fresh.context)))
+        throw new Error('The saved CAD routes could not be confirmed in the current calculation network. Refresh the tray status and try again.');
       if (command.kind === 'tray-matches') {
         const counts = (matchReceipt as PreparationTrayMatchesReceipt | null)?.counts;
         update(value => ({ ...value, discovery: sameModel(command.discovery, fresh.context.scope) ? command.discovery : null,
@@ -1070,11 +1082,56 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       throw new Error('The model frame could not be confirmed for the current network. Check the trays again.');
     return verified;
   }, [access?.projectId, access?.token, assertCurrent, execute, update]);
+  const finishAssignedCadNetwork = useCallback(async (fresh: CurrentPreparation, signal: AbortSignal): Promise<CurrentPreparation> => {
+    if (!fresh.context.trays.some(tray => tray.geometrySource) || assignedCadNetworkMatches(fresh.context)) return fresh;
+    const aggregate = fresh.context.currentAggregate;
+    if (!aggregate || !networkTraceMatches(fresh.context, fresh.networkTrace))
+      throw new Error('Prepare and verify the base network before adding the saved CAD routes.');
+    const verified = await execute({ kind: 'cad-network', body: { modelVersionId: fresh.context.scope.modelVersionId,
+      artifactId: aggregate.artifactId, snapshotSha256: aggregate.projection.sha256 } }, signal, true);
+    if (verified.context.currentAggregate?.id !== aggregate.id || !networkTraceMatches(verified.context, verified.networkTrace)
+      || !assignedCadNetworkMatches(verified.context))
+      throw new Error('The saved CAD routes could not be confirmed in the current calculation network. Refresh the tray status and try again.');
+    latestPf.current.refresh();
+    return verified;
+  }, [execute]);
   const prepareTrays = useCallback(async (signal: AbortSignal, starting?: CurrentPreparation, regenerate = false) => {
     let fresh = starting ?? await readCurrent(signal, null);
     assertCurrent(signal);
+    // Resume only this generation's already published base after a CAD batch or
+    // its status read was interrupted. Do not recapture geometry to retry CAD.
+    if (regenerate && regenerationSession.current && fresh.context.currentAggregate?.sessionId === regenerationSession.current
+      && fresh.session?.id === regenerationSession.current && fresh.session.state === 'published' && publishedNetworkMatches(fresh.context)) {
+      fresh = await ensureNetworkTrace(fresh, signal);
+      fresh = await finishAssignedCadNetwork(fresh, signal);
+      update(value => ({ ...value, progress: null, notice: 'Tray network updated.', unknown: false }));
+      return;
+    }
+    // Older published preparations retained their exact assigned roots only in
+    // the sealed plan. Recover those UUID-owned assignments for this same model,
+    // without replacing any subsequent explicit resolution or running name matching.
     if (regenerate && !fresh.context.resolutions.some(resolution => resolution.mode === 'roots' && resolution.rootObjectIds.length > 0
-      && preparationResolutionMatchesScope(resolution.scope, fresh.context.scope)
+      && sameModel(resolution.scope, fresh.context.scope) && fresh.context.trays.some(tray => tray.projectTrayId === resolution.projectTrayId))) {
+      const aggregate = fresh.context.currentAggregate;
+      if (aggregate && sameModel(aggregate, fresh.context.scope)) {
+        fresh = await readCurrent(signal, aggregate.sessionId);
+        const session = fresh.session;
+        if (fresh.context.currentAggregate?.id === aggregate.id && session?.id === aggregate.sessionId
+          && session.projectId === fresh.context.projectId && session.state === 'published' && session.publishedAggregateId === aggregate.id
+          && sameModel(session.plan, fresh.context.scope) && session.plan.orderedPlanSha256 === aggregate.orderedPlanSha256) {
+          const recovered = session.plan.requestedScope.trays.filter(tray => tray.orderedRootObjectIds.length
+            && fresh.context.trays.some(current => current.projectTrayId === tray.projectTrayId && !current.geometrySource && current.policyState === 'configured')
+            && !fresh.context.resolutions.some(resolution => resolution.projectTrayId === tray.projectTrayId));
+          for (const tray of recovered) {
+            fresh = await execute({ kind: 'resolution', body: { schemaVersion: 'wfc.pf.preparation-resolution.write.v1',
+              expected: fresh.context.scope, idempotencyKey: generateId(), projectTrayId: tray.projectTrayId, mode: 'roots',
+              rootObjectIds: [...tray.orderedRootObjectIds], reason: 'Recovered the exact tray assignment retained by the published preparation for this model.' } }, signal, true);
+          }
+        }
+      }
+    }
+    if (regenerate && !fresh.context.resolutions.some(resolution => resolution.mode === 'roots' && resolution.rootObjectIds.length > 0
+      && sameModel(resolution.scope, fresh.context.scope)
       && fresh.context.trays.some(tray => tray.projectTrayId === resolution.projectTrayId)))
       throw new Error('No project trays are assigned in the current model. Choose Discover project tray candidates or assign model objects to trays, then generate the network.');
     // A current older network does not establish the outcome of a later saved
@@ -1165,7 +1222,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     // Preserve explicit physical assignments when only project routing inputs
     // changed. Each renewal is a fresh audited write with the current full CAS.
     // Only same-model renewals may retain dbIds directly.
-    const staleRoots = regenerate ? [] : fresh.context.resolutions.filter(resolution => resolution.mode === 'roots' &&
+    const staleRoots = fresh.context.resolutions.filter(resolution => resolution.mode === 'roots' &&
       fresh.context.trays.some(tray => tray.projectTrayId === resolution.projectTrayId) &&
       sameModel(resolution.scope, fresh.context.scope) && !preparationResolutionMatchesScope(resolution.scope, fresh.context.scope));
     for (const resolution of staleRoots) {
@@ -1246,10 +1303,11 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     if (!publishedNetworkMatches(fresh.context) || fresh.session?.state !== 'published' || fresh.context.currentAggregate!.sessionId !== fresh.session.id)
       throw new Error('The tray update could not be confirmed. Check the trays again.');
     fresh = await ensureNetworkTrace(fresh, signal);
+    if (regenerate) fresh = await finishAssignedCadNetwork(fresh, signal);
     const restorationNotice = restoredAssignments ? ` ${restoredAssignments} tray assignments were restored from the previous model revision; geometry was read from the current model.` : '';
     const unresolvedNotice = unresolvedAssignments.length ? ` Could not uniquely recognise ${unresolvedAssignments.length} assigned trays: ${unresolvedAssignments.slice(0, 8).join(', ')}${unresolvedAssignments.length > 8 ? '…' : ''}. Review their model selections.` : '';
     update(value => ({ ...value, progress: null, notice: `Tray network updated.${restorationNotice}${unresolvedNotice}`, unknown: false }));
-  }, [assertCurrent, collectSession, discoverTrays, ensureNetworkTrace, execute, readCurrent, reconcileAutomatic, update]);
+  }, [assertCurrent, collectSession, discoverTrays, ensureNetworkTrace, execute, finishAssignedCadNetwork, readCurrent, reconcileAutomatic, update]);
   const checkTrays = useCallback(() => {
     if (!latestActive.current) return Promise.resolve();
     return operate(async signal => {
@@ -1291,13 +1349,14 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         || fresh.session.plan.orderedPlanSha256 !== aggregate.orderedPlanSha256)
         throw new Error('The published network does not match the current preparation. Refresh its status before finishing it.');
       fresh = await ensureNetworkTrace(fresh, signal);
+      fresh = await finishAssignedCadNetwork(fresh, signal);
       if (fresh.context.currentAggregate?.id !== aggregate.id || !networkTraceMatches(fresh.context, fresh.networkTrace))
         throw new Error('The saved network frame could not be verified. Refresh its status before trying again.');
       regenerationRequested.current = false; regenerationSession.current = null;
       update(value => ({ ...value, progress: null, notice: 'The saved routing network is ready for routing calculations.', unknown: false }));
       latestPf.current.refresh();
     });
-  }, [ensureNetworkTrace, operate, readCurrent, readScopeOnly, update]);
+  }, [ensureNetworkTrace, finishAssignedCadNetwork, operate, readCurrent, readScopeOnly, update]);
   const assignTray = useCallback((projectTrayId: string, rootObjectIds: string[]) => {
     if (!latestActive.current) return Promise.resolve();
     const origin = stateRef.current.context?.scope;
@@ -1342,7 +1401,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     if (assignmentContext) void pf.setTrayAssignmentContext?.(assignmentContext);
   }, [assignmentContext, pf.setTrayAssignmentContext, pf.preparationViewerGeneration]);
   const canMutate = enabled && active && !view.busy && !view.unknown && !view.conflict;
-  const networkReady = Boolean(!view.unknown && !view.conflict && view.context && networkTraceMatches(view.context, view.networkTrace));
+  const networkReady = Boolean(!view.unknown && !view.conflict && view.context && networkTraceMatches(view.context, view.networkTrace)
+    && assignedCadNetworkMatches(view.context));
   const networkStorageStatus: PreparationNetworkStorageStatus = !view.context
     ? view.error ? 'unavailable' : 'loading'
     : !view.context.currentAggregate ? 'missing'

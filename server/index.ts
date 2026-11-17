@@ -9,6 +9,7 @@ import { initializeCadDesignSchema } from './cadDesign/schema.js';
 import { initializeCadRouteGroupsSchema } from './cadDesign/routeGroupsSchema.js';
 import { initializeCadRouteTransitionsSchema } from './cadDesign/routeTransitionsSchema.js';
 import { initializeCadRouteTrayExportsSchema } from './cadDesign/routeTrayExportsSchema.js';
+import { initializeCadNetworkPreparationSchema } from './cadDesign/networkPreparationSchema.js';
 import { initializeCadAutomaticConnectivity } from './cadDesign/automaticConnectivity.js';
 import { initializeMaterialTrayCadSchema } from './materialCad/schema.js';
 import { pool } from './db.js';
@@ -67,6 +68,7 @@ const startServer = async (): Promise<void> => {
       await initializeCadRouteGroupsSchema(pool);
       await initializeCadRouteTransitionsSchema(pool);
       await initializeCadRouteTrayExportsSchema(pool);
+      await initializeCadNetworkPreparationSchema(pool);
       await initializeCadAutomaticConnectivity(pool);
     }
     await initializePathFinderRuntime();
