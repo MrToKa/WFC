@@ -2,6 +2,7 @@ export type MaterialOrderMeasurement = 'pcs' | 'pack' | 'meters';
 export type MaterialPackaging = 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 
 export type MaterialTray = {
+  orderNumber: string | null;
   id: string;
   type: string;
   manufacturer: string | null;
@@ -203,6 +204,7 @@ export type MaterialInstrumentInput = MaterialCableInstallationMaterialInput;
 export type MaterialInstrumentInstallationMaterialInput = MaterialCableInstallationMaterialInput;
 
 export type MaterialTrayInput = {
+  orderNumber?: string | null;
   type: string;
   manufacturer?: string | null;
   heightMm?: number | null;

@@ -100,6 +100,7 @@ export const TraysTable = ({
             <tr>
               <th className={styles.tableHeadCell}>Manufacturer</th>
               <th className={styles.tableHeadCell}>Type</th>
+              <th className={styles.tableHeadCell}>Order number</th>
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                 Height [mm]
               </th>
@@ -126,6 +127,7 @@ export const TraysTable = ({
                 <tr key={tray.id}>
                   <td className={styles.tableCell}>{tray.manufacturer ?? '-'}</td>
                   <td className={styles.tableCell}>{tray.type}</td>
+                  <td className={styles.tableCell}>{tray.orderNumber ?? '-'}</td>
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatNumeric(tray.heightMm)}
                   </td>

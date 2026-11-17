@@ -21,6 +21,7 @@ const criteriaOptions: {
   { value: 'all', label: 'All fields' },
   { value: 'manufacturer', label: 'Manufacturer' },
   { value: 'type', label: 'Type' },
+  { value: 'orderNumber', label: 'Order number', catalog: 'trays' },
   { value: 'height', label: 'Height [mm]' },
   { value: 'rungHeight', label: 'Rung height [mm]', catalog: 'trays' },
   { value: 'width', label: 'Width [mm]' },

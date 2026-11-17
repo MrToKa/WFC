@@ -13,6 +13,8 @@ const apiMocks = vi.hoisted(() => ({
   deleteMaterialTray: vi.fn(),
   importMaterialSupports: vi.fn(),
   importMaterialTrays: vi.fn(),
+  createMaterialTray: vi.fn(),
+  updateMaterialTray: vi.fn(),
 }));
 
 vi.mock('@/api/client', async (importOriginal) => ({
@@ -163,5 +165,54 @@ describe.each([
     expect(result.current.importing).toBe(false);
     expect(target.value).toBe('');
     expect(fetchAll).toHaveBeenCalledOnce();
+  });
+});
+
+
+describe('tray order numbers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMocks.fetchAllMaterialTrays.mockResolvedValue({ trays: [makeTray(1), makeTray(2)] });
+    apiMocks.createMaterialTray.mockResolvedValue({ tray: makeTray(1) });
+    apiMocks.updateMaterialTray.mockResolvedValue({ tray: makeTray(1) });
+  });
+
+  it('loads and updates an order number as text and clears it explicitly', async () => {
+    const { result } = renderHook(() => useTrays(params));
+    await waitFor(() => expect(result.current.isLoadingTrays).toBe(false));
+    act(() => result.current.openTrayEditDialog(makeTray(1)));
+    expect(result.current.trayForm.orderNumber).toBe('00-1');
+    act(() => result.current.handleTrayFieldChange('orderNumber')({} as ChangeEvent<HTMLInputElement>, { value: '  00123-KL  ' }));
+    await act(async () => result.current.handleTraySubmit({ preventDefault: vi.fn() } as never));
+    expect(apiMocks.updateMaterialTray).toHaveBeenLastCalledWith('token', 'tray-1', expect.objectContaining({ orderNumber: '00123-KL' }));
+    act(() => result.current.openTrayEditDialog(makeTray(1)));
+    act(() => result.current.handleTrayFieldChange('orderNumber')({} as ChangeEvent<HTMLInputElement>, { value: '' }));
+    await act(async () => result.current.handleTraySubmit({ preventDefault: vi.fn() } as never));
+    expect(apiMocks.updateMaterialTray).toHaveBeenLastCalledWith('token', 'tray-1', expect.objectContaining({ orderNumber: null }));
+  });
+
+  it('creates a tray with its order number and resets the form', async () => {
+    const { result } = renderHook(() => useTrays(params));
+    await waitFor(() => expect(result.current.isLoadingTrays).toBe(false));
+    act(() => result.current.openTrayCreateDialog());
+    expect(result.current.trayForm.orderNumber).toBe('');
+    act(() => {
+      result.current.handleTrayFieldChange('type')({} as ChangeEvent<HTMLInputElement>, { value: 'New tray' });
+      result.current.handleTrayFieldChange('orderNumber')({} as ChangeEvent<HTMLInputElement>, { value: '000123' });
+    });
+    await act(async () => result.current.handleTraySubmit({ preventDefault: vi.fn() } as never));
+    expect(apiMocks.createMaterialTray).toHaveBeenCalledWith('token', expect.objectContaining({ orderNumber: '000123' }));
+    expect(result.current.trayForm.orderNumber).toBe('');
+  });
+
+  it('searches by order number in all fields and in the dedicated field', async () => {
+    const { result } = renderHook(() => useTrays(params));
+    await waitFor(() => expect(result.current.isLoadingTrays).toBe(false));
+    act(() => result.current.setSearchText('00-2'));
+    expect(result.current.trays.map((tray) => tray.id)).toEqual(['tray-2']);
+    act(() => result.current.setSearchCriteria('orderNumber'));
+    expect(result.current.trays.map((tray) => tray.id)).toEqual(['tray-2']);
+    act(() => result.current.setSearchText('Tray'));
+    expect(result.current.trays).toEqual([]);
   });
 });

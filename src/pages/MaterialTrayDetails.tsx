@@ -12,6 +12,7 @@ export const MaterialTrayDetails = () => (
     getTitle={(material) => material.type}
     getProperties={(material) => [
       { label: 'Type', value: material.type },
+      { label: 'Order number', value: material.orderNumber ?? '—' },
       { label: 'Manufacturer', value: material.manufacturer ?? '—' },
       { label: 'Height', value: numeric(material.heightMm, 'mm') },
       { label: 'Rung height', value: numeric(material.rungHeightMm, 'mm') },

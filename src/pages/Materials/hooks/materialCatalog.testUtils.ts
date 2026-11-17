@@ -27,6 +27,7 @@ export const makeTray = (index: number): MaterialTray => {
     type: `Tray ${String(index).padStart(2, '0')}`,
     weightKgPerM: weightKg,
     rungHeightMm: 31,
+    orderNumber: `00-${index}`,
     loadCurveId: 'curve-1',
     loadCurveName: 'Medium span',
   };

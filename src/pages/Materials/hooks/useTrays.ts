@@ -133,6 +133,7 @@ export const useTrays = ({ token, isAdmin, showToast, pageSize = 10 }: UseTraysP
     setEditingTray(tray);
     setTrayForm({
       type: tray.type,
+      orderNumber: tray.orderNumber ?? '',
       manufacturer: tray.manufacturer ?? '',
       heightMm: toFormValue(tray.heightMm),
       rungHeightMm: toFormValue(tray.rungHeightMm),
@@ -340,6 +341,7 @@ export const useTrays = ({ token, isAdmin, showToast, pageSize = 10 }: UseTraysP
           await createMaterialTray(token, {
             type,
             manufacturer: nextManufacturer,
+            orderNumber: trayForm.orderNumber.trim() || null,
             heightMm: heightResult.numeric,
             rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,
@@ -359,6 +361,7 @@ export const useTrays = ({ token, isAdmin, showToast, pageSize = 10 }: UseTraysP
           await updateMaterialTray(token, editingTray.id, {
             type,
             manufacturer: nextManufacturer,
+            orderNumber: trayForm.orderNumber.trim() || null,
             heightMm: heightResult.numeric,
             rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,

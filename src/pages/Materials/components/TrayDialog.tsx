@@ -90,6 +90,13 @@ export const TrayDialog = ({
               >
                 <Input value={form.type} onChange={onFieldChange('type')} required />
               </Field>
+              <Field label='Order number'>
+                <Input
+                  value={form.orderNumber}
+                  maxLength={200}
+                  onChange={onFieldChange('orderNumber')}
+                />
+              </Field>
               <Field label='Manufacturer'>
                 <Input value={form.manufacturer} onChange={onFieldChange('manufacturer')} />
               </Field>

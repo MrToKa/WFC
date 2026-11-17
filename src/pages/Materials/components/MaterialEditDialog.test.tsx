@@ -3,9 +3,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MaterialCableInstallationMaterial } from '@/api/client';
 import { MaterialEditDialog } from './MaterialEditDialog';
+import { makeTray } from '../hooks/materialCatalog.testUtils';
 
 const apiMocks = vi.hoisted(() => ({
   updateCableInstallationMaterial: vi.fn(),
+  updateTray: vi.fn(),
   updateTrayInstallationMaterial: vi.fn(),
   updateInstrument: vi.fn(),
   updateInstrumentInstallationMaterial: vi.fn(),
@@ -14,6 +16,7 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
   updateMaterialCableInstallationMaterial: apiMocks.updateCableInstallationMaterial,
+  updateMaterialTray: apiMocks.updateTray,
   updateMaterialTrayInstallationMaterial: apiMocks.updateTrayInstallationMaterial,
   updateMaterialInstrument: apiMocks.updateInstrument,
   updateMaterialInstrumentInstallationMaterial: apiMocks.updateInstrumentInstallationMaterial,
@@ -39,6 +42,24 @@ const material: MaterialCableInstallationMaterial = {
 };
 
 describe('MaterialEditDialog', () => {
+  it.each(['  000123-KL  ', ''])('edits a tray order number from the details page: %s', async (value) => {
+    const tray = makeTray(1);
+    const onSaved = vi.fn().mockResolvedValue(undefined);
+    apiMocks.updateTray.mockResolvedValue({ tray });
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <MaterialEditDialog open category="tray" material={tray} token="token" onDismiss={vi.fn()} onSaved={onSaved} />
+      </FluentProvider>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Order number' });
+    expect(input).toHaveValue('00-1');
+    expect(input).toHaveAttribute('maxLength', '200');
+    fireEvent.change(input, { target: { value } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(apiMocks.updateTray).toHaveBeenCalledWith('token', tray.id, expect.objectContaining({ orderNumber: value.trim() || null })));
+    expect(onSaved).toHaveBeenCalledOnce();
+  });
+
   beforeEach(() => {
     apiMocks.updateCableInstallationMaterial.mockReset();
     apiMocks.updateCableInstallationMaterial.mockResolvedValue({

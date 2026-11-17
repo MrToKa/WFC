@@ -42,6 +42,7 @@ const useStyles = makeStyles({
 });
 
 type FormState = {
+  orderNumber: string;
   name: string;
   type: string;
   purpose: string;
@@ -66,6 +67,7 @@ type FormState = {
 };
 
 const emptyForm: FormState = {
+  orderNumber: '',
   name: '',
   type: '',
   purpose: '',
@@ -142,6 +144,7 @@ const formFromMaterial = (
       const item = material as MaterialTray;
       return {
         ...common,
+        orderNumber: item.orderNumber ?? '',
         type: item.type,
         manufacturer: item.manufacturer ?? '',
         heightMm: numberValue(item.heightMm),
@@ -274,6 +277,7 @@ export const MaterialEditDialog = ({
         case 'tray':
           if (!form.type.trim()) throw new Error('Type is required.');
           await updateMaterialTray(token, material.id, {
+            orderNumber: nullableText(form.orderNumber),
             type: form.type.trim(),
             manufacturer: nullableText(form.manufacturer),
             heightMm: optionalNumber(form.heightMm, 'Height'),
@@ -369,6 +373,13 @@ export const MaterialEditDialog = ({
                 </>
               ) : category === 'tray' ? (
                 <>
+                  <Field label="Order number">
+                    <Input
+                      value={form.orderNumber}
+                      maxLength={200}
+                      onChange={(_, data) => setField('orderNumber', data.value)}
+                    />
+                  </Field>
                   {textField('Type', 'type')}
                   {textField('Manufacturer', 'manufacturer')}
                   {textField('Height [mm]', 'heightMm')}

@@ -25,6 +25,7 @@ export const parseMaterialsTab = (value: string | null): MaterialsTab =>
   MATERIAL_TABS.includes(value as MaterialsTab) ? (value as MaterialsTab) : 'cableTypes';
 
 export type TrayFormState = {
+  orderNumber: string;
   type: string;
   manufacturer: string;
   heightMm: string;
@@ -64,6 +65,7 @@ export type LoadCurveFormState = {
 export type LoadCurveFormErrors = Partial<Record<keyof LoadCurveFormState, string>>;
 
 export const initialTrayForm: TrayFormState = {
+  orderNumber: '',
   type: '',
   manufacturer: '',
   heightMm: '',

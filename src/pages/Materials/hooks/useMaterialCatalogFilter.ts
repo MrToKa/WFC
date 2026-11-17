@@ -5,6 +5,7 @@ export type MaterialCatalogSearchCriteria =
   | 'all'
   | 'type'
   | 'manufacturer'
+  | 'orderNumber'
   | 'height'
   | 'rungHeight'
   | 'width'
@@ -21,6 +22,7 @@ const getSearchValues = (
   item: CatalogItem,
 ): Record<Exclude<MaterialCatalogSearchCriteria, 'all'>, string | number | null> => ({
   type: item.type,
+  orderNumber: 'orderNumber' in item ? item.orderNumber : null,
   manufacturer: item.manufacturer,
   height: item.heightMm,
   rungHeight: 'rungHeightMm' in item ? item.rungHeightMm : null,

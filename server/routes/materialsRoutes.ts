@@ -49,6 +49,7 @@ import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes
 
 const TRAY_HEADERS = {
   manufacturer: 'Manufacturer',
+  orderNumber: 'Order number',
   type: 'Type',
   height: 'Height [mm]',
   rungHeight: 'Rung height [mm]',
@@ -87,6 +88,7 @@ const materialImportColumns = (
 ): ExcelImportColumn[] => [
   { headers: [headers.type], required: true, maxLength: 200, unique: true, normalizeWhitespace: true },
   { headers: [headers.manufacturer], maxLength: 200 },
+  ...('orderNumber' in headers ? [{ headers: [headers.orderNumber], maxLength: 200 }] : []),
   ...('loadCurve' in headers ? [{ headers: [headers.loadCurve], maxLength: 200 }] : []),
   ...[
     headers.height,
@@ -358,6 +360,7 @@ const selectMaterialTraysQuery = `
     mt.id,
     mt.tray_type,
     mt.manufacturer,
+    mt.order_number,
     mt.height_mm,
     mt.rung_height_mm,
     mt.width_mm,
@@ -602,8 +605,9 @@ materialsRouter.post(
             packaging,
             source,
             load_curve_id,
-            image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULL, $13);
+            image_template_id,
+            order_number
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULL, $13, $14);
         `,
         [
           trayId,
@@ -618,7 +622,8 @@ materialsRouter.post(
           data.orderMeasurement ?? 'pcs',
           data.packaging ?? 'pcs',
           normalizeOptionalText(data.source ?? null),
-          normalizedImageTemplateId
+          normalizedImageTemplateId,
+          normalizeOptionalText(data.orderNumber)
         ]
       );
 
@@ -710,6 +715,12 @@ materialsRouter.patch(
     if (data.manufacturer !== undefined) {
       setClauses.push(`manufacturer = $${parameterIndex}`);
       values.push(normalizeOptionalText(data.manufacturer));
+      parameterIndex += 1;
+    }
+
+    if (data.orderNumber !== undefined) {
+      setClauses.push(`order_number = $${parameterIndex}`);
+      values.push(normalizeOptionalText(data.orderNumber));
       parameterIndex += 1;
     }
 
@@ -932,6 +943,7 @@ materialsRouter.post(
       const fieldHeaders: Record<string, string> = {
         type: TRAY_HEADERS.type,
         manufacturer: TRAY_HEADERS.manufacturer,
+        orderNumber: TRAY_HEADERS.orderNumber,
         heightMm: TRAY_HEADERS.height,
         rungHeightMm: TRAY_HEADERS.rungHeight,
         widthMm: TRAY_HEADERS.width,
@@ -957,6 +969,9 @@ materialsRouter.post(
         const parseResult = createMaterialTraySchema.safeParse({
           type: normalizeType(String(row[TRAY_HEADERS.type])),
           manufacturer: normalizeOptionalText(String(row[TRAY_HEADERS.manufacturer] ?? '')),
+          orderNumber: TRAY_HEADERS.orderNumber in row
+            ? normalizeOptionalText(String(row[TRAY_HEADERS.orderNumber] ?? ''))
+            : undefined,
           heightMm: toNullableNumber(row[TRAY_HEADERS.height]),
           rungHeightMm: toNullableNumber(row[TRAY_HEADERS.rungHeight]),
           widthMm: toNullableNumber(row[TRAY_HEADERS.width]),
@@ -1015,6 +1030,7 @@ materialsRouter.post(
                   minimum_order_quantity = $9,
                   order_measurement = $10,
                   packaging = $11,
+                  order_number = CASE WHEN $13 THEN $14 ELSE order_number END,
                   updated_at = NOW()
                 WHERE id = $12;
               `,
@@ -1030,7 +1046,9 @@ materialsRouter.post(
                 data.minimumOrderQuantity ?? 1,
                 data.orderMeasurement ?? 'pcs',
                 data.packaging ?? 'pcs',
-                existing.rows[0].id
+                existing.rows[0].id,
+                data.orderNumber !== undefined,
+                data.orderNumber ?? null
               ]
             );
             updated += 1;
@@ -1049,8 +1067,9 @@ materialsRouter.post(
                   load_curve_id,
                   minimum_order_quantity,
                   order_measurement,
-                  packaging
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
+                  packaging,
+                  order_number
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
               `,
               [
                 randomUUID(),
@@ -1064,7 +1083,8 @@ materialsRouter.post(
                 loadCurveId,
                 data.minimumOrderQuantity ?? 1,
                 data.orderMeasurement ?? 'pcs',
-                data.packaging ?? 'pcs'
+                data.packaging ?? 'pcs',
+                data.orderNumber ?? null
               ]
             );
             created += 1;
@@ -1122,6 +1142,7 @@ registerMaterialExportRoutes(
       const columns = [
         { name: TRAY_HEADERS.manufacturer, key: 'manufacturer', width: 26 },
         { name: TRAY_HEADERS.type, key: 'type', width: 30 },
+        { name: TRAY_HEADERS.orderNumber, key: 'orderNumber', width: 26 },
         { name: TRAY_HEADERS.height, key: 'height', width: 18 },
         { name: TRAY_HEADERS.rungHeight, key: 'rungHeight', width: 18 },
         { name: TRAY_HEADERS.width, key: 'width', width: 18 },
@@ -1136,6 +1157,7 @@ registerMaterialExportRoutes(
       const rows = filterMaterialExportRows(result.rows, res).map((row) => [
         row.manufacturer ?? '',
         row.tray_type,
+        row.order_number ?? '',
         row.height_mm !== null && row.height_mm !== '' ? Number(row.height_mm) : '',
         row.rung_height_mm !== null && row.rung_height_mm !== '' ? Number(row.rung_height_mm) : '',
         row.width_mm !== null && row.width_mm !== '' ? Number(row.width_mm) : '',
@@ -1173,6 +1195,9 @@ registerMaterialExportRoutes(
 
       columns.forEach((column, index) => {
         worksheet.getColumn(index + 1).width = column.width;
+        if (column.key === 'orderNumber') {
+          worksheet.getColumn(index + 1).numFmt = '@';
+        }
         if (column.key === 'height' || column.key === 'rungHeight' || column.key === 'width') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         }
@@ -1218,6 +1243,7 @@ materialsRouter.get(
       const columns = [
         { name: TRAY_HEADERS.manufacturer, key: 'manufacturer', width: 26 },
         { name: TRAY_HEADERS.type, key: 'type', width: 30 },
+        { name: TRAY_HEADERS.orderNumber, key: 'orderNumber', width: 26 },
         { name: TRAY_HEADERS.height, key: 'height', width: 18 },
         { name: TRAY_HEADERS.rungHeight, key: 'rungHeight', width: 18 },
         { name: TRAY_HEADERS.width, key: 'width', width: 18 },
@@ -1250,6 +1276,9 @@ materialsRouter.get(
 
       columns.forEach((column, index) => {
         worksheet.getColumn(index + 1).width = column.width;
+        if (column.key === 'orderNumber') {
+          worksheet.getColumn(index + 1).numFmt = '@';
+        }
         if (column.key === 'height' || column.key === 'rungHeight' || column.key === 'width') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         }
