@@ -610,7 +610,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
           ? proposalEndpointObjectIdsFromContexts(detail, latest.pf.data, { projectId, token }, knownContexts) : [];
         const initialObjectIds = computedPathObjectIds(detail.route.objectIds,
           [...knownEndpoints, ...(availableEndpoints?.status === 'fulfilled' ? availableEndpoints.value : [])]) ?? routeObjectIds;
-        verifiedWorkflowPath.current = { key: workflowKey, path: { pathId: detail.id, points: detail.route.points, objectIds: initialObjectIds } };
+        verifiedWorkflowPath.current = { key: workflowKey, path: { pathId: detail.id, points: detail.route.points, objectIds: initialObjectIds, routeNames: [...new Set(detail.route.routeCodes)] } };
         setWorkflowProposalRead({ key: workflowKey, proposalId: detail.id, proposalHash: detail.proposalHash, row: live.row,
           scope: pathFinderWorkflowDisplayScope(latest.pf, accountId ?? null), source: displaySource });
         setWorkflowDisplayProof({ key: workflowKey, proposalId: detail.id, proposalHash: detail.proposalHash, accepted: acceptedDisplayReady, source: displaySource });

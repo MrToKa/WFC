@@ -106,6 +106,18 @@ test('tray display carries one bounded unique root set with a detached exact cur
   }
 });
 
+test('computed CAD route names are optional, bounded and copied independently of native IDs', () => {
+  const payload = { pathId: uuid(9), pointCount: 1, objectIds: [], routeNames: ['/BC901', '/BC027-1'] };
+  const parsed = validateEnvelope(envelope('BEGIN_COMPUTED_PATH', payload), 'parent-to-frame');
+  assert.ok(parsed); payload.routeNames[0] = '/CHANGED';
+  assert.deepEqual(parsed.payload.routeNames, ['/BC901', '/BC027-1']);
+  assert.ok(validateEnvelope(envelope('BEGIN_COMPUTED_PATH', { ...payload, routeNames: [] })));
+  for (const routeNames of [null, '/BC901', [1], [''], ['  '], ['x\u0000'], ['x'.repeat(2049)], Array(2), Array(15).fill('x'.repeat(2048))])
+    assert.equal(validateEnvelope(envelope('BEGIN_COMPUTED_PATH', { ...payload, routeNames })), null);
+  const objectIds = Array.from({ length: MAX_PATH_OBJECT_IDS }, (_, at) => 2147483647 - at);
+  assert.ok(validateEnvelope(envelope('BEGIN_COMPUTED_PATH', { ...payload, objectIds, routeNames: Array(13).fill('x'.repeat(2048)) })));
+});
+
 test('only a strict computed-path begin carries both complete4096-member locations and512route objects',()=>{
   const objectIds=Array.from({length:MAX_PATH_OBJECT_IDS},(_,at)=>2147483647-at),payload={pathId:uuid(9),pointCount:1,objectIds};
   const message=envelope('BEGIN_COMPUTED_PATH',payload),size=new TextEncoder().encode(JSON.stringify(message)).byteLength;

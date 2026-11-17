@@ -272,7 +272,7 @@ describe('selected current cable workflow result', () => {
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({canReview:false,canApply:false});
     view.rerender(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.live.row} accountId={id(2)} options={options}
       onWorkflowDisplayChange={changed} onWorkflowReviewChange={review} workflowDisplayRequest={{cableId:id(4),requestId:1,action:'show'}} />);
-    await waitFor(()=>expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({pathId:id(3),points:f.proposal.route!.points,objectIds:[23]}));
+    await waitFor(()=>expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({pathId:id(3),points:f.proposal.route!.points,routeNames:f.proposal.route!.routeCodes,objectIds:[23]}));
     expect(f.pf.reviewProposal).not.toHaveBeenCalled();expect(f.pf.action).not.toHaveBeenCalled();expect(f.pf.calculate).not.toHaveBeenCalled();
   });
   it('retires stored geometry when its latest receipt identity changes during the live read',async()=>{
@@ -300,7 +300,7 @@ describe('selected current cable workflow result', () => {
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false });
     view.rerender(<PathFinderResults pf={checkedPf} selectedCableId={id(4)} workflowSelection={f.live.row} accountId={id(2)} options={options}
       onWorkflowDisplayChange={changed} onWorkflowReviewChange={review} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();
   });
   it.each([
@@ -322,10 +322,10 @@ describe('selected current cable workflow result', () => {
     if (timing === 'before-show') await act(async () => finishEndpoints(['dbid:44', 'dbid:45']));
     view.rerender(<PathFinderResults {...p} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
     if (timing === 'after-show') {
-      await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+      await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
       await act(async () => finishEndpoints(['dbid:44', 'dbid:45']));
     }
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 44, 45] }));
     expect(f.pf.showPath).toHaveBeenCalledTimes(timing === 'before-show' ? 1 : 2);
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: true }));
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false });
@@ -431,7 +431,7 @@ describe('selected current cable workflow result', () => {
     expect(popup?.message).not.toContain('current cable proof is unavailable');
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false, message: expect.stringContaining('already saved in Cable list') });
     view.rerender(<PathFinderResults {...props} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false });
     expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
@@ -448,7 +448,7 @@ describe('selected current cable workflow result', () => {
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: false, routing: '/BC1' }));
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false });
     view.rerender(<PathFinderResults {...props} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
   it('keeps the accepted own-write path ready and visible when background siblings finish without item review authority', async () => {
@@ -484,7 +484,7 @@ describe('selected current cable workflow result', () => {
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledExactlyOnceWith(id(1), 'current-private-token', id(4), f.proposal.routingPreferences, expect.any(AbortSignal));
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false });
     view.rerender(<PathFinderResults {...props} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.calculate).not.toHaveBeenCalled();
     expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
@@ -514,7 +514,7 @@ describe('selected current cable workflow result', () => {
     const view = render(<PathFinderResults {...p} />);
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: false, routing: '/BC1' }));
     view.rerender(<PathFinderResults {...p} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false });
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
@@ -570,7 +570,7 @@ describe('selected current cable workflow result', () => {
     const pf = { ...f.pf, data: { ...f.pf.data, jobs: [{ ...f.parent, status: 'complete' as const, completed: 13, total: 13 }] } };
     view.rerender(<PathFinderResults {...p} pf={asPf(pf)} workflowSelection={completed}
       workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: true, routing: '/BC1' }));
     expect(f.pf.readProposal).toHaveBeenCalledOnce(); expect(f.pf.readJob).toHaveBeenCalledOnce();
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
@@ -635,7 +635,7 @@ describe('selected current cable workflow result', () => {
     await act(async () => finish(f.live));
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: false, routing: '/BC1' }));
     view.rerender(<PathFinderResults {...p} displayOwned={false} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     expect(f.pf.readProposal).toHaveBeenCalledOnce(); expect(f.pf.readJob).toHaveBeenCalledOnce();
     expect(f.pf.refresh).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
@@ -650,9 +650,9 @@ describe('selected current cable workflow result', () => {
     view.rerender(<PathFinderResults {...p} displayOwned={false} />);
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0].ready).toBe(true));
     view.rerender(<PathFinderResults {...p} displayOwned workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     await act(async () => finish(['dbid:44', 'dbid:45']));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 44, 45] }));
     expect(f.pf.showPath).toHaveBeenCalledTimes(2);
     expect(f.pf.refresh).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
@@ -666,7 +666,7 @@ describe('selected current cable workflow result', () => {
       workflowDisplayRequest={{ cableId: id(4), requestId: 0, action: 'show' }} />);
     await waitFor(() => expect(proposalEndpointObjectIds).toHaveBeenCalledOnce());
     await act(async () => finishProof(f.live));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 44, 45] }));
     expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: true });
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
@@ -680,11 +680,11 @@ describe('selected current cable workflow result', () => {
     const view = render(<PathFinderResults {...p} workflowDisplayRequest={start === 'initial' ? { cableId: id(4), requestId: 0, action: 'show' } : null} />);
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0].ready).toBe(true));
     if (start === 'cached') view.rerender(<PathFinderResults {...p} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     await act(async () => finishEndpoints(['dbid:44', 'dbid:45']));
     expect(f.pf.showPath).toHaveBeenCalledOnce();
     await act(async () => finishShow(true));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 44, 45] }));
     expect(f.pf.showPath).toHaveBeenCalledTimes(2);
     expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: true });
     expect(f.pf.readProposal).toHaveBeenCalledOnce(); expect(f.pf.readJob).toHaveBeenCalledOnce();
@@ -706,7 +706,7 @@ describe('selected current cable workflow result', () => {
     expect(f.pf.showPath).toHaveBeenCalledOnce();
     expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: false });
     view.rerender(<PathFinderResults {...p} workflowDisplayRequest={{ cableId: id(4), requestId: 3, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 44, 45] }));
     expect(f.pf.showPath).toHaveBeenCalledTimes(2);
     expect(f.pf.readProposal).toHaveBeenCalledOnce(); expect(f.pf.readJob).toHaveBeenCalledOnce(); expect(proposalEndpointObjectIds).toHaveBeenCalledOnce();
     expect(f.pf.refresh).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
@@ -729,7 +729,7 @@ describe('selected current cable workflow result', () => {
     expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: false });
     ownsViewer = true;
     view.rerender(<PathFinderResults {...p} displayOwned workflowDisplayRequest={{ cableId: id(4), requestId: 2, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 44, 45] }));
     expect(claimViewer).toHaveBeenCalledTimes(2); expect(proposalEndpointObjectIds).toHaveBeenCalledOnce();
   });
   it('does not redraw a visible route when endpoint foreground adds no new objects', async () => {
@@ -755,7 +755,7 @@ describe('selected current cable workflow result', () => {
       await waitFor(() => expect(changed.mock.calls.at(-1)?.[0].ready).toBe(true));
       await act(async () => fail(error));
       view.rerender(<PathFinderResults {...p} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-      await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+      await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
       expect(f.pf.readProposal).toHaveBeenCalledOnce(); expect(f.pf.readJob).toHaveBeenCalledOnce();
       await waitFor(() => expect(proposalEndpointObjectIds).toHaveBeenCalledTimes(3), { timeout: 2500 });
       expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
@@ -780,7 +780,7 @@ describe('selected current cable workflow result', () => {
       expect(proposalEndpointObjectIds).toHaveBeenCalledTimes(2); expect(f.pf.showPath).toHaveBeenCalledOnce();
       view.rerender(<PathFinderResults {...p} workflowDisplayRequest={{ cableId: id(4), requestId: 3, action: 'show' }} />);
       await act(async () => {});
-      expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] });
+      expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 44, 45] });
       expect(f.pf.readProposal).toHaveBeenCalledOnce(); expect(f.pf.readJob).toHaveBeenCalledOnce(); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
       expect(f.pf.refresh).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
     } finally { vi.useRealTimers(); }
@@ -912,7 +912,7 @@ describe('selected current cable workflow result', () => {
     const view = render(<PathFinderResults {...p} />);
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0].ready).toBe(true));
     view.rerender(<PathFinderResults {...p} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points,
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes,
       objectIds: Array.from({ length: 8704 }, (_, index) => index + 1) }));
   });
   it('retains the exact result when its objects exceed the complete protected display budget', async () => {
@@ -1024,7 +1024,7 @@ describe('selected current cable workflow result', () => {
     view.rerender(<PathFinderResults {...props} workflowRefreshRequest={workflowRefreshRequest}
       workflowDisplayRequest={{ ...props.workflowDisplayRequest, requestId: 2 }} />);
     await act(async () => {});
-    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] });
+    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] });
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(8);
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();
   });
@@ -1120,7 +1120,7 @@ describe('selected current cable workflow result', () => {
     view.rerender(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}
       accountId={id(2)} options={options} onWorkflowDisplayChange={changed}
       workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 44, 45] }));
     expect(f.pf.readProposal).toHaveBeenCalledOnce(); expect(f.pf.readJob).toHaveBeenCalledOnce();
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(proposalEndpointObjectIds).toHaveBeenCalledOnce();
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: true }));
@@ -1375,7 +1375,7 @@ describe('selected current cable workflow result', () => {
       accountId={id(2)} options={options} onWorkflowDisplayChange={changed} workflowDisplayRequest={request} />);
     await waitFor(() => expect(changed).toHaveBeenLastCalledWith({ cableId: id(4), jobId: id(7), proposalId: id(3), proposalHash: f.proposal.proposalHash,
       ready: true, visible: true, routing: '/BC1', designLength: '7', source: 'current-calculation', verifiedRow: f.live.row, verifiedScope: pathFinderWorkflowDisplayScope(asPf(f.pf), id(2)) }));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     expect(proposalEndpointObjectIds).toHaveBeenCalledOnce(); expect(f.pf.readProposal).toHaveBeenCalledOnce(); expect(f.pf.readJob).toHaveBeenCalledOnce();
     expect(f.pf.clear).not.toHaveBeenCalled(); expect(f.pf.refresh).not.toHaveBeenCalled();
     expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
@@ -1448,7 +1448,7 @@ describe('selected current cable workflow result', () => {
     await waitFor(() => expect(popup?.canReview).toBe(true));
     expect(f.pf.readProposal).toHaveBeenCalledExactlyOnceWith(id(3), expect.any(AbortSignal)); expect(f.pf.readJob).toHaveBeenCalledExactlyOnceWith(id(7), expect.any(AbortSignal));
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledExactlyOnceWith(id(1), 'current-private-token', id(4), options, expect.any(AbortSignal));
-    expect(f.pf.showPath).toHaveBeenCalledWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] });
+    expect(f.pf.showPath).toHaveBeenCalledWith({ pathId: id(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] });
     expect(popup?.comparison?.current.cable.routing).toBe('/LIVE-CURRENT');
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.refresh).not.toHaveBeenCalled();
     await act(async () => { popup?.review(); }); await waitFor(() => expect(f.pf.reviewProposal).toHaveBeenCalledWith(f.proposal));

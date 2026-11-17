@@ -1,7 +1,7 @@
 import { validateCadProperties, type CadSectionMetadata, type CadSectionRoute } from '../../viewer-runtime/cad-properties.mjs';
 import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
-import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isUuid, isCanonicalPoint, validateEnvelope, validateTrayAssignments, type ViewerTrayAssignment, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type PlacementPickOptions, type PlacementPickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
+import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isUuid, isCanonicalPoint, validateComputedRouteNames, validateEnvelope, validateTrayAssignments, type ViewerTrayAssignment, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type PlacementPickOptions, type PlacementPickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateBarrierFrameObservation, barrierFrameObservationHashInput, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
 import { validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl,
@@ -643,8 +643,10 @@ export class ViewerController {
   async showComputedPath(path: ComputedPath): Promise<string | null> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
     if (!UUID.test(path.pathId) || !Array.isArray(path.points) || path.points.length < 1 || path.points.length > MAX_PATH_POINTS || !path.points.every(isCanonicalPoint) || !Array.isArray(path.objectIds) || path.objectIds.length > MAX_PATH_OBJECT_IDS || !path.objectIds.every(id => Number.isInteger(id) && id > 0 && id <= 2147483647) || new Set(path.objectIds).size !== path.objectIds.length) throw new Error('Invalid computed path');
+    if (path.routeNames !== undefined && !validateComputedRouteNames(path.routeNames)) throw new Error('Invalid computed route names');
     // Freeze caller-owned arrays before asynchronous selection and capability checks.
     const points = path.points.map(point => [...point]), objectIds = [...path.objectIds], pathId = path.pathId;
+    const routeFocus = path.routeNames === undefined ? {} : { routeNames: [...path.routeNames] };
     this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
@@ -653,7 +655,7 @@ export class ViewerController {
     await this.sendAsync('CLEAR_ROUTE', { reason: 'selection' }, 'ROUTE_CLEARED');
     if (this.disposed || generation !== this.routeGeneration) return null;
     if (!await this.checkSelection() || this.disposed || generation !== this.routeGeneration) return null;
-    const begin = await this.sendAsync('BEGIN_COMPUTED_PATH', { pathId, pointCount: points.length, objectIds }, 'COMPUTED_PATH_UPDATED');
+    const begin = await this.sendAsync('BEGIN_COMPUTED_PATH', { pathId, pointCount: points.length, objectIds, ...routeFocus }, 'COMPUTED_PATH_UPDATED');
     if (begin.payload.pathId !== pathId || begin.payload.phase !== 'begun' || begin.payload.received !== 0) throw new Error('Computed path acknowledgement mismatch');
     for (let offset = 0; offset < points.length; offset += MAX_PATH_CHUNK_POINTS) {
       if (this.disposed || generation !== this.routeGeneration) return null;

@@ -183,11 +183,11 @@ describe('post-Save endpoint foreground over verified HTTP contexts', () => {
     const view = render(<PopupForegroundFlow f={f} popup={false} changed={changed} />);
     await waitFor(() => expect(wire.counts).toEqual({ from: 3, to: 3 }), { timeout: 3000 });
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: true }));
-    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23] });
+    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] });
     wire.startPopup(); view.rerender(<PopupForegroundFlow f={f} popup changed={changed} />);
     await waitFor(() => expect(wire.counts).toEqual({ from: 4, to: 4 }));
     wire.release();
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23, 88, 99] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 88, 99] }));
     expect(f.pf.showPath).toHaveBeenCalledTimes(2); expect(wire.fetchMock).toHaveBeenCalledTimes(8);
     expect((screen.getByLabelText('From assigned model object') as HTMLTextAreaElement).value).toContain('/Synthetic from');
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.readProposal).toHaveBeenCalledOnce(); expect(f.pf.readJob).toHaveBeenCalledOnce();
@@ -205,7 +205,7 @@ describe('post-Save endpoint foreground over verified HTTP contexts', () => {
     // A real popup Show request is independent of its successful metadata reads.
     const calls = wire.fetchMock.mock.calls.length;
     view.rerender(<PopupForegroundFlow f={f} popup requestId={3} changed={changed} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23, 88, 99] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 88, 99] }));
     expect(f.pf.showPath).toHaveBeenCalledTimes(2);
     expect(wire.fetchMock).toHaveBeenCalledTimes(calls);
   });
@@ -218,7 +218,7 @@ describe('post-Save endpoint foreground over verified HTTP contexts', () => {
     await waitFor(() => expect((screen.getByLabelText('From assigned model object') as HTMLTextAreaElement).value).toContain('/Synthetic from'));
     await waitFor(() => expect(screen.getByTestId('popup-foreground-ready')).toHaveTextContent('ready'));
     expect(f.pf.showPath).not.toHaveBeenCalled(); await act(async () => proof.resolve(f.live));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23, 88, 99] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 88, 99] }));
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 350)); });
     expect(wire.fetchMock).toHaveBeenCalledTimes(4); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.refresh).not.toHaveBeenCalled();
@@ -235,9 +235,9 @@ describe('post-Save endpoint foreground over verified HTTP contexts', () => {
     });
     vi.stubGlobal('fetch', fetchMock); vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue(f.live);
     const view = render(<PopupForegroundFlow f={f} popup={false} changed={changed} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     popup = true; view.rerender(<PopupForegroundFlow f={f} popup changed={changed} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23, 88, 99] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 88, 99] }));
     await act(async () => oldLookup.resolve());
     expect(f.pf.showPath).toHaveBeenCalledTimes(2); expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.refresh).not.toHaveBeenCalled();
@@ -251,7 +251,7 @@ describe('post-Save endpoint foreground over verified HTTP contexts', () => {
     wire.startPopup(); view.rerender(<PopupForegroundFlow f={f} popup changed={changed} />); wire.release();
     await waitFor(() => expect(f.pf.refresh).toHaveBeenCalledOnce());
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: false, visible: false }));
-    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23] });
+    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] });
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
   it('ignores popup context owners from another login, project, cable, model or preparation', async () => {
@@ -268,7 +268,7 @@ describe('post-Save endpoint foreground over verified HTTP contexts', () => {
     }
     expect(f.pf.showPath).toHaveBeenCalledOnce();
     view.rerender(<PathFinderResults {...props} workflowSelection={f.row} workflowDisplayRequest={request} endpointForegroundContexts={contexts} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23, 88, 99] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 88, 99] }));
     expect(wire.fetchMock).toHaveBeenCalledTimes(6); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
   });
   it('recovers both saved objects after a transient lock refusal only after the new automatic-write route proof settles', async () => {
@@ -283,11 +283,11 @@ describe('post-Save endpoint foreground over verified HTTP contexts', () => {
     wire.finishProof(); await act(async () => proof.resolve(f.live));
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, routing: '/NEW', designLength: '7' }));
     view.rerender(<PathFinderResults {...props} workflowSelection={f.row} workflowDisplayRequest={{ cableId: key(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     await waitFor(() => expect(wire.requests).toHaveLength(4));
     expect(wire.requests.slice(2).every(request => request.proofFinished)).toBe(true);
     wire.releaseRetry();
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23, 88, 99] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenLastCalledWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23, 88, 99] }));
     expect(f.pf.showPath).toHaveBeenCalledTimes(2);
     expect(f.proposal.cableWriteRevision).toBe('9'); expect(f.row.cable.cableWriteRevision).toBe('10');
     expect(f.contexts.from.head!.bindingRevision).toBe('42');
@@ -300,7 +300,7 @@ describe('post-Save endpoint foreground over verified HTTP contexts', () => {
     const { view, props } = savedResult(f, changed);
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0].ready).toBe(true));
     view.rerender(<PathFinderResults {...props} workflowSelection={f.row} workflowDisplayRequest={{ cableId: key(4), requestId: 1, action: 'show' }} />);
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] }));
     await waitFor(() => expect(wire.requests.length).toBeGreaterThanOrEqual(4));
     wire.releaseRetry();
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: false, visible: false }));
@@ -324,7 +324,7 @@ describe('post-Save endpoint foreground over verified HTTP contexts', () => {
     view.rerender(<PathFinderResults {...props} workflowSelection={f.row} workflowDisplayRequest={{ cableId: key(4), requestId: 1, action: 'show' }} />);
     await waitFor(() => expect(wire.requests).toHaveLength(6), { timeout: 3000 });
     expect(wire.counts).toEqual({ from: 3, to: 3 });
-    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, objectIds: [23] });
+    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: key(3), points: f.proposal.route!.points, routeNames: f.proposal.route!.routeCodes, objectIds: [23] });
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.calculate).not.toHaveBeenCalled();
     expect(f.pf.refresh).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });

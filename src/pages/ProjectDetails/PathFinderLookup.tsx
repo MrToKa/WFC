@@ -70,7 +70,7 @@ export function PathFinderLookup({ pf, selectedCable, active = true, displayOwne
       if (objectIds.length > 512) { setNotice('This exact lookup exceeds the viewer object budget. The result is retained without truncation.'); return; }
       setWorking(true);
       try {
-        const displayed = await latest.current.showPath({ pathId: result.id, points: route.points, objectIds });
+        const displayed = await latest.current.showPath({ pathId: result.id, points: route.points, objectIds, routeNames: [...new Set(route.routeCodes)] });
         if (!closed && current === generation.current && displayGuard.current() && !cancelled.current) setNotice(displayed ? 'The exact ordered lookup is displayed.' : 'The result is retained. Reload the model and run the lookup again to display it.');
       } finally { if (!closed && current === generation.current) setWorking(false); }
     };

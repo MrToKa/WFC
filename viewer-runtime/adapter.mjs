@@ -395,7 +395,9 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           if (legacyPath) routes.clearRoute(); legacyPath = false;
           try {
             const result = pathfinder.showPath(value); computedPath = true; trayDisplay = false;
-            setCadRouteFilter([]); return result;
+            // CAD sections are not native model object IDs. Focus them by the
+            // engine's route names, retaining user visibility for older callers.
+            setCadRouteFilter(value.routeNames ?? null); return result;
           } catch (error) {
             try { pathfinder.clear({ preserveSelection: true }); setCadRouteFilter(null); computedPath = trayDisplay = false; }
             catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }

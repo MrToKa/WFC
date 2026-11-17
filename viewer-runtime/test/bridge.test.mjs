@@ -737,6 +737,15 @@ test('computed path requires ordered complete bounded chunks and current cookie-
   f.bridge.dispose();
 });
 
+test('computed path retains CAD route names through staged display alongside native IDs', async () => {
+  const f = fixture(); await f.loaded(); const pathId = uuid(17), routeNames = ['/BC901', '/BC027-1'];
+  f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 1, objectIds: [23], routeNames }); await turn();
+  f.send('APPEND_COMPUTED_PATH', { pathId, offset: 0, points: [[1, 2, 3]] }); await turn();
+  f.send('COMMIT_COMPUTED_PATH', { pathId }); await turn();
+  assert.deepEqual(f.facts.computedPath, { points: [[1, 2, 3]], objectIds: [23], routeNames });
+  assert.equal(f.messages('COMPUTED_PATH_UPDATED').at(-1).payload.phase, 'displayed'); f.bridge.dispose();
+});
+
 test('a successful zero-length engine result transports its one exact point without adding a second', async () => {
   const f = fixture(); await f.loaded(); const pathId = uuid(17), points = [[1, 0, 0.5]];
   f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 1, objectIds: [] }); await turn();

@@ -282,7 +282,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         if (!live() || !stillLoaded()) return;
         if (!emit(command, command.type === 'READ_BARRIER_MULTIPART_FRAME' ? 'BARRIER_MULTIPART_FRAME' : 'BARRIER_MULTIPART_STATUS', result)) throw failure('BARRIER_MULTIPART_FAILED');
       } else if (command.type === 'BEGIN_COMPUTED_PATH') {
-        stopRoute(command.requestId); computed = { pathId: command.payload.pathId, pointCount: command.payload.pointCount, objectIds: command.payload.objectIds, points: [] };
+        stopRoute(command.requestId); computed = { pathId: command.payload.pathId, pointCount: command.payload.pointCount, objectIds: command.payload.objectIds, points: [], ...(command.payload.routeNames === undefined ? {} : { routeNames: command.payload.routeNames }) };
         emit(command, 'COMPUTED_PATH_UPDATED', { pathId: computed.pathId, phase: 'begun', received: 0 });
       } else if (command.type === 'APPEND_COMPUTED_PATH') {
         if (!computed || computed.pathId !== command.payload.pathId || computed.points.length !== command.payload.offset || computed.points.length + command.payload.points.length > computed.pointCount) throw failure('PATH_INVALID');
@@ -291,7 +291,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       } else if (command.type === 'COMMIT_COMPUTED_PATH') {
         if (!computed || computed.pathId !== command.payload.pathId || computed.points.length !== computed.pointCount) throw failure('PATH_INVALID');
         const path = computed;
-        handle.showComputedPath({ points: path.points, objectIds: path.objectIds });
+        handle.showComputedPath({ points: path.points, objectIds: path.objectIds, ...(path.routeNames === undefined ? {} : { routeNames: path.routeNames }) });
         computed = undefined; routeRequest = command; routeHasLine = true;
         emit(command, 'COMPUTED_PATH_UPDATED', { pathId: path.pathId, phase: 'displayed', received: path.points.length });
       } else if (command.type === 'SET_PATH_TRANSPARENCY') {

@@ -86,7 +86,7 @@ describe('standalone path endpoint foreground', () => {
     result.result!.from = { ...result.result!.from, source: 'equipment-bottom-aabb', objectId: 'dbid:44' };
     result.result!.to = { ...result.result!.to, source: 'equipment-bottom-aabb', objectId: 'dbid:55' };
     pf.readPreview.mockResolvedValue(result); mount(pf); enterNames(); fireEvent.click(screen.getByRole('button', { name: 'Calculate path' }));
-    await waitFor(() => expect(pf.showPath).toHaveBeenCalledWith({ pathId: jobId, points: result.result!.route!.points, objectIds: [23, 44, 55] }));
+    await waitFor(() => expect(pf.showPath).toHaveBeenCalledWith({ pathId: jobId, points: result.result!.route!.points, routeNames: result.result!.route!.routeCodes, objectIds: [23, 44, 55] }));
     expect(pf.showPath.mock.calls[0][0].points).toBe(result.result!.route!.points);
   });
 

@@ -95,7 +95,7 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
       if (!objectIds) { setNotice('The exact path exceeds the viewer object budget. Its result is retained without truncation.'); return; }
       setWorking(true);
       try {
-        const displayed = await latest.current.showPath({ pathId: result.id, points: route.points, objectIds });
+        const displayed = await latest.current.showPath({ pathId: result.id, points: route.points, objectIds, routeNames: [...new Set(route.routeCodes)] });
         if (!closed && current === generation.current && displayGuard.current()) setNotice(displayed ? 'The exact standalone path is displayed. Review its route and length.' : 'The result is retained. Reload the model and calculate again to display it.');
       } finally { if (!closed && current === generation.current) setWorking(false); }
     };

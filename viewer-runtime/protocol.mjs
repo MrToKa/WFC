@@ -33,6 +33,10 @@ const integer = value => Number.isSafeInteger(value) && value >= 0;
 const positiveId = value => Number.isSafeInteger(value) && value > 0 && value <= 2147483647;
 export const isCanonicalPoint = value => Array.isArray(value) && value.length === 3 && value.every(item => typeof item === 'number' && Number.isFinite(item) && Math.abs(item) <= 1e9);
 const boundedIds = (value, maximum = 512) => Array.isArray(value) && value.length <= maximum && [...value].every(positiveId) && new Set(value).size === value.length;
+// Display-only CAD focus, bounded separately from the native object foreground.
+export const validateComputedRouteNames = value => Array.isArray(value) && value.length <= MAX_PATH_POINTS
+  && [...value].every(name => text(name, 2048) && name.trim().length > 0)
+  && new TextEncoder().encode(JSON.stringify(value)).byteLength <= 28 * 1024;
 const bounds = value => value === null || exact(value, ['minimum', 'maximum']) && isCanonicalPoint(value.minimum) && isCanonicalPoint(value.maximum) && value.minimum.every((item, i) => item <= value.maximum[i]);
 export const isUuid = value => typeof value === 'string' && UUID.test(value);
 const nullableUuid = value => value === null || isUuid(value);
@@ -186,7 +190,7 @@ function payload(type, value) {
     case 'MODEL_CAPTURE_EVENT': return isUuid(value.captureId) && integer(value.index) && value.index < 3000 && typeof value.done === 'boolean'
       && (exact(value, ['captureId', 'index', 'done', 'eventJson']) && validCaptureEventJson(value.eventJson) || exact(value, ['captureId', 'index', 'done', 'eventJsons']) && validCaptureBatch(value));
     case 'BARRIER_CAPTURE_PROGRESS': case 'MODEL_CAPTURE_PROGRESS': return exact(value, ['captureId', 'phase', 'loaded', 'total']) && isUuid(value.captureId) && oneOf(value.phase, ['index', 'properties', 'geometry']) && integer(value.loaded) && integer(value.total) && value.loaded <= value.total && value.total <= 1000000;
-    case 'BEGIN_COMPUTED_PATH': return exact(value, ['pathId', 'pointCount', 'objectIds']) && isUuid(value.pathId) && integer(value.pointCount) && value.pointCount >= 1 && value.pointCount <= MAX_PATH_POINTS && boundedIds(value.objectIds, MAX_PATH_OBJECT_IDS);
+    case 'BEGIN_COMPUTED_PATH': return (exact(value, ['pathId', 'pointCount', 'objectIds']) || exact(value, ['pathId', 'pointCount', 'objectIds', 'routeNames']) && validateComputedRouteNames(value.routeNames)) && isUuid(value.pathId) && integer(value.pointCount) && value.pointCount >= 1 && value.pointCount <= MAX_PATH_POINTS && boundedIds(value.objectIds, MAX_PATH_OBJECT_IDS);
     case 'APPEND_COMPUTED_PATH': return exact(value, ['pathId', 'offset', 'points']) && isUuid(value.pathId) && integer(value.offset) && value.offset < MAX_PATH_POINTS && Array.isArray(value.points) && value.points.length > 0 && value.points.length <= MAX_PATH_CHUNK_POINTS && value.points.every(isCanonicalPoint);
     case 'COMMIT_COMPUTED_PATH': return exact(value, ['pathId']) && isUuid(value.pathId);
     case 'COMPUTED_PATH_UPDATED': return exact(value, ['pathId', 'phase', 'received']) && isUuid(value.pathId) && oneOf(value.phase, ['begun', 'appended', 'displayed']) && integer(value.received) && value.received <= MAX_PATH_POINTS;

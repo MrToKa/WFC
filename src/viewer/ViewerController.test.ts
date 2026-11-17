@@ -1219,9 +1219,12 @@ it('a recoverable saved-point refusal or timeout keeps the ready model', async (
       if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
     });
     const points: [number, number, number][] = Array.from({ length: 257 }, (_, i) => [i / 7, i / 9, i / 11]);
-    const showing = s.c.showComputedPath({ pathId: generateId(), points, objectIds: [23] });
+    const routeNames = ['/BC901', '/BC027-1'];
+    const showing = s.c.showComputedPath({ pathId: generateId(), points, objectIds: [23], routeNames });
     points[0][0] = 9999;
+    routeNames[0] = '/CHANGED';
     const requestId = await showing;
+    expect(s.send.mock.calls.find(call => call[0].type === 'BEGIN_COMPUTED_PATH')![0].payload.routeNames).toEqual(['/BC901', '/BC027-1']);
     const chunks = s.send.mock.calls.filter(call => call[0].type === 'APPEND_COMPUTED_PATH').map(call => call[0]);
     expect(chunks.map(chunk => chunk.payload.points.length)).toEqual([128, 128, 1]);
     expect(chunks[0].payload.points[0][0]).toBe(0);

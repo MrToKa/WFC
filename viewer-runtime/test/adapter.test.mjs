@@ -734,3 +734,62 @@ test('tray and legacy route focus suppress streamed manual CAD and Hide restores
   await assert.rejects(handle.showTray([2]), { code: 'TRAY_UNAVAILABLE' });
   assert.deepEqual([...dynamic.records.values()].map(row => row.visible), [true, false]);
 });
+
+test('computed route keeps its manual trays visible, filters streamed CAD and restores user hiding on Clear', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  const av = f.window.Autodesk.Viewing;
+  Object.assign(f.model, { getUnitScale: () => 1, getUpVector: () => [0, 0, 1], getGlobalOffset: () => [0, 0, 0] });
+  class Vector3 { constructor(x = 0, y = 0, z = 0) { this.set(x, y, z); } set(x, y, z) { Object.assign(this, { x, y, z }); } }
+  class Box3 { expandByPoint() { return this; } }
+  class Disposable { dispose() {} }
+  class Geometry extends Disposable { setAttribute() {} setIndex() {} setIndices() {} }
+  class Mesh { constructor(geometry, material) { Object.assign(this, { geometry, material, position: new Vector3() }); } }
+  Object.assign(f.window.THREE, { Vector3, Box3, BufferGeometry: Geometry, BufferAttribute: class {}, MeshBasicMaterial: Disposable, Mesh });
+  class DynamicModel {
+    id = 77; data = { loadOptions: {} }; records = new Map(); next = 0;
+    instances = {
+      fragments: { length: 0, fragId2dbId: [] }, setDbId: nativeSetDbId, _dbIdToInstanceIds: nativeFragmentIds,
+      add: () => { const id = this.next++; this.records.set(id, { visible: true }); return id; },
+      remove: id => this.records.delete(id),
+    };
+    getData() { return this.data; } getInstances() { return this.instances; }
+    getObjectTree() { return this.data.instanceTree; } setObjectTree = nativeSetObjectTree;
+    _dispatchEvent() {} isInitialized() { return true; } isLoadDone() { return true; }
+    setVisibility(id, visible) { this.records.get(id).visible = visible; }
+  }
+  av.Model = DynamicModel; av.ObjectTreeBuilder = nativeTreeSdk.ObjectTreeBuilder;
+  av.Scene = { BufferGeometry: Geometry, BufferAttribute: class {}, UnlitMaterial: class {}, Side: { Double: 2 } };
+  av.Math = { Matrix4: class { compose() { return this; } }, Quaternion: class {}, Vector3 };
+  av.Extensions = { ViewerPropertyPanel: class { setVisible() {} isVisible() { return false; } uninitialize() {} } };
+  av.PropertySet = class {};
+  await f.adapter.initialize();
+  const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0]; let dynamic;
+  viewer.showModel = model => { dynamic = model; }; viewer.unloadModel = () => {}; viewer.refresh = () => {};
+  viewer.getExtension = () => ({ setPanel() {}, setDefaultPanel() {} });
+  viewer.navigation = { fitBounds() {} };
+  const mesh = { schemaVersion: 1, units: 'mm', triangleCount: 1, positions: [0,0,0,1,0,0,0,1,0], normals: [0,0,1,0,0,1,0,0,1], indices: [0,1,2] };
+  const transform = { positionMm: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } };
+  const componentId = number => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
+  const annotate = (id, name) => handle.cadProperties(id, {
+    instanceId: id, name: `${name} / section`, actualLengthMm: 3750, widthMm: 300, heightMm: 60,
+    partNumber: 'KL 60.303 F', manufacturer: 'Niedax', purpose: 'LV', componentKind: 'straight', cadAssetId: null, cadRevision: 1,
+  }, { id: componentId(99), name, purpose: 'LV' });
+  for (const [number, name] of [[1, 'BC901'], [2, 'BC902'], [3, 'BC901']]) {
+    handle.cadAdd(componentId(number), mesh, transform); await annotate(componentId(number), name);
+  }
+  handle.cadVisibility(componentId(3), false);
+  const visibility = () => [...dynamic.records.values()].map(row => row.visible);
+  assert.deepEqual(visibility(), [true, true, false]);
+  handle.showComputedPath({ points: [[0, 0, 0], [1, 0, 0]], objectIds: [2], routeNames: ['/bc901'] });
+  assert.deepEqual(visibility(), [true, false, false], 'only participating trays remain visible; explicit user hiding wins');
+  handle.cadAdd(componentId(4), mesh, transform);
+  assert.equal(dynamic.records.get(3).visible, false, 'unclassified late geometry stays suppressed');
+  await annotate(componentId(4), 'BC901');
+  assert.equal(dynamic.records.get(3).visible, true, 'late matching route metadata reveals its geometry');
+  handle.cadAdd(componentId(5), mesh, transform); await annotate(componentId(5), 'BC902');
+  assert.equal(dynamic.records.get(4).visible, false, 'late unrelated tray stays suppressed');
+  handle.clearRoute({ preserveCamera: true });
+  assert.deepEqual(visibility(), [true, true, false, true, true], 'Clear restores the original user visibility');
+});

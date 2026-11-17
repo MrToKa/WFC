@@ -210,7 +210,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
     expect(f.pf.refreshState).toHaveBeenCalledOnce(); expect(f.pf.showPath).not.toHaveBeenCalled();
     await act(async () => { fireEvent.click(button('Show')); });
-    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] });
+    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] });
     expect(f.pf.submitCalculation).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
     expect(f.pf.action).not.toHaveBeenCalled(); expect(transport.save).not.toHaveBeenCalled();
   });
@@ -295,7 +295,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     await waitFor(() => expect(button('Show')).toBeEnabled(), { timeout: 12000 });
     expect(resultReads).toBe(4); expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
     fireEvent.click(button('Show'));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] }));
     expect(transport.save).toHaveBeenCalledOnce(); expect(f.pf.submitCalculation).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
     expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   }, 18000);
@@ -337,7 +337,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(button('Assign From')).toBeEnabled(); expect(button('Calculate routing')).toBeEnabled();
     const automaticRefreshes = transport.refresh.mock.calls.length;
     fireEvent.click(button('Show'));
-    await waitFor(() => expect(transport.viewerPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    await waitFor(() => expect(transport.viewerPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23], routeNames: ['/NEW'] }));
     expect(transport.save).toHaveBeenCalledOnce(); expect(submitPathFinderCalculation).not.toHaveBeenCalled();
     expect(pathFinderRequest).not.toHaveBeenCalled(); expect(transport.refresh).toHaveBeenCalledTimes(automaticRefreshes);
   });
@@ -370,7 +370,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     await waitForExactDisplay();
     expect(button('Show')).toBeEnabled();
     fireEvent.click(button('Show'));
-    await waitFor(() => expect(transport.viewerPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(transport.viewerPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] }));
     expect(fetchPathFinderJob).toHaveBeenCalledTimes(2); expect(submitPathFinderCalculation).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
     // Startup, acknowledged Save state and settled optional diagnostics only;
     // the user never refreshes or submits another calculation to enable Show.
@@ -398,7 +398,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     await waitFor(() => expect(button('Show')).toBeEnabled());
     fireEvent.click(button('Show'));
     await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledTimes(2));
-    for (const call of vi.mocked(f.pf.showPath).mock.calls) expect(call[0]).toEqual({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] });
+    for (const call of vi.mocked(f.pf.showPath).mock.calls) expect(call[0]).toEqual({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] });
     expect(f.done.calculation.currentness).toBe('changed'); expect(f.done.calculation.acceptedMatchesCurrent).toBe(false);
     expect(transport.save).not.toHaveBeenCalled(); expect(f.pf.submitCalculation).not.toHaveBeenCalled();
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
@@ -438,7 +438,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(screen.getByText('Calculated design length: 7 m')).toBeVisible();
     expect(button('Assign From')).toBeEnabled(); expect(button('Calculate routing')).toBeEnabled();
     fireEvent.click(button('Show'));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] }));
     expect(transport.save).not.toHaveBeenCalled(); expect(f.pf.submitCalculation).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
   }, 12000);
   it('shows the independently verified recorded result when the list preference hint differs from its policy', async () => {
@@ -470,7 +470,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(f.parent.status).toBe('running'); expect(transport.save).toHaveBeenCalledOnce();
     expect(f.pf.submitCalculation).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
     fireEvent.click(button('Show'));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] }));
   }, 12000);
   it.each([false, true])('Save automatically hydrates the selected path and Show while siblings run (automatic-owned=%s)', async automatic => {
     const f = fixture(automatic); wire(f); render(<Flow f={f} />);
@@ -486,7 +486,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(button('Assign From')).toBeEnabled(); expect(button('Assign To')).toBeEnabled();
     expect(button('Calculate routing')).toBeEnabled();
     fireEvent.click(button('Show'));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] }));
     if (automatic) expect(screen.queryByText('Review proposed routing', { selector: 'button' })).toBeNull();
     else {
       await waitFor(() => expect(button('Review proposed routing')).toBeEnabled(), { timeout: 5000 });
@@ -503,7 +503,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     await waitFor(() => expect(button('Show')).toBeEnabled(), { timeout: 5000 });
     expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
     fireEvent.click(button('Show'));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] }));
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(id(1), 'transport-only-token', id(4), f.preferences, expect.any(AbortSignal));
     expect(button('Review proposed routing')).toBeDisabled();
     expect(transport.save).not.toHaveBeenCalled(); expect(f.pf.submitCalculation).not.toHaveBeenCalled();
@@ -536,7 +536,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(child.getByLabelText('Cable routing')).toHaveValue('/NEW'); expect(child.getByText('Show', { selector: 'button' })).toBeEnabled();
     expect(child.getByText('Assign From', { selector: 'button' })).toBeEnabled(); expect(child.getByText('Calculate routing', { selector: 'button' })).toBeEnabled();
     await act(async () => { fireEvent.click(child.getByText('Show', { selector: 'button' })); });
-    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] });
+    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] });
     expect(transport.save).toHaveBeenCalledOnce(); expect(transport.saved).toHaveBeenCalledOnce();
     expect(f.pf.submitCalculation).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
     view.unmount(); frame.remove();
@@ -557,7 +557,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     await waitFor(() => expect(button('Show')).toBeEnabled());
     expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
     fireEvent.click(button('Show'));
-    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45], routeNames: ['/NEW'] }));
     expect(transport.save).not.toHaveBeenCalled(); expect(f.pf.submitCalculation).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
     expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   }, 12000);

@@ -565,9 +565,9 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('tab', { name: 'Path lookup' }));
     await user.type(screen.getByRole('textbox', { name: 'Path Finder ordered route' }), '/BC1/BC2'); expect(screen.queryByRole('spinbutton', { name: 'Lookup connection tolerance in metres' })).toBeNull(); expect(screen.getByText('Connection gap: 1 m. Change this in Project Details. Larger values permit larger unmodelled gaps.')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Show route' })); await screen.findByText('Lookup complete — forward preview');
-    expect(startLookup).toHaveBeenNthCalledWith(1, '/BC1/BC2', false); await waitFor(() => expect(showPath).toHaveBeenCalledWith({ pathId: forwardId, points: [[1, 2, 3], [4, 5, 6]], objectIds: [23] }));
+    expect(startLookup).toHaveBeenNthCalledWith(1, '/BC1/BC2', false); await waitFor(() => expect(showPath).toHaveBeenCalledWith({ pathId: forwardId, points: [[1, 2, 3], [4, 5, 6]], objectIds: [23], routeNames: ['/BC1'] }));
     await user.click(screen.getByRole('button', { name: 'Reverse preview' })); await screen.findByText('Lookup complete — reverse preview');
-    expect(startLookup).toHaveBeenNthCalledWith(2, '/BC1/BC2', true); await waitFor(() => expect(showPath).toHaveBeenLastCalledWith({ pathId: reverseId, points: [[4, 5, 6], [1, 2, 3]], objectIds: [23] }));
+    expect(startLookup).toHaveBeenNthCalledWith(2, '/BC1/BC2', true); await waitFor(() => expect(showPath).toHaveBeenLastCalledWith({ pathId: reverseId, points: [[4, 5, 6], [1, 2, 3]], objectIds: [23], routeNames: ['/BC1'] }));
     expect(screen.getByText(/Original cable labels: From EQ-001; To EQ-002/)).toBeVisible(); expect(within(screen.getByRole('region', { name: 'Ordered lookup result' })).queryByRole('button', { name: /Apply/ })).toBeNull(); expect(pf.action).not.toHaveBeenCalled();
   });
   it('retains an outdated lookup without displaying its stale points', async () => {
@@ -643,10 +643,10 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview, readPreview, showPath }); mount();
     await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'EQ-001'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'EQ-002'); await user.selectOptions(screen.getByRole('combobox', { name: 'Path cable purpose' }), 'Power'); await user.click(screen.getByRole('button', { name: 'Calculate path' }));
     expect(startPreview).toHaveBeenNthCalledWith(1, expect.objectContaining({ from: { name: 'EQ-001' }, to: { name: 'EQ-002' }, category: 'LV', reverse: false, secondaryDistanceMeters: 2, preferVerticalApproach: true, barrierRouting: expect.objectContaining({ drillThroughWalls: false }) }));
-    await screen.findByText('Path calculation complete'); await waitFor(() => expect(showPath).toHaveBeenCalledWith({ pathId: forwardId, points: [[1, 2, 3], [4, 5, 6]], objectIds: [23] }));
+    await screen.findByText('Path calculation complete'); await waitFor(() => expect(showPath).toHaveBeenCalledWith({ pathId: forwardId, points: [[1, 2, 3], [4, 5, 6]], objectIds: [23], routeNames: ['/BC1'] }));
     await user.click(screen.getByRole('button', { name: 'Reverse path' })); await screen.findByText(/Original endpoints: From EQ-001; To EQ-002. Reverse preview/);
     expect(startPreview).toHaveBeenLastCalledWith(expect.objectContaining({ from: { name: 'EQ-001' }, to: { name: 'EQ-002' }, category: 'LV', reverse: true }));
-    await waitFor(() => expect(showPath).toHaveBeenLastCalledWith({ pathId: reverseId, points: [[4, 5, 6], [1, 2, 3]], objectIds: [23] })); expect(pf.action).not.toHaveBeenCalled();
+    await waitFor(() => expect(showPath).toHaveBeenLastCalledWith({ pathId: reverseId, points: [[4, 5, 6], [1, 2, 3]], objectIds: [23], routeNames: ['/BC1'] })); expect(pf.action).not.toHaveBeenCalled();
     expect(within(screen.getByRole('region', { name: 'Standalone path result' })).queryByRole('button', { name: /Apply/ })).toBeNull();
   });
   it('shared Clear removes the displayed standalone notice and result while preserving drafts and preferences without requests', async () => {
