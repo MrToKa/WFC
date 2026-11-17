@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRAWING_DEFAULTS, drawingCategory, drawingRoutingContainsTray, makeTrayDrawingInput } from './trayDrawingInputs.js';
+import { DRAWING_DEFAULTS, drawingCategory, drawingRoutingContainsTray, makeTrayDrawingInput, trayDrawingDiagnostics } from './trayDrawingInputs.js';
 import { DEFAULT_DRAWING_MODES } from './pathfinderDrawingPolicy.js';
 import { computeTrayDrawing, classifyDrawingCategory } from './trayDrawing/index.js';
 import type { TrayDrawingResponse, TrayBundleOverride } from './trayDrawingSnapshot.js';
@@ -22,6 +22,21 @@ function data(): Data {
 const override = (value: Partial<TrayBundleOverride> = {}): TrayBundleOverride => ({ useCustom: true, categories: {}, ...value });
 
 describe('authoritative drawing input interpretation', () => {
+  it('blocks missing purpose, invalid diameter, overflow and incomplete placement after supporting named purposes', () => {
+    const source = data(); source.trayCables[0].purpose = 'Plastic tubing';
+    const layout = computeTrayDrawing(makeTrayDrawingInput(source, null, DEFAULT_DRAWING_MODES));
+    expect(trayDrawingDiagnostics(source, layout).blocked).toBe(false);
+    const incomplete = { ...layout, diagnostics: [...layout.diagnostics, { code: 'DRAWING_PLACEMENT_INCOMPLETE', cableIds: ['synthetic-power'], message: 'Incomplete placement' }] };
+    expect(trayDrawingDiagnostics(source, incomplete).blocked).toBe(true);
+    const overflow = { ...layout, diagnostics: [...layout.diagnostics, { code: 'DRAWING_OVERFLOW', cableIds: [], message: 'Overflow' }] };
+    expect(trayDrawingDiagnostics(source, overflow).blocked).toBe(true);
+    source.trayCables[0].purpose = ' ';
+    expect(trayDrawingDiagnostics(source, layout).diagnostics.some(value => value.code === 'UNKNOWN_DRAWING_CATEGORY')).toBe(true);
+    source.trayCables[0].purpose = 'Plastic\u0000 tubing';
+    expect(trayDrawingDiagnostics(source, layout).diagnostics.some(value => value.code === 'UNKNOWN_DRAWING_CATEGORY')).toBe(true);
+    source.trayCables[0].purpose = 'Plastic tubing'; source.trayCables[0].diameterMm = null;
+    expect(trayDrawingDiagnostics(source, layout).diagnostics.some(value => value.code === 'MISSING_CABLE_DIAMETER')).toBe(true);
+  });
   it('retains existing project category defaults and explicit Control trefoil restrictions', () => {
     expect(DRAWING_DEFAULTS).toEqual(DEFAULT_CATEGORY_SETTINGS);
     const result = makeTrayDrawingInput(data(), null, DEFAULT_DRAWING_MODES);
@@ -31,7 +46,7 @@ describe('authoritative drawing input interpretation', () => {
     expect(result.layoutConfig.control).toMatchObject({ maxRows: 7, maxColumns: 20, trefoil: false, trefoilSpacingBetweenBundles: false, applyPhaseRotation: false });
   });
   it.each([null, '', ' ', 'Grounding', 'Power ground', 'MV', ' medium voltage ', 'VFD', 'power VFD', 'Power', 'UPS power', 'Control', 'Instrumentation', 'LV', 'unknown'])('preserves drawing classifier parity for %s', purpose => {
-    expect(drawingCategory(purpose)).toBe(matchCableCategory(purpose));
+    if (drawingCategory(purpose) !== 'generic') expect(drawingCategory(purpose)).toBe(matchCableCategory(purpose));
     expect(drawingCategory(purpose)).toBe(classifyDrawingCategory(purpose));
   });
   it.each([
@@ -76,13 +91,15 @@ describe('authoritative drawing input interpretation', () => {
     expect(result.cableBundles.power['21.1-30'].map(c => c.diameterMm)).toEqual([21.5]);
     expect(result.layoutConfig.power.bundleMaxRowsByKey).toEqual({ '19-21': 1 });
   });
-  it('preserves complete input order/identities and does not reinterpret unknown categories as Control', () => {
+  it('preserves arbitrary named purposes and complete input identities without reclassifying as Control', () => {
     const source = data(); source.trayCables.unshift({ ...source.trayCables[0], id: 'unknown', cableId: 3, purpose: 'Instrumentation' });
     const before = source.trayCables.map(c => c.id);
     const result = makeTrayDrawingInput(source, null, DEFAULT_DRAWING_MODES);
-    expect(result.cablesOnTray.map(c => c.id)).toEqual(['synthetic-power', 'synthetic-control']);
+    expect(result.cablesOnTray.map(c => c.id)).toEqual(before);
+    expect(result.cableBundles.generic['15.1-21'].map(c => c.id)).toEqual(['unknown']);
     expect(result.cableBundles.control['15.1-21'].map(c => c.id)).toEqual(['synthetic-control']);
-    expect(source.trayCables.map(c => c.id)).toEqual(before); // Caller still owns unknown IDs for the blocking snapshot diagnostic.
+    expect(source.trayCables.map(c => c.id)).toEqual(before);
+    expect(trayDrawingDiagnostics(source, computeTrayDrawing(result)).blocked).toBe(false);
   });
   it('keeps routed grounding distinct from an optional tray-weight grounding setting', () => {
     const source = data(); source.tray.includeGroundingCable = true; source.tray.groundingCableTypeId = 'weight-only';

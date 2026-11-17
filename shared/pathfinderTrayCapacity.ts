@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { policyHashSchema } from './pathfinderPurposePolicy.js';
-import { computeTrayDrawing } from './trayDrawing/index.js';
+import { computeTrayDrawing, type PurposeModes } from './trayDrawing/index.js';
 import { makeTrayDrawingInput, trayDrawingDiagnostics, type TrayDrawingPlacementData } from './trayDrawingInputs.js';
 import { DEFAULT_DRAWING_MODES, type DrawingCategoryModes } from './pathfinderDrawingPolicy.js';
 import type { TrayBundleOverride } from './trayDrawingSnapshot.js';
@@ -32,7 +32,7 @@ export const effectiveTrayCapacityMinimum = (minimum: number | null | undefined)
 
 /** Uses the authoritative placement/diagnostic path; it never invents cable diameters or free space. */
 export function assessTrayCapacity(input: {
-  data: TrayDrawingPlacementData; override?: TrayBundleOverride | null; categoryModes?: DrawingCategoryModes;
+  data: TrayDrawingPlacementData; override?: TrayBundleOverride | null; categoryModes?: DrawingCategoryModes; purposeModes?: PurposeModes;
   minimumFreeSpacePercent: number | null; restrictionEnabled?: boolean; unavailableDiagnostic?: string;
 }): TrayCapacityAssessment {
   const minimum = effectiveTrayCapacityMinimum(input.minimumFreeSpacePercent);
@@ -43,11 +43,11 @@ export function assessTrayCapacity(input: {
   // Type A/MV has no report capacity interpretation; keep its existing exclusion explicit.
   if (input.data.tray.purpose?.trim().toLowerCase() === 'type a (pink color) for mv cables') return unavailable(['CAPACITY_MV_TRAY_EXCLUDED']);
   try {
-    const layout = computeTrayDrawing(makeTrayDrawingInput(input.data, input.override ?? null, input.categoryModes ?? { ...DEFAULT_DRAWING_MODES }));
+    const layout = computeTrayDrawing(makeTrayDrawingInput(input.data, input.override ?? null, input.categoryModes ?? { ...DEFAULT_DRAWING_MODES }, input.purposeModes));
     const { diagnostics, blocked } = trayDrawingDiagnostics(input.data, layout);
     const allDiagnosticCodes = [...new Set(diagnostics.map(value => value.code))];
     const diagnosticCodes = allDiagnosticCodes.slice(0, 4);
-    const unknownInputs = allDiagnosticCodes.some(value => ['UNKNOWN_DRAWING_CATEGORY', 'MISSING_CABLE_DIAMETER', 'CABLE_DIAMETER_DEFAULTED'].includes(value));
+    const unknownInputs = allDiagnosticCodes.some(value => ['UNKNOWN_DRAWING_CATEGORY', 'MISSING_CABLE_DIAMETER', 'CABLE_DIAMETER_DEFAULTED', 'DRAWING_PLACEMENT_INCOMPLETE'].includes(value));
     if (unknownInputs || !layout.summary) return unavailable(diagnosticCodes.length ? diagnosticCodes : ['CAPACITY_DRAWING_UNAVAILABLE']);
     const width = input.data.tray.widthMm;
     if (typeof width !== 'number' || !Number.isFinite(width) || width <= 0) return unavailable(['TRAY_DIMENSIONS_REQUIRED']);

@@ -18,13 +18,13 @@ vi.mock('../models/materialSupport.js', () => ({ mapMaterialSupportRow: (row: un
 vi.mock('../models/materialLoadCurve.js', () => ({ mapMaterialLoadCurveRow: (row: object, points: unknown[]) => ({ ...row, points }), mapMaterialLoadCurvePointRow: (row: unknown) => row }));
 vi.mock('./policySchema.js', () => ({ readPurposePolicyState: vi.fn() }));
 vi.mock('./drawingPolicy.js', () => ({ readDrawingPolicy: vi.fn() }));
-vi.mock('../../shared/trayDrawing/index.js', () => ({ computeTrayDrawing: vi.fn(), determineCableDiameterGroupWithCustomRanges: () => '8.1-15' }));
+vi.mock('../../shared/trayDrawing/index.js', async importOriginal => ({ ...await importOriginal<typeof import('../../shared/trayDrawing/index.js')>(), computeTrayDrawing: vi.fn(), determineCableDiameterGroupWithCustomRanges: () => '8.1-15' }));
 const id = (n: number) => '55555555-5555-4555-8555-' + String(n).padStart(12, '0');
 const projectId = id(1), trayId = id(2), cableId = id(3), userId = id(4), loginId = id(5), typeId = id(6);
 const dates = { createdAt: '2026-10-19T00:00:00Z', updatedAt: '2026-10-19T00:00:00Z' };
 const authority = { role: 'admin' as const, isAdmin: true, canEdit: true };
 const reader = { role: 'basic' as const, isAdmin: false, canEdit: false };
-const layout = () => ({ schemaVersion: 'wfc.tray-drawing-layout.v1', algorithmVersion: 'wfc-tray-placement-v2', widthPx: 2000, heightPx: 800, commands: [], summary: { hasBottomRow: true }, diagnostics: [] as Array<{ code: string; cableIds: string[]; message: string }>, placements: [] });
+const layout = () => ({ schemaVersion: 'wfc.tray-drawing-layout.v1', algorithmVersion: 'wfc-tray-placement-v3', widthPx: 2000, heightPx: 800, commands: [], summary: { hasBottomRow: true }, diagnostics: [] as Array<{ code: string; cableIds: string[]; message: string }>, placements: [] });
 function fixture() {
   const project = { id: projectId, projectNumber: 'SYN', name: 'Synthetic', customer: 'Test', manager: null, description: null, connectionGap: 1, secondaryTrayLength: 7, supportDistance: null, supportWeight: null, additionalBendingPercent: 10, endConnectionLength: 5, trayLoadSafetyFactor: null, supportDistanceOverrides: {}, trayPurposeTemplates: {}, cableLayout: { cableSpacing: 1, considerBundleSpacingAsFree: false, minFreeSpacePercent: null, maxFreeSpacePercent: null, mv: null, power: null, vfd: null, control: null, customBundleRanges: null }, ...dates };
   const tray = { id: trayId, projectId, name: 'SYN-TRAY', type: 'Synthetic', purpose: 'Shared', widthMm: 300, heightMm: 100, lengthMm: 1000, includeGroundingCable: false, groundingCableTypeId: null, useTrefoilClamps: false, trefoilClampSpacingMm: 300, ...dates };
@@ -75,7 +75,7 @@ describe('consistent server drawing snapshot and exact input identity', () => {
   it('changes snapshot identity for source template facts or cable input revisions', async () => { const x = fixture(), before = await x.read(); x.setSources({ synthetic: 'changed-template' }); x.state.drawingInputRevision = '4'; const changed = await x.read(); expect(changed.sourceSha256).not.toBe(before.sourceSha256); expect(changed.snapshot.snapshotId).not.toBe(before.snapshot.snapshotId); x.cables[0].diameterMm = 12; x.state.drawingInputRevision = '5'; expect((await x.read()).snapshot.inputSha256).not.toBe(changed.snapshot.inputSha256); });
   it('rejects tampered immutable payload or private source proof', async () => { const x = fixture(); const value = await x.read(); x.snapshots.get(value.snapshot.contentSha256)!.payload.data.tray.widthMm = 500; await expect(x.read()).rejects.toMatchObject({ code: 'DRAWING_SNAPSHOT_INTEGRITY' }); });
   it('rejects ambiguous material type matches rather than choosing one', async () => { const x = fixture(); x.materials.push({ id: id(40) }, { id: id(41) }); await expect(x.read()).rejects.toMatchObject({ code: 'DRAWING_MATERIAL_AMBIGUOUS' }); expect(computeTrayDrawing).not.toHaveBeenCalled(); });
-  it('unknown drawing purpose and missing diameter cannot become exported capacity evidence', async () => { const x = fixture(); x.cables[0].purpose = 'Unknown'; x.cables[0].diameterMm = null; const value = await x.read(); expect(value.snapshot.state).toBe('blocked'); expect(value.snapshot.diagnostics.map(d => d.code)).toEqual(expect.arrayContaining(['UNKNOWN_DRAWING_CATEGORY', 'MISSING_CABLE_DIAMETER'])); await expect(assertCurrentDrawingSnapshot(x.client, projectId, trayId, value.snapshot.snapshotId, value.snapshot.contentSha256, authority)).rejects.toMatchObject({ code: 'DRAWING_SNAPSHOT_BLOCKED' }); });
+  it('missing drawing purpose and diameter cannot become exported capacity evidence', async () => { const x = fixture(); x.cables[0].purpose = ''; x.cables[0].diameterMm = null; const value = await x.read(); expect(value.snapshot.state).toBe('blocked'); expect(value.snapshot.diagnostics.map(d => d.code)).toEqual(expect.arrayContaining(['UNKNOWN_DRAWING_CATEGORY', 'MISSING_CABLE_DIAMETER'])); await expect(assertCurrentDrawingSnapshot(x.client, projectId, trayId, value.snapshot.snapshotId, value.snapshot.contentSha256, authority)).rejects.toMatchObject({ code: 'DRAWING_SNAPSHOT_BLOCKED' }); });
   it('a positive gap too small for the required divider blocks export', async () => { const x = fixture(), result = layout(); result.diagnostics.push({ code: 'DIVIDER_GAP_UNAVAILABLE', cableIds: [], message: 'No usable divider gap.' }); vi.mocked(computeTrayDrawing).mockReturnValue(result as never); const value = await x.read(); expect(value.snapshot.state).toBe('blocked'); await expect(assertCurrentDrawingSnapshot(x.client, projectId, trayId, value.snapshot.snapshotId, value.snapshot.contentSha256, authority)).rejects.toMatchObject({ code: 'DRAWING_SNAPSHOT_BLOCKED' }); });
   it('a missing tray purpose visibly uses defaults without changing routing permissions', async () => { const x = fixture(); x.tray.purpose = null as never; const value = await x.read(); expect(value.snapshot.categoryModes).toEqual(DEFAULT_DRAWING_MODES); expect(value.snapshot.diagnostics.some(d => d.code === 'MISSING_TRAY_PURPOSE')).toBe(true); expect(x.state.routingPolicyRevision).toBe('9'); });
   it('rejects a stale or foreign snapshot identity before export', async () => { const x = fixture(), value = await x.read(); await expect(assertCurrentDrawingSnapshot(x.client, projectId, trayId, id(90), value.snapshot.contentSha256, authority)).rejects.toMatchObject({ code: 'DRAWING_SNAPSHOT_STALE' }); x.state.drawingPolicyRevision = '2'; await expect(assertCurrentDrawingSnapshot(x.client, projectId, trayId, value.snapshot.snapshotId, value.snapshot.contentSha256, authority)).rejects.toMatchObject({ code: 'DRAWING_SNAPSHOT_STALE' }); });
@@ -119,5 +119,21 @@ describe('project drawing metrics request-local source reuse', () => {
     const second = await readProjectDrawingFreeSpace(x.client, projectId);
     expect(second.provenance[0].inputSha256).not.toBe(first.provenance[0].inputSha256);
     expect(x.calls.filter(call => call.sql.startsWith('SELECT c.*,ct.name'))).toHaveLength(2);
+  });
+});
+
+describe('purpose positioning snapshot identity', () => {
+  it('binds exact cable purpose choices into settings and layout identity and forwards them to capacity export', async () => {
+    const x = fixture();
+    const before = await x.read();
+    const purposeModes = { 'Plastic tubing': 'right' as const };
+    vi.mocked(readDrawingPolicy).mockResolvedValue({ schemaVersion: 'pathfinder.drawing-purpose-policy.v1', projectId, catalogRevision: '2', drawingPolicyRevision: '2', rules: [{ purposeKey: 'Shared', categoryModes: { ...DEFAULT_DRAWING_MODES }, purposeModes }] });
+    const after = await x.read();
+    expect(after.snapshot.purposeModes).toEqual(purposeModes);
+    expect(after.snapshot.settingsSha256).not.toBe(before.snapshot.settingsSha256);
+    expect(after.snapshot.contentSha256).not.toBe(before.snapshot.contentSha256);
+    expect(vi.mocked(computeTrayDrawing).mock.calls.at(-1)?.[0].options?.purposeModes).toEqual(purposeModes);
+    await readProjectDrawingFreeSpace(x.client, projectId);
+    expect(vi.mocked(computeTrayDrawing).mock.calls.at(-1)?.[0].options?.purposeModes).toEqual(purposeModes);
   });
 });

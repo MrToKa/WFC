@@ -4,7 +4,7 @@ import { canonicalPurposeJson, policyRevisionSchema, policyUuidSchema } from '..
 import { drawingPurposePolicySchema, drawingPurposeWriteSchema, drawingPurposeRuleSchema, drawingPolicySaveSchema, drawingPolicyHistorySchema, drawingPurposeDiagnostics, isDefaultDrawingModes, type DrawingPurposeRule } from '../../shared/pathfinderDrawingPolicy.js';
 import { readCatalog } from './catalog.js';
 import { readActivePurposeIncarnations, readPurposePolicyState } from './policySchema.js';
-import { PurposePolicyError, purposePolicyTransaction, type PolicyRevisions } from './purposePolicy.js';
+import { readProjectCablePurposes, PurposePolicyError, purposePolicyTransaction, type PolicyRevisions } from './purposePolicy.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 
@@ -30,6 +30,7 @@ export async function initializeDrawingPolicySchema(pool: Pool): Promise<void> {
         FOREIGN KEY(project_id,purpose_key,purpose_incarnation_id)
           REFERENCES pf_catalog_purpose_incarnations(project_id,purpose_key,incarnation_id)
       );
+      ALTER TABLE pf_drawing_purpose_rules ADD COLUMN IF NOT EXISTS purpose_modes JSONB CHECK(purpose_modes IS NULL OR jsonb_typeof(purpose_modes)='object');
       CREATE TABLE IF NOT EXISTS pf_drawing_policy_history(
         audit_id UUID PRIMARY KEY,project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
         actor_id UUID NOT NULL,login_id UUID NOT NULL,occurred_at TIMESTAMPTZ NOT NULL,
@@ -57,17 +58,17 @@ export async function initializeDrawingPolicySchema(pool: Pool): Promise<void> {
 }
 
 async function activeRules(client: PoolClient, projectId: string): Promise<DrawingPurposeRule[]> {
-  const rows = (await client.query<Row>(`SELECT r.purpose_key,r.category_modes FROM pf_drawing_purpose_rules r
+  const rows = (await client.query<Row>(`SELECT r.purpose_key,r.category_modes,r.purpose_modes FROM pf_drawing_purpose_rules r
     JOIN pf_catalog_purpose_incarnations i ON i.project_id=r.project_id AND i.purpose_key=r.purpose_key AND i.incarnation_id=r.purpose_incarnation_id
     WHERE r.project_id=$1 AND i.active=TRUE AND i.row_count>0 ORDER BY r.purpose_key COLLATE "C" LIMIT 4097`, [projectId])).rows;
   if (rows.length > 4096) throw new DrawingPolicyError('POLICY_STORAGE_INVALID', 500, 'Cable positioning exceeds its storage limit.');
-  return rows.map(row => drawingPurposeRuleSchema.parse({ purposeKey: row.purpose_key, categoryModes: row.category_modes })).sort((a, b) => compare(a.purposeKey, b.purposeKey));
+  return rows.map(row => drawingPurposeRuleSchema.parse({ purposeKey: row.purpose_key, categoryModes: row.category_modes, ...(row.purpose_modes == null ? {} : { purposeModes: row.purpose_modes }) })).sort((a, b) => compare(a.purposeKey, b.purposeKey));
 }
 
 /** Internal read: caller holds its authorized project transaction. It grants no admin API access. */
 export async function readDrawingPolicy(client: PoolClient, projectId: string) {
   const state = await readPurposePolicyState(client, projectId, { lock: true });
-  return drawingPurposePolicySchema.parse({ schemaVersion: 'pathfinder.drawing-purpose-policy.v1', projectId, catalogRevision: state.catalogRevision, drawingPolicyRevision: state.drawingPolicyRevision, rules: await activeRules(client, projectId) });
+  return drawingPurposePolicySchema.parse({ schemaVersion: 'pathfinder.drawing-purpose-policy.v1', projectId, catalogRevision: state.catalogRevision, drawingPolicyRevision: state.drawingPolicyRevision, rules: await activeRules(client, projectId), ...await readProjectCablePurposes(client, projectId) });
 }
 
 /** Caller owns a project-first transaction; authoring additionally rechecks true admin here. */
@@ -88,6 +89,16 @@ export async function saveDrawingPolicy(client: PoolClient, projectId: string, w
   }
   if (command.expectedCatalogRevision !== state.catalogRevision) throw new DrawingPolicyError('CATALOG_REVISION_CONFLICT', 409, 'The tray catalog changed. Refresh before saving.', current);
   if (command.expectedRevision !== state.drawingPolicyRevision) throw new DrawingPolicyError('POLICY_REVISION_CONFLICT', 409, 'Cable positioning changed. Refresh before saving.', current);
+  const beforeRules = await activeRules(client, projectId);
+  if (command.changes.some(change => change.purposeModes !== undefined) && command.expectedCablePurposesSha256 === undefined)
+    throw new DrawingPolicyError('CABLE_PURPOSES_REFRESH_REQUIRED', 409, 'Refresh the cable purposes before saving.', current);
+  if (command.expectedCablePurposesSha256 !== undefined) {
+    const purposes = await readProjectCablePurposes(client, projectId);
+    if (command.expectedCablePurposesSha256 !== purposes.cablePurposesSha256) throw new DrawingPolicyError('CABLE_PURPOSES_CONFLICT', 409, 'The project cable purposes changed. Refresh before saving.', current);
+    if (command.changes.some(change => Object.entries(change.purposeModes ?? {}).some(([purpose, mode]) => !purposes.cablePurposes.includes(purpose)
+      && beforeRules.find(rule => rule.purposeKey === change.purposeKey)?.purposeModes?.[purpose] !== mode)))
+      throw new DrawingPolicyError('CABLE_PURPOSE_UNAVAILABLE', 409, 'A selected cable purpose is no longer in the project. Refresh before saving.', current);
+  }
   if (state.drawingPolicyRevision === '9223372036854775807') throw new DrawingPolicyError('POLICY_REVISION_EXHAUSTED', 409, 'Cable positioning revision capacity is exhausted.', current);
   const catalog = await readCatalog(client, projectId), incarnations = await readActivePurposeIncarnations(client, projectId);
   if (catalog.catalogRevision !== state.catalogRevision) throw new DrawingPolicyError('CATALOG_REVISION_CONFLICT', 409, 'The tray catalog changed. Refresh before saving.', current);
@@ -96,12 +107,12 @@ export async function saveDrawingPolicy(client: PoolClient, projectId: string, w
     const rows = catalog.rows.filter(row => row.purposeKey === change.purposeKey);
     if (!rows.length || rows.some(row => blocked.has(row.projectTrayId)) || new Set(rows.map(row => row.rawPurpose)).size !== 1 || !incarnations.some(row => row.purposeKey === change.purposeKey && row.rowCount > 0)) throw new DrawingPolicyError('PURPOSE_UNAVAILABLE', 409, 'A purpose is missing, detached or ambiguous. Resolve the catalog and refresh.', current);
   }
-  const beforeRules = await activeRules(client, projectId);
   for (const change of command.changes) {
     const incarnation = incarnations.find(row => row.purposeKey === change.purposeKey)!;
-    if (isDefaultDrawingModes(change.categoryModes)) await client.query('DELETE FROM pf_drawing_purpose_rules WHERE project_id=$1 AND purpose_key=$2 AND purpose_incarnation_id=$3', [projectId, change.purposeKey, incarnation.incarnationId]);
-    else await client.query(`INSERT INTO pf_drawing_purpose_rules(project_id,purpose_key,purpose_incarnation_id,category_modes) VALUES($1,$2,$3,$4::jsonb)
-      ON CONFLICT(project_id,purpose_key,purpose_incarnation_id) DO UPDATE SET category_modes=EXCLUDED.category_modes`, [projectId, change.purposeKey, incarnation.incarnationId, JSON.stringify(change.categoryModes)]);
+    const purposeModes = change.purposeModes ?? beforeRules.find(rule => rule.purposeKey === change.purposeKey)?.purposeModes;
+    if (isDefaultDrawingModes(change.categoryModes) && (!purposeModes || Object.keys(purposeModes).length === 0)) await client.query('DELETE FROM pf_drawing_purpose_rules WHERE project_id=$1 AND purpose_key=$2 AND purpose_incarnation_id=$3', [projectId, change.purposeKey, incarnation.incarnationId]);
+    else await client.query(`INSERT INTO pf_drawing_purpose_rules(project_id,purpose_key,purpose_incarnation_id,category_modes,purpose_modes) VALUES($1,$2,$3,$4::jsonb,$5::jsonb)
+      ON CONFLICT(project_id,purpose_key,purpose_incarnation_id) DO UPDATE SET category_modes=EXCLUDED.category_modes,purpose_modes=EXCLUDED.purpose_modes`, [projectId, change.purposeKey, incarnation.incarnationId, JSON.stringify(change.categoryModes), purposeModes === undefined ? null : JSON.stringify(purposeModes)]);
   }
   const afterRules = await activeRules(client, projectId);
   const changed = (await client.query<{ revision: string }>(`UPDATE pf_purpose_project_state SET drawing_policy_revision=drawing_policy_revision+1,updated_at=NOW()

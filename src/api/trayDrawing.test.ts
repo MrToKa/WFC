@@ -19,6 +19,17 @@ function fixture() {
 }
 afterEach(()=>vi.unstubAllGlobals());
 describe('shared drawing snapshot boundary',()=>{
+  it('binds per-purpose positioning to the verified drawing settings',async()=>{
+    const value=fixture();
+    const snapshot={...value.snapshot,purposeModes:{'Plastic tubing':'right' as const}};
+    snapshot.settingsSha256=hash(drawingSettingsHashInput(value.override,snapshot.categoryModes,snapshot.purposeModes));
+    snapshot.contentSha256=hash(drawingContentHashInput(snapshot,value.layout));
+    const verified=await verifyTrayDrawingResponse({...value,snapshot},projectId,trayId);
+    expect(verified.snapshot.purposeModes).toEqual({'Plastic tubing':'right'});
+    const changed={...snapshot,purposeModes:{'Plastic tubing':'left' as const}};
+    changed.contentSha256=hash(drawingContentHashInput(changed,value.layout));
+    await expect(verifyTrayDrawingResponse({...value,snapshot:changed},projectId,trayId)).rejects.toMatchObject({code:'DRAWING_SNAPSHOT_MISMATCH'});
+  });
   it('verifies one consistent snapshot and preserves its identity for read-only viewers',async()=>{
     const value=fixture(); const first=await verifyTrayDrawingResponse(value,projectId,trayId);
     const second=await verifyTrayDrawingResponse({...value,permissions:{canEdit:false}},projectId,trayId);

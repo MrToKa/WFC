@@ -9,7 +9,7 @@ vi.mock('./catalog.js', () => ({ readCatalog: vi.fn() }));
 const id = (n: number) => '77777777-7777-4777-8777-' + String(n).padStart(12, '0');
 const projectId = id(1), userId = id(2), loginId = id(3), trayId = id(4), incarnationId = id(5);
 const command = (key = id(10), patch: Record<string, unknown> = {}) => ({ schemaVersion: 'pathfinder.drawing-purpose-policy.write.v1', expectedCatalogRevision: '2', expectedRevision: '0', idempotencyKey: key, changes: [{ purposeKey: 'Synthetic purpose', categoryModes: { ...DEFAULT_DRAWING_MODES, power: 'left', control: 'right' } }], ...patch });
-type Rule = { purpose_key: string; purpose_incarnation_id: string; category_modes: Record<string, string> };
+type Rule = { purpose_key: string; purpose_incarnation_id: string; category_modes: Record<string, string>; purpose_modes?: Record<string, string> | null };
 function database(options: { admin?: boolean; missingUser?: boolean; revoked?: boolean; projectExists?: boolean; failAt?: string; commitLost?: boolean } = {}) {
   const principal: JobPrincipal = { userId, loginId, loginExpiresAt: Date.now() + 3600000 }, calls: { sql: string; values: any[] }[] = [];
   const state = { catalog_revision: '2', routing_policy_revision: '17', drawing_policy_revision: '0', drawing_input_revision: '3' };
@@ -26,6 +26,7 @@ function database(options: { admin?: boolean; missingUser?: boolean; revoked?: b
       if (sql.startsWith('SELECT id FROM projects')) { const waiting = tail; tail = new Promise<void>(resolve => { unlock = resolve; }); await waiting; backup = { state: { ...state }, rules: structuredClone(rules), events: structuredClone(events), receipts: structuredClone(receipts) }; return { rows: options.projectExists === false ? [] : [{ id: projectId }] }; }
       if (sql === 'COMMIT') { committed = true; unlock?.(); unlock = undefined; if (failCommit) { failCommit = false; throw new Error('synthetic-private-detail'); } return { rows: [] }; }
       if (sql === 'ROLLBACK') { if (backup && !committed) { Object.assign(state, backup.state); rules.splice(0, rules.length, ...backup.rules); events.splice(0, events.length, ...backup.events); receipts.clear(); for (const [key, value] of backup.receipts) receipts.set(key, value); } unlock?.(); unlock = undefined; return { rows: [] }; }
+      if (sql.startsWith('SELECT DISTINCT purpose')) return { rows: [{ purpose: 'Control' }, { purpose: 'Plastic tubing' }, { purpose: 'Power' }] };
       if (sql.startsWith('SELECT is_admin')) return { rows: options.missingUser ? [] : [{ is_admin: options.admin !== false }] };
       if (sql.startsWith('INSERT INTO viewer_login_bindings')) return { rows: [] };
       if (sql.startsWith('SELECT user_id,expires_at')) return { rows: [{ user_id: userId, expires_at: new Date(principal.loginExpiresAt), revoked_at: options.revoked ? new Date() : null }] };
@@ -33,7 +34,7 @@ function database(options: { admin?: boolean; missingUser?: boolean; revoked?: b
       if (sql.startsWith('SELECT purpose_key,incarnation_id::text')) return { rows: epochs.filter(epoch => epoch.active) };
       if (sql.startsWith('SELECT r.purpose_key')) return { rows: rules.filter(rule => epochs.some(epoch => epoch.active && epoch.purpose_key === rule.purpose_key && epoch.incarnation_id === rule.purpose_incarnation_id)) };
       if (sql.startsWith('SELECT request_sha256')) return { rows: receipts.has(values.join(':')) ? [receipts.get(values.join(':'))] : [] };
-      if (sql.startsWith('INSERT INTO pf_drawing_purpose_rules')) { const row = { purpose_key: values[1], purpose_incarnation_id: values[2], category_modes: JSON.parse(values[3]) }, index = rules.findIndex(rule => rule.purpose_key === row.purpose_key && rule.purpose_incarnation_id === row.purpose_incarnation_id); if (index < 0) rules.push(row); else rules[index] = row; return { rows: [] }; }
+      if (sql.startsWith('INSERT INTO pf_drawing_purpose_rules')) { const row = { purpose_key: values[1], purpose_incarnation_id: values[2], category_modes: JSON.parse(values[3]), purpose_modes: values[4] == null ? null : JSON.parse(values[4]) }, index = rules.findIndex(rule => rule.purpose_key === row.purpose_key && rule.purpose_incarnation_id === row.purpose_incarnation_id); if (index < 0) rules.push(row); else rules[index] = row; return { rows: [] }; }
       if (sql.startsWith('DELETE FROM pf_drawing_purpose_rules')) { const index = rules.findIndex(rule => rule.purpose_key === values[1] && rule.purpose_incarnation_id === values[2]); if (index >= 0) rules.splice(index, 1); return { rows: [] }; }
       if (sql.startsWith('UPDATE pf_purpose_project_state')) { if (state.catalog_revision !== values[1] || state.drawing_policy_revision !== values[2]) return { rows: [] }; state.drawing_policy_revision = String(BigInt(state.drawing_policy_revision) + 1n); return { rows: [{ revision: state.drawing_policy_revision }] }; }
       if (sql.startsWith('INSERT INTO pf_drawing_policy_history')) { events.push({ audit_id: values[0], project_id: values[1], actor_id: values[2], login_id: values[3], occurred_at: values[4], catalog_revision: values[5], previous_revision: values[6], revision: values[7], idempotency_key: values[8], request_sha256: values[9], before_rules: JSON.parse(values[10]), after_rules: JSON.parse(values[11]) }); return { rows: [] }; }
@@ -69,5 +70,40 @@ describe('drawing policy idempotency, CAS, ABA and purpose identity', () => {
   it('history cursor is exclusive and retains BIGINT revisions including maximum', async () => { const db = database(); for (let i = 0; i < 3; i++) await db.save(command(id(10 + i), { expectedRevision: String(i) })); const page = await db.repository.history(projectId, db.principal, { limit: 2 }); expect(page.events.map(event => event.revision)).toEqual(['3', '2']); expect(page.nextBeforeRevision).toBe('2'); expect((await db.repository.history(projectId, db.principal, { limit: 2, beforeRevision: '2' })).events.map(event => event.revision)).toEqual(['1']); db.state.drawing_policy_revision = '9223372036854775806'; await db.save(command(id(20), { expectedRevision: db.state.drawing_policy_revision })); expect((await db.repository.history(projectId, db.principal, {})).events[0].revision).toBe('9223372036854775807'); await expect(db.save(command(id(21), { expectedRevision: '9223372036854775807' }))).rejects.toMatchObject({ code: 'POLICY_REVISION_EXHAUSTED' }); });
   it.each(['1\n', '01', '9223372036854775808'])('refuses invalid history cursor %s', async beforeRevision => { const db = database(); await expect(db.repository.history(projectId, db.principal, { beforeRevision })).rejects.toMatchObject({ code: 'INVALID_POLICY_HISTORY' }); });
   it('initializes only new drawing tables under the shared schema advisory lock', async () => { const calls: string[] = [], client = { query: vi.fn(async (sql: string) => { calls.push(sql); return { rows: [] }; }), release: vi.fn() }; await initializeDrawingPolicySchema({ connect: async () => client } as unknown as Pool); expect(calls[0]).toBe('BEGIN'); expect(calls[1]).toContain('wfc-purpose-policy-schema-v1'); expect(calls[2]).toContain('purpose_incarnation_id'); expect(calls[2]).toContain('BEFORE UPDATE OR DELETE'); expect(calls[2]).not.toContain('UPDATE pf_purpose_project_state'); expect(calls.at(-1)).toBe('COMMIT'); expect(client.release).toHaveBeenCalledOnce(); });
-  it('internal policy reads require no admin data and can serve a caller-authorized snapshot', async () => { const client = { query: vi.fn(async (sql: string) => ({ rows: sql.startsWith('SELECT catalog_revision') ? [{ catalog_revision: '2', routing_policy_revision: '5', drawing_policy_revision: '3', drawing_input_revision: '9' }] : [] })) } as unknown as PoolClient; expect(await readDrawingPolicy(client, projectId)).toEqual({ schemaVersion: 'pathfinder.drawing-purpose-policy.v1', projectId, catalogRevision: '2', drawingPolicyRevision: '3', rules: [] }); expect(vi.mocked(client.query).mock.calls.some(call => String(call[0]).includes('FROM users'))).toBe(false); });
+  it('internal policy reads require no admin data and can serve a caller-authorized snapshot', async () => { const client = { query: vi.fn(async (sql: string) => ({ rows: sql.startsWith('SELECT catalog_revision') ? [{ catalog_revision: '2', routing_policy_revision: '5', drawing_policy_revision: '3', drawing_input_revision: '9' }] : [] })) } as unknown as PoolClient; expect(await readDrawingPolicy(client, projectId)).toMatchObject({ schemaVersion: 'pathfinder.drawing-purpose-policy.v1', projectId, catalogRevision: '2', drawingPolicyRevision: '3', rules: [] }); expect(vi.mocked(client.query).mock.calls.some(call => String(call[0]).includes('FROM users'))).toBe(false); });
+});
+
+describe('drawing purposes from cable types', () => {
+  it('publishes sorted project purposes, preserves legacy rules and stores exact purpose overrides in immutable history', async () => {
+    const db = database();
+    const initial = await db.get();
+    expect(initial.cablePurposes).toEqual(['Control', 'Plastic tubing', 'Power']);
+    const changes = [{ purposeKey: 'Synthetic purpose', categoryModes: command().changes[0].categoryModes, purposeModes: { 'Plastic tubing': 'left', Control: 'use-default' } }];
+    await db.save(command(id(200), { expectedCablePurposesSha256: initial.cablePurposesSha256, changes }));
+    expect((await db.get()).rules).toEqual(changes);
+    expect(db.events[0].after_rules).toEqual(changes);
+    await db.save(command(id(201), { expectedRevision: '1' }));
+    expect((await db.get()).rules[0].purposeModes).toEqual(changes[0].purposeModes);
+    await db.save(command(id(202), { expectedRevision: '2', expectedCablePurposesSha256: initial.cablePurposesSha256, changes: [{ purposeKey: 'Synthetic purpose', categoryModes: DEFAULT_DRAWING_MODES, purposeModes: {} }] }));
+    expect((await db.get()).rules).toEqual([]);
+  });
+  it('rejects stale purpose catalogs and choices outside the project before changing data', async () => {
+    const db = database(); const initial = await db.get();
+    const changes = [{ purposeKey: 'Synthetic purpose', categoryModes: DEFAULT_DRAWING_MODES, purposeModes: { 'Plastic tubing': 'right' } }];
+    await expect(db.save(command(id(203), { changes }))).rejects.toMatchObject({ code: 'CABLE_PURPOSES_REFRESH_REQUIRED' });
+    await expect(db.save(command(id(204), { expectedCablePurposesSha256: '0'.repeat(64), changes }))).rejects.toMatchObject({ code: 'CABLE_PURPOSES_CONFLICT' });
+    await expect(db.save(command(id(205), { expectedCablePurposesSha256: initial.cablePurposesSha256, changes: [{ ...changes[0], purposeModes: { Missing: 'left' } }] }))).rejects.toMatchObject({ code: 'CABLE_PURPOSE_UNAVAILABLE' });
+    expect(db.rules).toEqual([]); expect(db.events).toEqual([]);
+  });
+});
+
+describe('retired cable purpose overrides', () => {
+  it('retains unchanged historical purposes without accepting new unavailable choices', async () => {
+    const db = database();
+    db.rules.push({ purpose_key: 'Synthetic purpose', purpose_incarnation_id: incarnationId, category_modes: { ...DEFAULT_DRAWING_MODES }, purpose_modes: { Retired: 'left' } });
+    const initial = await db.get();
+    await db.save(command(id(210), { expectedCablePurposesSha256: initial.cablePurposesSha256, changes: [{ purposeKey: 'Synthetic purpose', categoryModes: DEFAULT_DRAWING_MODES, purposeModes: { Retired: 'left', 'Plastic tubing': 'right' } }] }));
+    expect((await db.get()).rules[0].purposeModes).toEqual({ Retired: 'left', 'Plastic tubing': 'right' });
+    await expect(db.save(command(id(211), { expectedRevision: '1', expectedCablePurposesSha256: initial.cablePurposesSha256, changes: [{ purposeKey: 'Synthetic purpose', categoryModes: DEFAULT_DRAWING_MODES, purposeModes: { Retired: 'right' } }] }))).rejects.toMatchObject({ code: 'CABLE_PURPOSE_UNAVAILABLE' });
+  });
 });

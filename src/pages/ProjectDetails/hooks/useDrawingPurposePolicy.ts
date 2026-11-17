@@ -1,7 +1,7 @@
 import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { purposeKeySchema, type CatalogEnvelope } from '../../../../shared/pathfinderPurposePolicy';
-import { drawingPurposeDiagnostics, DEFAULT_DRAWING_MODES, isDefaultDrawingModes, type DrawingCategoryModes } from '../../../../shared/pathfinderDrawingPolicy';
+import { drawingPurposeDiagnostics, DEFAULT_DRAWING_MODES, resolveDrawingPurposeMode, type DrawingCategoryModes, type DrawingPurposeRule } from '../../../../shared/pathfinderDrawingPolicy';
 import {
   fetchDrawingPurposeCatalog, fetchDrawingPurposePolicy, fetchDrawingPurposeHistory, saveDrawingPurposePolicy,
   DrawingPolicyApiError, DRAWING_CATEGORY_ORDER,
@@ -10,19 +10,25 @@ import {
 
 type Scope = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean };
 type Snapshot = { catalog: CatalogEnvelope; policy: DrawingPurposePolicy };
-type DrawingCategory = keyof DrawingCategoryModes;
-type Draft = Map<string, DrawingCategoryModes>;
+type RuleModes = Pick<DrawingPurposeRule, 'categoryModes' | 'purposeModes'>;
+type SideMode = DrawingCategoryModes[keyof DrawingCategoryModes];
+type Draft = Map<string, RuleModes>;
 type State = { scope: Scope; snapshot: Snapshot | null; draft: Draft; loading: boolean; refreshing: boolean; saving: boolean; stale: boolean;
   uncertain: boolean; conflict: string | null; notice: string | null; error: string | null; refreshPrompt: boolean;
   history: DrawingPolicyHistory | null; historyLoading: boolean; historyError: string | null };
 type Run = { scope: Scope; closed: boolean; readId: number; historyId: number; read?: AbortController; history?: AbortController; save?: AbortController;
   mutation: boolean; pending?: DrawingPurposeWrite };
-export type DrawingPurposeRow = { purposeKey: string | null; trayCount: number; blocked: boolean; categoryModes: DrawingCategoryModes; configured: boolean; dirty: boolean };
+export type DrawingPurposeRow = { purposeKey: string | null; trayCount: number; blocked: boolean; categoryModes: DrawingCategoryModes; purposeModes: Record<string, SideMode>; configured: boolean; dirty: boolean };
 const initial = (scope: Scope): State => ({ scope, snapshot: null, draft: new Map(), loading: false, refreshing: false, saving: false, stale: true,
   uncertain: false, conflict: null, notice: null, error: null, refreshPrompt: false, history: null, historyLoading: false, historyError: null });
 const enabled = (scope: Scope) => Boolean(scope.isAdmin && scope.projectId && scope.token && scope.projectId === scope.loadedProjectId);
-const same = (left: DrawingCategoryModes | undefined, right: DrawingCategoryModes | undefined) => DRAWING_CATEGORY_ORDER.every(key => (left ?? DEFAULT_DRAWING_MODES)[key] === (right ?? DEFAULT_DRAWING_MODES)[key]);
-const draftFor = (policy: DrawingPurposePolicy): Draft => new Map(policy.rules.map(rule => [rule.purposeKey, { ...rule.categoryModes }]));
+const emptyModes = (): RuleModes => ({ categoryModes: { ...DEFAULT_DRAWING_MODES }, purposeModes: {} });
+const same = (left: RuleModes | undefined, right: RuleModes | undefined) => {
+  if (!DRAWING_CATEGORY_ORDER.every(key => (left?.categoryModes ?? DEFAULT_DRAWING_MODES)[key] === (right?.categoryModes ?? DEFAULT_DRAWING_MODES)[key])) return false;
+  const keys = new Set([...Object.keys(left?.purposeModes ?? {}), ...Object.keys(right?.purposeModes ?? {})]);
+  return [...keys].every(key => resolveDrawingPurposeMode(left, key) === resolveDrawingPurposeMode(right, key));
+};
+const draftFor = (policy: DrawingPurposePolicy): Draft => new Map(policy.rules.map(rule => [rule.purposeKey, { categoryModes: { ...rule.categoryModes }, purposeModes: { ...rule.purposeModes } }]));
 const authorableCache = new WeakMap<Snapshot, Set<string>>();
 const authorable = (snapshot: Snapshot, key: string): boolean => {
   const cached = authorableCache.get(snapshot);
@@ -39,7 +45,7 @@ const authorable = (snapshot: Snapshot, key: string): boolean => {
   return keys.has(key);
 };
 const changedKeys = (state: State): string[] => state.snapshot ? [...new Set([...state.draft.keys(), ...state.snapshot.policy.rules.map(rule => rule.purposeKey)])]
-  .filter(key => !same(state.draft.get(key), state.snapshot!.policy.rules.find(rule => rule.purposeKey === key)?.categoryModes)) : [];
+  .filter(key => !same(state.draft.get(key), state.snapshot!.policy.rules.find(rule => rule.purposeKey === key))) : [];
 const validChanges = (state: State): boolean => Boolean(state.snapshot && changedKeys(state).every(key => authorable(state.snapshot!, key)));
 const dirty = (state: State) => changedKeys(state).length > 0;
 const message = (error: unknown) => error instanceof DrawingPolicyApiError ? error.message : 'Cable positioning could not be loaded. Try again.';
@@ -119,15 +125,17 @@ export function useDrawingPurposePolicy({ projectId, loadedProjectId, token, isA
     await refreshRun(run);
   }, [current, refreshRun, update]);
   const cancelRefresh = useCallback(() => { const run = runRef.current; if (run) update(run, previous => ({ ...previous, refreshPrompt: false })); }, [update]);
-  const change = useCallback((purposeKey: string, categoryModes: DrawingCategoryModes) => {
+  const change = useCallback((purposeKey: string, selected: RuleModes) => {
     const run = runRef.current, previous = stateRef.current;
     if (!run || !current(run) || run.mutation || run.pending || previous.scope !== run.scope || previous.stale || previous.loading || previous.refreshing || previous.conflict || !previous.snapshot) return;
     if (!authorable(previous.snapshot, purposeKey)) return;
-    update(run, value => { const draft = new Map(value.draft); if (isDefaultDrawingModes(categoryModes)) draft.delete(purposeKey); else draft.set(purposeKey, { ...categoryModes }); return { ...value, draft, notice: null, error: null }; });
+    update(run, value => { const draft = new Map(value.draft); if (same(selected, undefined)) draft.delete(purposeKey); else draft.set(purposeKey, { categoryModes: { ...selected.categoryModes }, purposeModes: { ...selected.purposeModes } }); return { ...value, draft, notice: null, error: null }; });
   }, [current, update]);
-  const setMode = useCallback((purposeKey: string, category: DrawingCategory, mode: DrawingCategoryModes[DrawingCategory]) => {
-    const selected = stateRef.current.draft.get(purposeKey) ?? DEFAULT_DRAWING_MODES;
-    change(purposeKey, { ...selected, [category]: mode });
+  const setMode = useCallback((purposeKey: string, cablePurpose: string, mode: SideMode) => {
+    const snapshot = stateRef.current.snapshot;
+    if (!snapshot?.policy.cablePurposes?.includes(cablePurpose)) return;
+    const selected = stateRef.current.draft.get(purposeKey) ?? emptyModes();
+    change(purposeKey, { categoryModes: { ...selected.categoryModes }, purposeModes: { ...selected.purposeModes, [cablePurpose]: mode } });
   }, [change]);
   const send = useCallback(async (run: Run, body: DrawingPurposeWrite): Promise<void> => {
     if (!current(run) || run.mutation || !run.scope.projectId || !run.scope.token) return;
@@ -160,10 +168,10 @@ export function useDrawingPurposePolicy({ projectId, loadedProjectId, token, isA
     const changes: DrawingPurposeWrite['changes'] = [...new Set([...base.keys(), ...previous.draft.keys()])].sort().flatMap<DrawingPurposeWrite['changes'][number]>(purposeKey => {
       const selected = previous.draft.get(purposeKey);
       if (same(selected, base.get(purposeKey))) return [];
-      return [{ purposeKey, categoryModes: { ...(selected ?? DEFAULT_DRAWING_MODES) } }];
+      return [{ purposeKey, categoryModes: { ...(selected?.categoryModes ?? DEFAULT_DRAWING_MODES) }, purposeModes: { ...selected?.purposeModes } }];
     });
     await send(run, { schemaVersion: 'pathfinder.drawing-purpose-policy.write.v1', expectedCatalogRevision: previous.snapshot.catalog.catalogRevision,
-      expectedRevision: previous.snapshot.policy.drawingPolicyRevision, idempotencyKey: generateId(), changes });
+      expectedRevision: previous.snapshot.policy.drawingPolicyRevision, expectedCablePurposesSha256: previous.snapshot.policy.cablePurposesSha256, idempotencyKey: generateId(), changes });
   }, [current, send]);
   const retrySave = useCallback(async (): Promise<void> => { const run = runRef.current; if (run && current(run) && run.pending && !run.mutation) await send(run, run.pending); }, [current, send]);
   const refreshHistory = useCallback(async (): Promise<void> => { const run = runRef.current; if (run) await historyRun(run); }, [historyRun]);
@@ -175,12 +183,13 @@ export function useDrawingPurposePolicy({ projectId, loadedProjectId, token, isA
     const counts = new Map<string | null, number>();
     for (const row of view.snapshot.catalog.rows) counts.set(row.purposeKey, (counts.get(row.purposeKey) ?? 0) + 1);
     return [...counts].sort(([left], [right]) => left === null ? 1 : right === null ? -1 : left < right ? -1 : left > right ? 1 : 0).map(([purposeKey, trayCount]) => ({
-      purposeKey, trayCount, blocked: purposeKey === null || !authorable(view.snapshot!, purposeKey), categoryModes: purposeKey === null ? { ...DEFAULT_DRAWING_MODES } : view.draft.get(purposeKey) ?? { ...DEFAULT_DRAWING_MODES },
-      configured: purposeKey !== null && view.draft.has(purposeKey), dirty: purposeKey !== null && !same(view.draft.get(purposeKey), view.snapshot!.policy.rules.find(rule => rule.purposeKey === purposeKey)?.categoryModes),
+      purposeKey, trayCount, blocked: purposeKey === null || !authorable(view.snapshot!, purposeKey), categoryModes: purposeKey === null ? { ...DEFAULT_DRAWING_MODES } : view.draft.get(purposeKey)?.categoryModes ?? { ...DEFAULT_DRAWING_MODES },
+      purposeModes: Object.fromEntries((view.snapshot!.policy.cablePurposes ?? []).map(key => [key, resolveDrawingPurposeMode(purposeKey === null ? undefined : view.draft.get(purposeKey), key)])),
+      configured: purposeKey !== null && view.draft.has(purposeKey), dirty: purposeKey !== null && !same(view.draft.get(purposeKey), view.snapshot!.policy.rules.find(rule => rule.purposeKey === purposeKey)),
     }));
   }, [view]);
   const isDirty = dirty(view), busy = view.loading || view.refreshing || view.saving;
-  return { ...view, rows, dirty: isDirty, busy, canEdit: enabled(scope) && Boolean(view.snapshot) && !busy && !view.stale && !view.conflict && !view.uncertain,
+  return { ...view, rows, cablePurposes: view.snapshot?.policy.cablePurposes ?? [], invalidCablePurposeCount: view.snapshot?.policy.invalidCablePurposeCount ?? 0, dirty: isDirty, busy, canEdit: enabled(scope) && Boolean(view.snapshot) && !busy && !view.stale && !view.conflict && !view.uncertain,
     canSave: enabled(scope) && Boolean(view.snapshot) && isDirty && !busy && !view.stale && !view.conflict && !view.uncertain && validChanges(view),
-    canRetrySave: enabled(scope) && view.uncertain && !view.saving, refresh, cancelRefresh, setMode, reset: (key: string) => change(key, { ...DEFAULT_DRAWING_MODES }), save, retrySave, refreshHistory, moreHistory };
+    canRetrySave: enabled(scope) && view.uncertain && !view.saving, refresh, cancelRefresh, setMode, reset: (key: string) => change(key, emptyModes()), save, retrySave, refreshHistory, moreHistory };
 }

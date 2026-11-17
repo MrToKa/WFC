@@ -212,12 +212,13 @@ export async function readTrayCapacityRouting(client: PoolClient, input: {
       .sort((a, b) => a.cableId - b.cableId || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     const materials = materialRows.filter(value => value.tray_type.trim().toLowerCase() === (tray.type ?? '').trim().toLowerCase());
     const purpose = tray.purpose ? normalizeCatalogKey(tray.purpose) : null;
-    const modes = drawingPolicy.rules.find(value => value.purposeKey === purpose)?.categoryModes ?? { ...DEFAULT_DRAWING_MODES };
+    const drawingRule = drawingPolicy.rules.find(value => value.purposeKey === purpose);
+    const modes = drawingRule?.categoryModes ?? { ...DEFAULT_DRAWING_MODES };
     const override = trayBundleOverrideSchema.nullable().safeParse(overrides.get(tray.id) ?? null);
     const data: TrayDrawingPlacementData = { project, tray, trayCables: onTray,
       materialTrays: materials.slice(0, 1).map(value => ({ id: value.id, type: value.tray_type,
         rungHeightMm: value.rung_height_mm === null ? null : Number(value.rung_height_mm) })) };
-    const value = { routeCode: code, ...assessTrayCapacity({ data, override: override.success ? override.data : null, categoryModes: modes,
+    const value = { routeCode: code, ...assessTrayCapacity({ data, override: override.success ? override.data : null, categoryModes: modes, purposeModes: drawingRule?.purposeModes,
       minimumFreeSpacePercent: minimum, restrictionEnabled,
       ...(materials.length > 1 ? { unavailableDiagnostic: 'DRAWING_MATERIAL_AMBIGUOUS' }
         : !override.success ? { unavailableDiagnostic: 'CAPACITY_OVERRIDE_INVALID' } : {}) }) };

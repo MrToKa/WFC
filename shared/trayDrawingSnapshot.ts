@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { policyUuidSchema as uuid, policyRevisionSchema as revision, policyHashSchema as hash, purposeKeySchema } from './pathfinderPurposePolicy.js';
-import { drawingCategoryModesSchema } from './pathfinderDrawingPolicy.js';
+import { drawingCategoryModesSchema, drawingPurposeModesSchema } from './pathfinderDrawingPolicy.js';
 import { trayLengthCalculationSchema, trayLengthSourceSchema } from './trayAutoLength.js';
 
 const number = z.number().finite();
@@ -22,8 +22,8 @@ export const trayDrawingDiagnosticSchema = z.object({ code: z.string().regex(/^[
 export const trayDrawingSnapshotSchema = z.object({
   schemaVersion: z.literal('pathfinder.tray-drawing-snapshot.v1'), projectId: uuid, projectTrayId: uuid, snapshotId: uuid,
   catalogRevision: revision, drawingPolicyRevision: revision, drawingInputRevision: revision,
-  layoutAlgorithmVersion: z.literal('wfc-tray-placement-v2'), contentSha256: hash, purposeKey: purposeKeySchema.nullable(),
-  categoryModes: drawingCategoryModesSchema, legacySidePolicyVersion: z.literal('wfc-tray-sides-v1'), settingsSha256: hash, inputSha256: hash,
+  layoutAlgorithmVersion: z.enum(['wfc-tray-placement-v2', 'wfc-tray-placement-v3']), contentSha256: hash, purposeKey: purposeKeySchema.nullable(),
+  categoryModes: drawingCategoryModesSchema, purposeModes: drawingPurposeModesSchema.optional(), legacySidePolicyVersion: z.literal('wfc-tray-sides-v1'), settingsSha256: hash, inputSha256: hash,
   orderedCableIds: z.array(uuid).max(100000), state: z.enum(['ready', 'diagnostic', 'blocked']), diagnostics: z.array(trayDrawingDiagnosticSchema).max(1000),
 }).strict();
 const publicCategoryLayout = z.object({ cableSpacing: number.nonnegative().nullable(), considerBundleSpacingAsFree: z.boolean().nullable(), minFreeSpacePercent: number.nullable(), maxFreeSpacePercent: number.nullable(), autoRerouteForFreeSpace: z.boolean().optional(), mv: categorySetting.nullable(), power: categorySetting.nullable(), vfd: categorySetting.nullable(), control: categorySetting.nullable(), customBundleRanges: categoryMap(ranges).nullable() }).strict();
@@ -49,7 +49,7 @@ export type DrawingSettingsWrite = z.infer<typeof drawingSettingsWriteSchema>;
 export type DrawingExportWrite = z.infer<typeof drawingExportWriteSchema>;
 /** Shared explicit hash projections; source facts remain private, their digest is public. */
 export const drawingInputHashInput = (data: TrayDrawingResponse['data'], sourceSha256: string) => ({ data, sourceSha256 });
-export const drawingSettingsHashInput = (override: TrayDrawingResponse['override'], categoryModes: TrayDrawingSnapshot['categoryModes']) => ({ override, categoryModes });
+export const drawingSettingsHashInput = (override: TrayDrawingResponse['override'], categoryModes: TrayDrawingSnapshot['categoryModes'], purposeModes?: TrayDrawingSnapshot['purposeModes']) => ({ override, categoryModes, ...(purposeModes === undefined ? {} : { purposeModes }) });
 export function drawingContentHashInput(snapshot: Omit<TrayDrawingSnapshot, 'snapshotId' | 'contentSha256'> | TrayDrawingSnapshot, layout: unknown) {
   const { snapshotId: _id, contentSha256: _hash, ...input } = snapshot as TrayDrawingSnapshot;
   return { ...input, layout };
@@ -58,7 +58,7 @@ export const drawingExportReceiptSchema = z.object({ schemaVersion: z.literal('p
 export const projectDrawingMetricsSchema = z.object({
   project: drawingProjectSchema, trays: z.array(drawingTraySchema).max(2000), freeSpaceByTrayId: z.record(uuid, number.min(0).max(100).nullable()),
   provenance: z.array(z.object({ trayId: uuid, layoutSha256: hash, inputSha256: hash, state: z.enum(['ready', 'blocked']) }).strict()).max(2000),
-  revisions: z.object({ catalogRevision: revision, drawingPolicyRevision: revision, drawingInputRevision: revision }).strict(), layoutAlgorithmVersion: z.literal('wfc-tray-placement-v2'),
+  revisions: z.object({ catalogRevision: revision, drawingPolicyRevision: revision, drawingInputRevision: revision }).strict(), layoutAlgorithmVersion: z.enum(['wfc-tray-placement-v2', 'wfc-tray-placement-v3']),
 }).strict().superRefine((value, ctx) => {
   const ids = value.trays.map(v => v.id);
   if (new Set(ids).size !== ids.length || value.trays.some(t => t.projectId !== value.project.id) || JSON.stringify(Object.keys(value.freeSpaceByTrayId).sort()) !== JSON.stringify([...ids].sort()) || JSON.stringify(value.provenance.map(p => p.trayId).sort()) !== JSON.stringify([...ids].sort())) ctx.addIssue({ code: 'custom', message: 'Drawing metric scope is incomplete or inconsistent.' });

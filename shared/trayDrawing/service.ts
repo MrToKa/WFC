@@ -1,5 +1,5 @@
-import type { DrawingTray as Tray, DrawingCable as Cable, DrawingContext, DrawingCanvas, CategoryModes, CustomBundleRange, CategoryKey, CablePlacement, DrawingDiagnostic } from './types.js';
-import { DEFAULT_CATEGORY_MODES, CATEGORY_ORDER } from './types.js';
+import type { DrawingTray as Tray, DrawingCable as Cable, DrawingContext, DrawingCanvas, CategoryModes, CustomBundleRange, DrawingCategoryKey, PurposeModes, CablePlacement, DrawingDiagnostic } from './types.js';
+import { DEFAULT_CATEGORY_MODES, DRAWING_CATEGORY_ORDER, drawingPurposeKey } from './types.js';
 import { DEFAULT_RANGE_BOUNDS } from './ranges.js';
 import { createRecordingCanvas, replayDrawingCommands } from './recording.js';
 import { findCustomBundleRange, getBundleRangeLabel } from './ranges.js';
@@ -56,7 +56,8 @@ export type ProjectLayoutConfig = {
   bundleMaxRowsByKey?: Record<string, number>;
 };
 
-export type CategoryLayoutConfig = Record<CategoryKey, ProjectLayoutConfig>;
+export type CategoryLayoutConfig = Record<Exclude<DrawingCategoryKey, 'generic'>, ProjectLayoutConfig>;
+export type DrawingLayoutConfig = CategoryLayoutConfig & { generic?: ProjectLayoutConfig };
 
 type TrefoilGroup = { kind: 'trefoil'; cables: Cable[] } | { kind: 'normal'; cables: Cable[] };
 
@@ -202,12 +203,13 @@ export type TrayLayoutSummary = {
 
 class TrayDrawingData {
   categoryModes: CategoryModes = { ...DEFAULT_CATEGORY_MODES };
-  customRanges: Partial<Record<CategoryKey, CustomBundleRange[]>> = {};
+  purposeModes: PurposeModes = {};
+  customRanges: Partial<Record<DrawingCategoryKey, CustomBundleRange[]>> = {};
   placements: CablePlacement[] = [];
   diagnostics: DrawingDiagnostic[] = [];
-  currentCategory: CategoryKey = 'power';
+  currentCategory: DrawingCategoryKey = 'power';
   currentSide: 'left' | 'right' = 'left';
-  categoryByCableId = new Map<string, CategoryKey>();
+  categoryByCableId = new Map<string, DrawingCategoryKey>();
   sideSegments: Record<'left' | 'right', Array<{ leftPx: number; rightPx: number }>> = { left: [], right: [] };
   tray: Tray;
   cablesOnTray: Cable[];
@@ -215,7 +217,7 @@ class TrayDrawingData {
   cableBundles: CableBundleMap;
   canvasScale: number;
   spacingMm: number;
-  layoutConfig: CategoryLayoutConfig;
+  layoutConfig: DrawingLayoutConfig;
   trayHeightMm: number;
   rungHeightMm: number;
   usableTrayHeightMm: number;
@@ -246,7 +248,7 @@ class TrayDrawingData {
     cableBundles: CableBundleMap | undefined,
     canvasScale: number,
     spacingMm: number,
-    layoutConfig: CategoryLayoutConfig,
+    layoutConfig: DrawingLayoutConfig,
     rungHeightMm: number,
     useTrefoilClamps: boolean,
   ) {
@@ -736,7 +738,7 @@ class CableBundleDrawer {
     leftStartX: number,
     bottomStartY: number,
     spacingPx: number,
-    purpose: 'power' | 'mv' | 'vfd' | 'control' = 'power',
+    purpose: DrawingCategoryKey = 'power',
   ): PowerResult {
     const entries = Object.entries(bundles).filter(([, cables]) => cables.length > 0);
 
@@ -1076,7 +1078,7 @@ class CableBundleDrawer {
     rightStartX: number,
     bottomStartY: number,
     spacingPx: number,
-    purpose: CategoryKey = 'control',
+    purpose: DrawingCategoryKey = 'control',
   ): ControlResult {
     const sortedBundles = Object.entries(bundles)
       .filter(([, cables]) => cables.length > 0)
@@ -1086,7 +1088,7 @@ class CableBundleDrawer {
 
 
     for (const [bundleKey, bundleCables] of sortedBundles) {
-      const layoutConfig = data.layoutConfig[purpose];
+      const layoutConfig = data.layoutConfig[purpose] ?? data.layoutConfig.control;
       const customBundleMaxRows = this.resolveBundleMaxRows(layoutConfig, bundleKey);
       const sortedCables = [...bundleCables].sort(
         (a, b) => getCableDiameter(b) - getCableDiameter(a),
@@ -1810,7 +1812,7 @@ class CableBundleDrawer {
     fromRight: boolean,
   ): PowerResult | ControlResult {
     const baseBottomY = data.originY + data.usableTrayHeightMm * data.canvasScale;
-    const layoutConfig = data.layoutConfig[purpose as CategoryKey];
+    const layoutConfig = data.layoutConfig[purpose as DrawingCategoryKey] ?? data.layoutConfig.control;
     for (let index = 0; index < cables.length; index += 3) {
       const group = cables.slice(index, index + 3);
       const orderedGroup = fromRight && group.length === 3 ? [group[1], group[0], group[2]] : group;
@@ -2022,7 +2024,7 @@ class CableBundleDrawer {
     const cableNumber = numberFromSortedOrder ?? (fallbackNumber > 0 ? fallbackNumber : null);
     const label = cableNumber !== null ? cableNumber.toString() : '?';
     data.placements.push({ cableId: cable.id, displayNumber: cableNumber ?? 0,
-      category: data.categoryByCableId.get(cable.id) ?? data.currentCategory, side: data.currentSide,
+      category: data.categoryByCableId.get(cable.id) ?? data.currentCategory, purposeKey: drawingPurposeKey(cable.purpose), side: data.currentSide,
       xPx: x, yPx: y, radiusPx: getCableDiameter(cable) * data.canvasScale / 2 });
 
     ctx.save();
@@ -2151,8 +2153,8 @@ export class TrayDrawingService {
     cableBundles: CableBundleMap | undefined,
     canvasScale: number,
     spacingMm?: number,
-    layoutConfig?: CategoryLayoutConfig,
-    options?: { rungHeightMm?: number | null; useTrefoilClamps?: boolean; categoryModes?: CategoryModes; customRanges?: Partial<Record<CategoryKey, CustomBundleRange[]>> },
+    layoutConfig?: DrawingLayoutConfig,
+    options?: { rungHeightMm?: number | null; useTrefoilClamps?: boolean; categoryModes?: CategoryModes; purposeModes?: PurposeModes; customRanges?: Partial<Record<DrawingCategoryKey, CustomBundleRange[]>> },
   ): TrayLayoutSummary | null {
     this.lastPlacements = []; this.lastDiagnostics = [];
     if (!canvas) {
@@ -2221,7 +2223,8 @@ export class TrayDrawingService {
       },
     };
 
-    const effectiveLayoutConfig: CategoryLayoutConfig = {
+    const effectiveLayoutConfig: DrawingLayoutConfig = {
+      generic: { ...(layoutConfig?.generic ?? defaultLayoutConfig.control), trefoil: false, trefoilSpacingBetweenBundles: false, applyPhaseRotation: false },
       power: layoutConfig?.power ?? defaultLayoutConfig.power,
       control: layoutConfig?.control ?? defaultLayoutConfig.control,
       mv: layoutConfig?.mv ?? defaultLayoutConfig.mv,
@@ -2241,6 +2244,7 @@ export class TrayDrawingService {
       options?.useTrefoilClamps ?? tray.useTrefoilClamps ?? false,
     );
     drawingData.categoryModes = options?.categoryModes ?? { ...DEFAULT_CATEGORY_MODES };
+    drawingData.purposeModes = options?.purposeModes ?? {};
     drawingData.customRanges = options?.customRanges ?? {};
 
     this.drawBaseTrayStructure(context, drawingData);
@@ -2406,29 +2410,31 @@ export class TrayDrawingService {
     const baseLeft = TrayConstants.canvasMargin + spacingPx;
     const baseRight = TrayConstants.canvasMargin + (data.tray.widthMm ?? 0) * data.canvasScale - spacingPx;
     const bottom = data.originY + data.usableTrayHeightMm * data.canvasScale;
-    const present = (category: CategoryKey) => Object.values(data.cableBundles[category] ?? {}).some(cables => cables.length > 0);
+    const present = (category: DrawingCategoryKey) => Object.values(data.cableBundles[category] ?? {}).some(cables => cables.length > 0);
     // Defaults are frozen from the complete input before a single explicit side is applied.
     const hasMv = present('mv'), hasPower = present('power');
-    type Family = 'power' | 'vfd' | 'control' | 'grounding';
-    type Group = { category: CategoryKey; family: Family; nativeSide: 'left' | 'right'; side: 'left' | 'right';
+    type Family = 'power' | 'vfd' | 'control' | 'grounding' | 'generic';
+    type Group = { category: DrawingCategoryKey; family: Family; nativeSide: 'left' | 'right'; side: 'left' | 'right';
       key: string; config: ProjectLayoutConfig; cables: Cable[]; signature: string; order: number };
     const groups: Group[] = [];
-    for (const category of CATEGORY_ORDER) {
+    for (const category of DRAWING_CATEGORY_ORDER) {
       const defaultSide = category === 'mv' ? 'left' : category === 'power' ? hasMv ? 'right' : 'left'
         : category === 'vfd' ? hasMv || hasPower ? 'right' : 'left' : 'right';
       for (const [key, cables] of Object.entries(data.cableBundles[category] ?? {})) {
-        const subsets = category === 'mv'
-          ? [cables.filter(cable => !isGroundingPurpose(cable.purpose)), cables.filter(cable => isGroundingPurpose(cable.purpose))]
-          : [cables];
+        const purposeKeys = [...new Set(cables.map(cable => drawingPurposeKey(cable.purpose)))].sort((a, b) =>
+          (category === 'mv' ? Number(isGroundingPurpose(a)) - Number(isGroundingPurpose(b)) : 0) || (a < b ? -1 : a > b ? 1 : 0));
+        const subsets = purposeKeys.map(purpose => cables.filter(cable => drawingPurposeKey(cable.purpose) === purpose));
         for (let index = 0; index < subsets.length; index++) {
           const selected = subsets[index]; if (!selected.length) continue;
           selected.forEach(cable => data.categoryByCableId.set(cable.id, category));
-          const grounding = category === 'mv' && index === 1;
+          const grounding = category === 'mv' && isGroundingPurpose(selected[0].purpose);
+          const purposeKey = drawingPurposeKey(selected[0].purpose);
           const nativeSide = grounding ? 'right' : defaultSide;
-          const side = data.categoryModes[category] === 'use-default' ? nativeSide : data.categoryModes[category];
-          const family: Family = grounding ? 'grounding' : category === 'control' ? 'control' : nativeSide === 'right' ? 'vfd' : 'power';
+          const mode = Object.hasOwn(data.purposeModes, purposeKey) ? data.purposeModes[purposeKey] : category === 'generic' ? 'use-default' : data.categoryModes[category];
+          const side = mode === 'use-default' ? nativeSide : mode;
+          const family: Family = category === 'generic' ? 'generic' : grounding ? 'grounding' : category === 'control' ? 'control' : nativeSide === 'right' ? 'vfd' : 'power';
           const custom = data.customRanges[category]?.find(range => `${range.min}-${range.max}` === key);
-          const originalConfig = data.layoutConfig[category];
+          const originalConfig = data.layoutConfig[category] ?? data.layoutConfig.control;
           const config = custom?.maxRows && originalConfig.bundleMaxRowsByKey?.[key] === undefined
             ? { ...originalConfig, bundleMaxRowsByKey: { ...originalConfig.bundleMaxRowsByKey, [key]: custom.maxRows } } : originalConfig;
           const bounds = custom ? { min: custom.min, max: custom.max, minInclusive: true } : DEFAULT_RANGE_BOUNDS[key] ?? { legacyKey: key };
@@ -2437,15 +2443,15 @@ export class TrayDrawingService {
             : family === 'vfd' ? ['30.1-40', '40.1-45'].includes(key) ? 'destination-grouped' : 'vfd-vertical'
               : family === 'power' && ['40.1-45', '45.1-60'].includes(key) ? 'hexagonal'
                 : family === 'power' && config.maxColumns === 1 ? 'vertical-bundle-column-spacing' : 'vertical';
-          const effectiveTrefoil = category !== 'control' && !grounding && config.trefoil;
-          const signature = JSON.stringify({ side, bounds, packing, maxRows: config.bundleMaxRowsByKey?.[key] ?? custom?.maxRows ?? config.maxRows,
+          const effectiveTrefoil = category !== 'generic' && category !== 'control' && !grounding && config.trefoil;
+          const signature = JSON.stringify({ side, bounds, packing, purpose: category === 'generic' ? purposeKey : undefined, maxRows: config.bundleMaxRowsByKey?.[key] ?? custom?.maxRows ?? config.maxRows,
             maxColumns: config.maxColumns, cableSpacing: config.cableSpacing, bundleSpacing: config.bundleSpacing,
             trefoil: effectiveTrefoil, phase: effectiveTrefoil && config.applyPhaseRotation,
             phaseGuard: effectiveTrefoil ? category === 'mv' ? 'mv' : 'ordered-endpoints' : null,
             trefoilSpacing: effectiveTrefoil && config.trefoilSpacingBetweenBundles, clamps: effectiveTrefoil && data.useTrefoilClamps });
           const existing = groups.find(group => group.signature === signature);
           if (existing) existing.cables.push(...selected);
-          else groups.push({ category, family, nativeSide, side, key, config, cables: [...selected], signature, order: CATEGORY_ORDER.indexOf(category) });
+          else groups.push({ category, family, nativeSide, side, key, config, cables: [...selected], signature, order: DRAWING_CATEGORY_ORDER.indexOf(category) });
         }
       }
     }
@@ -2475,7 +2481,7 @@ export class TrayDrawingService {
       const bundles = { [group.key]: group.cables };
       let nativeCursor: number;
       if (group.family === 'grounding') nativeCursor = this.bundleDrawer.drawControlBundles(recording.context, local, bundles, baseRight, bottom, spacingPx, 'mv').rightStartX;
-      else if (group.family === 'control') nativeCursor = this.bundleDrawer.drawControlBundles(recording.context, local, bundles, baseRight, bottom, spacingPx).rightStartX;
+      else if (group.family === 'control' || group.family === 'generic') nativeCursor = this.bundleDrawer.drawControlBundles(recording.context, local, bundles, baseRight, bottom, spacingPx, group.category).rightStartX;
       else if (group.family === 'vfd') {
         local.layoutConfig.vfd = group.config;
         nativeCursor = this.bundleDrawer.drawVfdBundles(recording.context, local, bundles, baseRight, bottom, spacingPx).rightStartX;
