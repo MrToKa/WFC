@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 import type { PathFinderRepository } from './repository.js';
 
-const seams=vi.hoisted(()=>({collect:vi.fn(),persist:vi.fn(),transaction:vi.fn(),automatic:vi.fn()}));
+const seams=vi.hoisted(()=>({collect:vi.fn(),persist:vi.fn(),transaction:vi.fn(),automatic:vi.fn(),requalify:vi.fn(),recover:vi.fn()}));
 vi.mock('./dependencyBatch.js',()=>({collectDependencyBatchInTransaction:seams.collect}));
 vi.mock('./revisionResultRepository.js',()=>({persistRevisionAdmission:seams.persist,verifyRevisionResultForProposal:vi.fn()}));
 vi.mock('./auth.js',async original=>({...await original<typeof import('./auth.js')>(),principalTransaction:seams.transaction}));
 vi.mock('./automaticPairMandates.js',()=>({appendAutomaticPairMandatesInTransaction:seams.automatic}));
+vi.mock('./endpointBindingRequalification.js',()=>({requalifyAutomaticEndpointBindingsInTransaction:seams.requalify}));
+vi.mock('./crossModelEndpointRecovery.js',()=>({recoverCrossModelEndpointsInTransaction:seams.recover}));
 import {createPathFinderJobs} from './jobs.js';
 import {createJobSchema,defaultOptions} from './jobContracts.js';
 import {PathFinderError} from './errors.js';
@@ -39,6 +41,17 @@ function fixture() {
 beforeEach(()=>{vi.clearAllMocks();seams.collect.mockReset();seams.persist.mockReset();seams.transaction.mockReset();seams.persist.mockResolvedValue(undefined);});
 
 describe('manual calculation uses the same exact cable scope for matching and admission',()=>{
+  it('recovers verified shared endpoints before freezing a forced whole-project run',async()=>{
+    const f=fixture();
+    const collect=seams.collect.getMockImplementation()!;
+    seams.collect.mockImplementationOnce(async (...args)=>({...await collect(...args),registryRevision:'9'}));
+    const result=await f.jobs.create(projectId,who,createJobSchema.parse({expectedRegistryRevision:'7',options,force:true,automaticPairPolicy}));
+    expect(seams.requalify).toHaveBeenCalledExactlyOnceWith(f.client,projectId,who,expect.any(AbortSignal));
+    expect(seams.recover).toHaveBeenCalledExactlyOnceWith(f.client,projectId,who,seams.requalify.mock.calls[0][3]);
+    expect(seams.requalify.mock.invocationCallOrder[0]).toBeLessThan(seams.recover.mock.invocationCallOrder[0]);
+    expect(seams.recover.mock.invocationCallOrder[0]).toBeLessThan(seams.collect.mock.invocationCallOrder[0]);
+    expect(result.registryRevision).toBe('9');
+  });
   it('strictly accepts automatic pair authority outside mathematical options without upgrading old requests',()=>{
     const legacy={expectedRegistryRevision:'7',cableIds:[cableId],options};
     expect(createJobSchema.parse(legacy)).toEqual(legacy);

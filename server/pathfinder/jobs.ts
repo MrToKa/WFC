@@ -8,6 +8,8 @@ import type { PathFinderRepository } from './repository.js';
 import { defaultOptions, type createJobSchema, type BarrierDependencySnapshot, type DependencySnapshot, type JobPrincipal } from './jobContracts.js';
 import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
 import { assertLoginNotExpired, principalTransaction } from './auth.js';
+import { requalifyAutomaticEndpointBindingsInTransaction } from './endpointBindingRequalification.js';
+import { recoverCrossModelEndpointsInTransaction } from './crossModelEndpointRecovery.js';
 import { isGrantPrincipal, grantProvenance, type OperationPrincipal } from './operationAuthority.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { collectDependencyBatchInTransaction, type DependencyBatch } from './dependencyBatch.js';
@@ -171,6 +173,13 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         if (revision.registry_revision !== matched.registryRevision) throw new PathFinderError('REGISTRY_CONFLICT',409);
         await client.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
         const deadline=Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
+        if (input.force && input.automaticPairPolicy && input.cableIds === undefined) {
+          // Recalculate all uses the same verified endpoint recovery as continuous recalculation.
+          // Freeze the job after recovery so its dependencies reference the updated heads.
+          const signal = AbortSignal.timeout(RECALCULATION_LIMITS.collectionMilliseconds);
+          await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,signal);
+          await recoverCrossModelEndpointsInTransaction(client,projectId,who,signal);
+        }
         const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline,
           dependencyVersion:'pathfinder.dependencies.v8'});
         const calculationSha256=batchHash(batch,input.timeoutMilliseconds??60000);
@@ -192,7 +201,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
           policy:input.automaticPairPolicy,requestSha256:requestHash,source:{kind:'explicit-job'},
           items:batch.items.flatMap(item=>item.dependencies?[{cableId:item.id,cableWriteRevision:item.cable.cable_write_revision,
             dependencyHash:hash(item.dependencies)}]:[]).sort((a,b)=>a.cableId<b.cableId?-1:1)},()=>{if(Date.now()>deadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);});
-        return {jobId,duplicate:false,registryRevision:matched.registryRevision};
+        return {jobId,duplicate:false,registryRevision:batch.registryRevision};
       });
     },
     async state(projectId:string,who:JobPrincipal) {

@@ -64,11 +64,11 @@ async function fixture() {
 }
 
 describe('same-model fixed endpoint requalification', () => {
-  it('automatic preflight carries a stale saved end when its other end is unbound, then performs no repeated writes',async()=>{
+  it.each(['unbound','changed'] as const)('automatic preflight carries a stale saved end when the other end is %s',async other=>{
     const f=await fixture(),cable=f.state.cables[0],before=f.state.bindings.get(f.state.heads.get(f.fromId)!)!;
-    cable.to_location='NO_BOUND_LOCATION';
+    if(other==='unbound')cable.to_location='NO_BOUND_LOCATION';
     f.state.locations.get(f.toId)!.revision='99';
-    f.state.cables.unshift({id:id(951),from_location:'Alias',to_location:'NO_BOUND_LOCATION'});
+    f.state.cables.unshift({id:id(951),from_location:'Alias',to_location:cable.to_location});
     const original=f.query.getMockImplementation()!;
     f.query.mockImplementation(async(sql,args=[])=>{
       if(sql.startsWith('/* automatic-endpoint-recovery:cables */'))return {rows:[f.state.cables[0],cable]};
