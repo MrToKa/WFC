@@ -17,6 +17,28 @@ describe('durable recalculation command and generation repository (synthetic SQL
   it('disable clears durable pause and invalidates the old epoch without changing engineering generation',async()=>{const x=recalculationFixture();x.db.state.paused=true;const value=await createRecalculationRepository(x.pool,x.adapter).command(f.projectId,x.who,{schemaVersion:enable.schemaVersion,action:'disable',expectedControlRevision:'1',idempotencyKey:f.key,reason:'Explicit disable'});expect(value.context).toMatchObject({enabled:false,paused:false,status:'disabled',desiredGeneration:'2'});expect(x.db.state.authority_epoch).toBe('2');});
   it('duplicate still checks current role before revealing a stored receipt',async()=>{const x=recalculationFixture(),r=createRecalculationRepository(x.pool,x.adapter);await r.command(f.projectId,x.who,enable);x.db.authority=false;await expect(r.command(f.projectId,x.who,enable)).rejects.toMatchObject({code:'ADMIN_REQUIRED'});});
   it('does not disclose project existence before current admin authority',async()=>{const x=recalculationFixture();x.db.authority=false;x.db.projectExists=false;await expect(createRecalculationRepository(x.pool,x.adapter).context(f.projectId,x.who)).rejects.toMatchObject({code:'ADMIN_REQUIRED'});});
+  it('reads committed status with a compatible project lock while commands keep the write mutex',async()=>{
+    const x=recalculationFixture(),repository=createRecalculationRepository(x.pool,x.adapter);
+    await repository.context(f.projectId,x.who);
+    expect(x.db.queries.slice(0,4)).toEqual(['BEGIN','SET TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+      "SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'",
+      'SELECT id FROM projects WHERE id=$1 FOR KEY SHARE']);
+    expect(x.db.queries).toContain('SELECT is_admin FROM users WHERE id=$1 FOR SHARE');
+    expect(x.db.queries).toContain('SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings WHERE login_id=$1 FOR SHARE');
+    x.db.queries.length=0;
+    await repository.command(f.projectId,x.who,enable);
+    expect(x.db.queries).toContain('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE');
+    expect(x.db.queries).not.toContain('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+  });
+  it('reports a status snapshot invalidated by concurrent authority changes as retryable database busy',async()=>{
+    const x=recalculationFixture(),query=x.query.getMockImplementation()!;
+    x.query.mockImplementation((sql,values)=>{
+      if(sql==='SELECT is_admin FROM users WHERE id=$1 FOR SHARE')throw Object.assign(new Error('snapshot changed'),{code:'40001'});
+      return query(sql,values);
+    });
+    await expect(createRecalculationRepository(x.pool,x.adapter).context(f.projectId,x.who)).rejects.toMatchObject({code:'RECALCULATION_DATABASE_BUSY',status:503});
+    expect(x.db.queries.at(-1)).toBe('ROLLBACK');
+  });
   it.each([
     {state:{paused:true},expected:'paused'},
     {state:{authority_expires_at:new Date(0).toISOString()},expected:'awaiting_authority'},

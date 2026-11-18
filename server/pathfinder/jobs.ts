@@ -24,6 +24,7 @@ import { readCurrentBarrierAdmissionIntent } from './barrierCalculationScope.js'
 import { barrierHistoricalUnavailableMessage, isExpectedBarrierCurrentnessError } from './barrierCurrentness.js';
 import { appendAutomaticPairMandatesInTransaction } from './automaticPairMandates.js';
 import { automaticPairStatuses } from '../../shared/pathfinderAutomaticPair.js';
+import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../shared/pathfinderCalculationSubmission.js';
 
 type Row = Record<string,any>;
 // The full admission history is separately paginated by Cable revision results.
@@ -190,19 +191,26 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
           if(existing)return existing;
         }
         await client.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
+        const bulkDeadline=bulkSubmission ? Date.now()+BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds : undefined;
+        const checkBulkDeadline=()=>{if(bulkDeadline!==undefined&&Date.now()>bulkDeadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);};
         // A keyed submission owns the project mutex from the receipt lookup
         // through matching and admission. A retry cannot observe a committed
         // registry change from its original invocation without its job receipt.
-        const matched = legacyMatch ?? await registry.match(projectId,who,input.expectedRegistryRevision,undefined,client);
+        const matched = legacyMatch ?? await registry.match(projectId,who,input.expectedRegistryRevision,undefined,client,checkBulkDeadline);
         const revision = (await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR UPDATE',[projectId])).rows[0];
         if (revision.registry_revision !== matched.registryRevision) throw new PathFinderError('REGISTRY_CONFLICT',409);
-        const deadline=Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
+        const deadline=bulkDeadline??Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
         if (input.force && input.automaticPairPolicy && input.cableIds === undefined) {
           // Recalculate all uses the same verified endpoint recovery as continuous recalculation.
           // Freeze the job after recovery so its dependencies reference the updated heads.
-          const signal = AbortSignal.timeout(RECALCULATION_LIMITS.collectionMilliseconds);
-          await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,signal);
-          await recoverCrossModelEndpointsInTransaction(client,projectId,who,signal);
+          checkBulkDeadline();
+          const recovery = new AbortController();
+          const timer = setTimeout(() => recovery.abort(new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503)),
+            Math.max(0,deadline-Date.now()));
+          try {
+            await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,recovery.signal);
+            await recoverCrossModelEndpointsInTransaction(client,projectId,who,recovery.signal);
+          } finally { clearTimeout(timer); }
         }
         const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline,
           dependencyVersion:'pathfinder.dependencies.v8'});

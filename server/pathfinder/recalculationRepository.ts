@@ -55,19 +55,24 @@ async function connect(pool: Pool): Promise<PoolClient> {
   finally{if(timer)clearTimeout(timer);}
 }
 /** State locks are intentionally absent here: the enrollment callback takes them LAST. */
-export async function recalculationTransaction<T>(pool:Pool,projectId:string,who:JobPrincipal,operation:(client:PoolClient)=>Promise<T>,signal?:AbortSignal):Promise<T>{
+export async function recalculationTransaction<T>(pool:Pool,projectId:string,who:JobPrincipal,operation:(client:PoolClient)=>Promise<T>,signal?:AbortSignal,options:{snapshot?:boolean}={}):Promise<T>{
   policyUuidSchema.parse(projectId);policyUuidSchema.parse(who.userId);policyUuidSchema.parse(who.loginId);assertLoginNotExpired(who);signal?.throwIfAborted();
   const c=await connect(pool);let committing=false,discard=false;
   try{
-    await c.query('BEGIN');await c.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
-    const exists=(await c.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE',[projectId])).rows.length===1;
+    await c.query('BEGIN');
+    // Poll committed status while a writer holds the project mutex. Keep the
+    // state and progress reads in the same snapshot and retain authority locks.
+    if(options.snapshot)await c.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    await c.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
+    const exists=(await c.query(`SELECT id FROM projects WHERE id=$1 FOR ${options.snapshot?'KEY SHARE':'NO KEY UPDATE'}`,[projectId])).rows.length===1;
     const account=(await c.query<{is_admin:boolean}>('SELECT is_admin FROM users WHERE id=$1 FOR SHARE',[who.userId])).rows[0];
     if(!account)return fail('LOGIN_REVOKED',401);if(!account.is_admin)return fail('ADMIN_REQUIRED',403);
     await requireCurrentLogin(c,who);if(!exists)return fail('PROJECT_NOT_FOUND',404);
     signal?.throwIfAborted();const value=await operation(c);signal?.throwIfAborted();assertLoginNotExpired(who);committing=true;await c.query('COMMIT');return value;
   }catch(error){discard=committing;try{await c.query('ROLLBACK');}catch{discard=true;}
     if(committing)return fail('RECALCULATION_COMMIT_OUTCOME_UNKNOWN',503);
-    if(['55P03','57014'].includes((error as {code?:string})?.code??''))return fail('RECALCULATION_DATABASE_BUSY',503);
+    const code=(error as {code?:string})?.code;
+    if(code==='55P03'||code==='57014'||(options.snapshot&&code==='40001'))return fail('RECALCULATION_DATABASE_BUSY',503);
     throw error;
   }finally{c.release(discard?true:undefined);}
 }
@@ -203,7 +208,7 @@ export async function pauseRecalculationForJob(c:PoolClient,input:{projectId:str
 export function createRecalculationRepository(pool:Pool,adapter:RecalculationJobAdapter){
   const repository={
     async authorize(projectId:string,who:JobPrincipal,signal?:AbortSignal){return authorizePathFinderPreflight(pool,projectId,who,signal);},
-    async context(projectId:string,who:JobPrincipal){return recalculationTransaction(pool,projectId,who,c=>context(c,projectId,who));},
+    async context(projectId:string,who:JobPrincipal){return recalculationTransaction(pool,projectId,who,c=>context(c,projectId,who),undefined,{snapshot:true});},
     async command(projectId:string,who:JobPrincipal,raw:RecalculationCommand,signal?:AbortSignal):Promise<RecalculationReceipt>{
       const command=recalculationCommandSchema.parse(raw),requestSha256=hash(command);
       return recalculationTransaction(pool,projectId,who,async c=>{

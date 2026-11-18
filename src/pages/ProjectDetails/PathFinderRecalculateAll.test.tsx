@@ -66,6 +66,15 @@ describe('whole-project background pass', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('not confirmed'));
     expect(screen.getByRole('button', { name: 'Assign From' })).toBeEnabled(); expect(submitAllPathFinderCalculations).toHaveBeenCalledOnce();
   });
+  it('shows the server preparation timeout and preserves the original request for retry', async () => {
+    const props = setup();
+    vi.mocked(submitAllPathFinderCalculations).mockResolvedValue({ kind: 'unknown', code: 'RECALCULATION_COLLECTION_DEADLINE' });
+    render(<PathFinderRecalculateAll {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Recalculate all the cables' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('time limit while preparing the cable list');
+    expect(screen.getByRole('button', { name: 'Retry same recalculation request' })).toBeEnabled();
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(vi.mocked(submitAllPathFinderCalculations).mock.calls[0][2]);
+  });
   it('does not call manual or uncertain output saved', () => {
     expect(backgroundCalculationCounts(makeJob('complete', [item('calculated'), item('calculated', 'unknown'), item('calculated', 'review-required')]))).toMatchObject({ saved: 0, review: 1, unsaved: 2 });
     expect(backgroundCalculationCounts(makeJob('complete', [{ ...item('locations_required'), state: 'blocked' }]))).toMatchObject({ blocked: 1, calculated: 0 });

@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+export const BULK_CALCULATION_SUBMISSION_LIMITS = Object.freeze({
+  admissionMilliseconds: 120_000,
+  responseMilliseconds: 150_000,
+});
+
 /** This invocation did not commit a calculation job. Registry matching may
  * already have committed; this is not evidence about any earlier invocation. */
 export const calculationSubmissionRefusalSchema = z.object({

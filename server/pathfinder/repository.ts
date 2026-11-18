@@ -202,7 +202,7 @@ export function createPathFinderRepository(pool: Pool) {
       });
     },
     /** A supplied transaction must already hold this project's mutex and current login authority. */
-    async match(projectId: string, who: JobPrincipal, expectedRegistryRevision: string, cableIds?: string[], withinTransaction?: PoolClient) {
+    async match(projectId: string, who: JobPrincipal, expectedRegistryRevision: string, cableIds?: string[], withinTransaction?: PoolClient, checkDeadline = () => {}) {
       const actorId = who.userId;
       const match = async (client: PoolClient) => {
         await stateRevision(client,projectId,expectedRegistryRevision);
@@ -226,6 +226,7 @@ export function createPathFinderRepository(pool: Pool) {
         let created = 0, bound = 0;
         const neededLocations = new Set<string>();
         for (const endpoint of endpoints) {
+          checkDeadline();
           const normalized = normalizeLocation(endpoint.name); if (!normalized) continue;
           let locationId = (await client.query<Row>('SELECT location_id FROM pf_location_aliases WHERE project_id=$1 AND normalized_alias=$2',[projectId,normalized])).rows[0]?.location_id;
           if (!locationId) {
@@ -237,6 +238,7 @@ export function createPathFinderRepository(pool: Pool) {
           neededLocations.add(locationId);
         }
         if (artifact) {
+          checkDeadline();
           const {list} = await locations(client,projectId,model.active_model_version_id,artifact.id,requested ? [...neededLocations].sort() : undefined);
           const unresolved=list.filter(location=>!(location.binding&&(location.binding.modelVersionId===model.active_model_version_id&&location.binding.source==='manual'||location.binding.status==='confirmed')));
           let verifiedCandidates:Map<string,AutomaticEndpointCandidateResult>|null=null;
@@ -249,6 +251,7 @@ export function createPathFinderRepository(pool: Pool) {
               throw new PathFinderError('ENDPOINT_PREPARATION_REQUIRED',409,'Prepare the current model again with visible equipment Properties before matching.');
           }
           for (const location of unresolved) {
+            checkDeadline();
             const names = [...new Set([location.name,...location.aliases].map(normalizeLocation))];
             const verified=verifiedCandidates?.get(location.id);
             const candidates:{rows:Row[]} = suggestionsOnly?{rows:(verified?.candidateObjectIds??[]).map(object_id=>({object_id}))}:await client.query<Row>(`SELECT * FROM pf_model_objects WHERE project_id=$1 AND artifact_id=$2 AND geometry_role='object'
@@ -270,6 +273,7 @@ export function createPathFinderRepository(pool: Pool) {
             await client.query('DELETE FROM pf_location_matches WHERE project_id=$1 AND location_id=$2 AND model_version_id=$3',[projectId,location.id,model.active_model_version_id]);
           }
         }
+        checkDeadline();
         return {createdLocations:created,matchedLocations:bound,registryRevision:created || bound ? await bumpRegistry(client,projectId) : expectedRegistryRevision};
       };
       return withinTransaction ? match(withinTransaction) : registryTransaction(pool,projectId,who,match);

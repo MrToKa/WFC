@@ -118,8 +118,10 @@ export async function readRequalifiedEndpointObject(client: PoolClient, projectI
   }
 }
 
-/** Caller owns the project/authority transaction; cached frames are immutable and transaction-local. */
-export async function requalifyCableEndpointBindingsInTransaction(client: PoolClient, projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal, frameCache?: FrameCache, onlyLocationId?: string) {
+/** The batch caller holds the project mutex and has already read the locked current publication. */
+async function requalifyCableEndpointBindingsInTransaction(client: PoolClient, projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal,
+  batch?: { current: EndpointCurrentScope; frames: FrameCache; locationId: string }) {
+  const onlyLocationId = batch?.locationId;
   const command = endpointRequalifySchema.parse(raw), request = { schemaVersion: 'wfc.pf.endpoint-requalify-owner.v1', command,
     ...(onlyLocationId ? { onlyLocationId } : {}) };
   const commandSha256 = endpointBindingHash(command);
@@ -134,7 +136,7 @@ export async function requalifyCableEndpointBindingsInTransaction(client: PoolCl
         return fail('ENDPOINT_REQUALIFICATION_RECEIPT_INVALID');
       return { ...receipt, duplicate: true };
     }
-    const current = await readCurrentEndpointBindingContext(client, projectId);
+    const current = batch?.current ?? await readCurrentEndpointBindingContext(client, projectId);
     if (!current || !same(current, command.expectedCurrent)) return fail('ENDPOINT_REQUALIFICATION_CONTEXT_CHANGED');
     const cable = (await client.query<{ from_location: string | null; to_location: string | null }>(`/* endpoint-requalify:cable */
       SELECT from_location,to_location FROM cables WHERE project_id=$1 AND id=$2 FOR SHARE`, [projectId, command.cableId])).rows[0];
@@ -156,7 +158,7 @@ export async function requalifyCableEndpointBindingsInTransaction(client: PoolCl
         || binding.bindingRevision !== row.binding_revision || contentSha256 !== row.record_sha256 || endpointBindingHash(body) !== contentSha256) return fail('ENDPOINT_HEAD_INTEGRITY');
       byLocation.set(row.location_id, { row, binding });
     }
-    const updatedLocationIds: string[] = [], frames = frameCache ?? new Map<string, Promise<Awaited<ReturnType<typeof readEndpointPublicationFrame>>>>();
+    const updatedLocationIds: string[] = [], frames = batch?.frames ?? new Map();
     for (const { row, binding } of byLocation.values()) {
       check();
       if (scopeMatches(binding, current) && (binding.mode !== 'object-derived' || binding.sourceObject?.traceId === current.traceId) && (binding.sameModelReuse
@@ -223,7 +225,8 @@ export async function requalifyAutomaticEndpointBindingsInTransaction(client: Po
       attempted.add(id);
       await client.query('SAVEPOINT automatic_endpoint_recovery');
       try{
-        const receipt=await requalifyCableEndpointBindingsInTransaction(client,projectId,who,{schemaVersion:'wfc.pf.endpoint-requalify.v1',cableId:cable.id,idempotencyKey:randomUUID(),expectedCurrent:current},signal,frames,id);
+        const receipt=await requalifyCableEndpointBindingsInTransaction(client,projectId,who,{schemaVersion:'wfc.pf.endpoint-requalify.v1',cableId:cable.id,idempotencyKey:randomUUID(),expectedCurrent:current},signal,
+          {current,frames,locationId:id});
         recovered+=receipt.updatedLocationIds.length;
         await client.query('RELEASE SAVEPOINT automatic_endpoint_recovery');
       }catch(error){

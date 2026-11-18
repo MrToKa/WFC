@@ -79,6 +79,15 @@ function mockAutomaticRecoveryReads(f: Awaited<ReturnType<typeof fixture>>, cabl
 }
 
 describe('same-model endpoint requalification', () => {
+  it('reads the locked current publication once while carrying multiple saved locations', async () => {
+    const f=await fixture();
+    mockAutomaticRecoveryReads(f,[f.state.cables[0]]);
+    f.query.mockClear();
+    expect(await requalifyAutomaticEndpointBindingsInTransaction(f.client as unknown as PoolClient,f.projectId,f.who,AbortSignal.timeout(30000))).toBe(2);
+    expect(f.query.mock.calls.filter(([sql])=>sql.startsWith('SELECT p.current_aggregate_id'))).toHaveLength(1);
+    expect(f.query.mock.calls.filter(([sql])=>sql.startsWith('UPDATE pf_endpoint_binding_heads'))).toHaveLength(2);
+  });
+
   it('carries the other saved endpoint for an exact location impact without rewriting its originating binding', async () => {
     const f = await fixture();
     const cable = f.state.cables[0];

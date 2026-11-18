@@ -16,7 +16,7 @@ export function recalculationFixture(){
   const query=vi.fn(async(raw:string|{text:string},p:any[]=[])=>{
     const sql=typeof raw==='string'?raw:raw.text;db.queries.push(sql);
     if(sql==='BEGIN'){saved=clone({state:db.state,commands:[...db.commands],enrollments:[...db.enrollments],claim:db.claim,jobs:[...db.jobs]});return result();}
-    if(sql.startsWith('SET LOCAL'))return result();
+    if(sql.startsWith('SET LOCAL')||sql==='SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')return result();
     if(sql.startsWith('/* automatic-endpoint-recovery:cables */')||sql.startsWith('/* cross-model-endpoints:needed */'))return result();
     if(sql==='COMMIT'){saved=undefined;if(db.commitLost)throw new Error('synthetic lost acknowledgement');return result();}
     if(sql==='ROLLBACK'){if(db.rollbackFails)throw new Error('synthetic rollback lost');if(saved){db.state=saved.state;db.commands=new Map(saved.commands);db.enrollments=new Map(saved.enrollments);db.claim=saved.claim;db.jobs=new Map(saved.jobs);}saved=undefined;return result();}

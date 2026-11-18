@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Caption1, ProgressBar, Spinner } from '@fluentui/react-components';
 import { bulkCalculationRequestSchema, fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCalculationSubmission, type PathFinderJob, type PathFinderPreferences, type PathFinderState } from '@/api/pathfinder';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
+import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../../shared/pathfinderCalculationSubmission';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
 import { generateId } from '@/utils/generateId';
 
@@ -102,7 +103,7 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     setPending(pendingRequest(value, projectId));
   };
   const submit = async (body: BulkRequest, marker: string, signal: AbortSignal) => {
-    const deadline = pathFinderRequestDeadline(signal, 60_000, () => new Error('Calculation admission timed out.'));
+    const deadline = pathFinderRequestDeadline(signal, BULK_CALCULATION_SUBMISSION_LIMITS.responseMilliseconds, () => new Error('Calculation admission timed out.'));
     let result: PathFinderCalculationSubmission;
     try { result = await deadline.wait(() => submitAllPathFinderCalculations(projectId, token, body, { signal: deadline.signal })); }
     catch { result = { kind: 'unknown', code: 'CALCULATION_SUBMISSION_UNKNOWN' }; }
@@ -114,7 +115,10 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       } catch { /* The persisted request still identifies the same job. */ }
       observeJob(result.jobId);
     } else if (result.kind === 'unknown') {
-      setJob(null); setJobId(null); setPending(body); setError(unknownMessage);
+      setJob(null); setJobId(null); setPending(body);
+      setError(result.code === 'RECALCULATION_COLLECTION_DEADLINE'
+        ? 'The server reached its time limit while preparing the cable list. Retry the same request to check or restart that preparation.'
+        : unknownMessage);
     } else {
       if (localStorage.getItem(storageKey) === marker) localStorage.removeItem(storageKey);
       observeJob(null);

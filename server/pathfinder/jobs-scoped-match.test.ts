@@ -78,7 +78,7 @@ describe('manual calculation uses the same exact cable scope for matching and ad
     expect(await f.jobs.create(projectId,who,input)).toEqual({jobId:submissionId,duplicate:false,registryRevision:'8'});
     expect(seams.transaction).toHaveBeenCalledOnce();
     expect(seams.transaction.mock.invocationCallOrder[0]).toBeLessThan(f.match.mock.invocationCallOrder[0]);
-    expect(f.match).toHaveBeenCalledExactlyOnceWith(projectId,who,'7',undefined,f.client);
+    expect(f.match).toHaveBeenCalledExactlyOnceWith(projectId,who,'7',undefined,f.client,expect.any(Function));
     expect(seams.collect.mock.calls[0][0]).toBe(f.client);
     f.match.mockRejectedValue(new PathFinderError('REGISTRY_CONFLICT',409));
     const renewed={...who,loginId:id(42)};
@@ -100,6 +100,33 @@ describe('manual calculation uses the same exact cable scope for matching and ad
     expect(f.match).not.toHaveBeenCalled();
     expect(seams.collect).not.toHaveBeenCalled();
     expect(seams.persist).not.toHaveBeenCalled();
+  });
+  it('admits a keyed bulk pass when verified endpoint recovery and sealing exceed the old shared deadline',async()=>{
+    const f=fixture(),submissionId=id(41),now=vi.spyOn(Date,'now');
+    let elapsed=0;
+    const started=Date.now();
+    now.mockImplementation(()=>started+elapsed);
+    try {
+      seams.requalify.mockImplementationOnce(async()=>{elapsed=25_000;});
+      seams.persist.mockImplementationOnce(async()=>{elapsed=35_000;});
+      seams.automatic.mockImplementationOnce(async(_client,_input,check:()=>void)=>{elapsed=55_000;check();});
+      const input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId});
+      expect(await f.jobs.create(projectId,who,input)).toEqual({jobId:submissionId,duplicate:false,registryRevision:'8'});
+    } finally { now.mockRestore(); }
+  });
+  it('refuses expired keyed preparation before creating a job',async()=>{
+    const f=fixture(),now=vi.spyOn(Date,'now');
+    const started=Date.now();
+    try {
+      f.match.mockImplementationOnce(async(_project,_who,_revision,_ids,_client,check:()=>void)=>{
+        now.mockReturnValue(started+120_001);
+        check();
+      });
+      const input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId:id(41)});
+      await expect(f.jobs.create(projectId,who,input)).rejects.toMatchObject({code:'RECALCULATION_COLLECTION_DEADLINE',status:503});
+      expect(seams.collect).not.toHaveBeenCalled();
+      expect(seams.persist).not.toHaveBeenCalled();
+    } finally { now.mockRestore(); }
   });
   it('checks the locked job receipt before refusing a stale registry on a keyed retry',async()=>{
     const f=fixture(),submissionId=id(41),input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId});
