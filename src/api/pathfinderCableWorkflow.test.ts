@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy';
 import { cableWorkflowPageSchema } from '../../shared/pathfinderCableWorkflow';
 import { cableWorkflowQueryHashInput, cableWorkflowQuerySchema, cableWorkflowDetailQueryHashInput, cableWorkflowDetailQuerySchema } from '../../shared/pathfinderCableWorkflowQueries';
-import { fetchHistoricalSavedPath, fetchPathFinderCableWorkflowPage, fetchPathFinderCableWorkflowDetail, CABLE_WORKFLOW_REQUEST_MILLISECONDS, CABLE_WORKFLOW_RESPONSE_BYTES } from './pathfinderCableWorkflow';
+import { collectFilteredCableIds, fetchHistoricalSavedPath, fetchPathFinderCableWorkflowPage, fetchPathFinderCableWorkflowDetail,
+  CABLE_WORKFLOW_REQUEST_MILLISECONDS, CABLE_WORKFLOW_RESPONSE_BYTES } from './pathfinderCableWorkflow';
 
 const id = (n: number) => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const project = id(1), cable = id(10), hash = 'a'.repeat(64);
@@ -140,5 +141,41 @@ describe('bounded read-only cable workflow transport', () => {
     const pending = expect(fetchPathFinderCableWorkflowPage(project, 'token', {}, abort.signal)).rejects.toMatchObject({ name: 'AbortError' });
     abort.abort(); await pending; finish(new Response(new ReadableStream({ cancel }))); await Promise.resolve();
     expect(cancel).toHaveBeenCalledOnce();
+  });
+});
+
+describe('complete filtered cable scope', () => {
+  const query = cableWorkflowQuerySchema.parse({ filter: 'all', search: 'Å_100%', secondaryDistanceMeters: 3 });
+  const collect = () => collectFilteredCableIds(project, 'token', query, hash, new AbortController().signal);
+
+  it('starts at the first page and includes matches after an empty continuing portion', async () => {
+    const first = fixture(query), last = id(30);
+    vi.mocked(fetch).mockResolvedValueOnce(response({ ...first, nextCursor: 'first_boundary' }))
+      .mockResolvedValueOnce(response({ ...first, rows: [], scannedThroughCableId: id(20), nextCursor: 'empty_boundary' }))
+      .mockResolvedValueOnce(response({ ...first, scannedThroughCableId: last, rows: [
+        { ...first.rows[0], cable: { ...first.rows[0].cable, id: last } },
+      ] }));
+    await expect(collect()).resolves.toEqual([cable, last]);
+    const sent = vi.mocked(fetch).mock.calls.map(([url]) => new URL(String(url), 'http://local').searchParams);
+    expect(sent.map(params => params.get('cursor'))).toEqual([null, 'first_boundary', 'empty_boundary']);
+    for (const params of sent) {
+      expect(params.get('search')).toBe('Å_100%');
+      expect(params.get('filter')).toBe('all');
+      expect(params.get('secondaryDistanceMeters')).toBe('3');
+    }
+  });
+
+  it.each(['different-context', 'non-advancing-boundary', 'duplicate-id'] as const)('rejects the whole scope on %s', async failure => {
+    const first = fixture(query), last = id(20);
+    const second = {
+      ...first,
+      contextSha256: failure === 'different-context' ? 'b'.repeat(64) : hash,
+      scannedThroughCableId: failure === 'non-advancing-boundary' ? cable : last,
+      rows: failure === 'duplicate-id' ? first.rows : [],
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(response({ ...first, nextCursor: 'first_boundary' }))
+      .mockResolvedValueOnce(response(second));
+    await expect(collect()).rejects.toMatchObject({ code: 'WORKFLOW_CONTEXT_CHANGED', status: 409 });
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

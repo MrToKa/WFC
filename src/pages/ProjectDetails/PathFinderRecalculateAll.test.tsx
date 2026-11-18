@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderJob, type PathFinderState } from '@/api/pathfinder';
 import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
-import { backgroundCalculationCounts, PathFinderRecalculateAll } from './PathFinderRecalculateAll';
+import { collectFilteredCableIds } from '@/api/pathfinderCableWorkflow';
+import { backgroundCalculationCounts, PathFinderRecalculateAll, useFilteredCableRecalculation } from './PathFinderRecalculateAll';
 vi.mock('@/api/pathfinder', async original => ({ ...await original<typeof import('@/api/pathfinder')>(), fetchLegacyBulkCalculationJob: vi.fn(), fetchPathFinderJob: vi.fn(), submitAllPathFinderCalculations: vi.fn() }));
+vi.mock('@/api/pathfinderCableWorkflow', async original => ({ ...await original<typeof import('@/api/pathfinderCableWorkflow')>(), collectFilteredCableIds: vi.fn() }));
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const storageKey = `wfc.recalculate-all:${id(1)}:${id(2)}`;
 const preferences = barrierCalculationFixture(id).preferences;
@@ -21,6 +23,46 @@ function setup() {
 }
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+const filteredQuery = { filter: 'all', search: 'JB_Prod12_01', limit: 100, secondaryDistanceMeters: 2, preferVerticalApproach: true } as const;
+const filterContext = 'b'.repeat(64);
+function FilteredAction() {
+  const action = useFilteredCableRecalculation()!;
+  return <><button disabled={action.disabled} onClick={() => void action.start({ query: filteredQuery, contextSha256: filterContext })}>Recalculate filtered cables</button>{action.progress}</>;
+}
+describe('filtered background recalculation', () => {
+  it('submits the collected set and retries that exact set without collecting again', async () => {
+    const props = setup(), onReviewReady = vi.fn(), ids = [id(30), id(32)];
+    vi.mocked(collectFilteredCableIds).mockResolvedValue(ids);
+    vi.mocked(submitAllPathFinderCalculations).mockResolvedValueOnce({ kind: 'unknown', code: 'CALCULATION_SUBMISSION_UNKNOWN' });
+    vi.mocked(fetchPathFinderJob).mockResolvedValue(makeJob('complete', [item('calculated', 'review-required')]));
+    render(<PathFinderRecalculateAll {...props} onReviewReady={onReviewReady}><FilteredAction /></PathFinderRecalculateAll>);
+    fireEvent.click(screen.getByRole('button', { name: 'Recalculate filtered cables' }));
+    const retry = await screen.findByRole('button', { name: 'Retry same recalculation request' });
+    const request = JSON.parse(localStorage.getItem(storageKey)!);
+    expect(request.cableIds).toEqual(ids);
+    expect(collectFilteredCableIds).toHaveBeenCalledExactlyOnceWith(id(1), 'token', filteredQuery, filterContext, expect.any(AbortSignal));
+    expect(screen.getByRole('button', { name: 'Recalculate all the cables' })).toBeDisabled();
+    fireEvent.click(retry);
+    await screen.findByText('Background recalculation finished.');
+    expect(submitAllPathFinderCalculations).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(submitAllPathFinderCalculations).mock.calls.map(call => call[2])).toEqual([request, request]);
+    expect(collectFilteredCableIds).toHaveBeenCalledOnce();
+    expect(localStorage.getItem(storageKey)).toBe(`filtered:${id(20)}`);
+    expect(onReviewReady).not.toHaveBeenCalled();
+    expect(props.onChanged).toHaveBeenCalled();
+  });
+  it('creates no job for an empty filtered set', async () => {
+    const props = setup();
+    vi.mocked(collectFilteredCableIds).mockResolvedValue([]);
+    render(<PathFinderRecalculateAll {...props}><FilteredAction /></PathFinderRecalculateAll>);
+    fireEvent.click(screen.getByRole('button', { name: 'Recalculate filtered cables' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('No cables match the applied filters.');
+    expect(submitAllPathFinderCalculations).not.toHaveBeenCalled();
+    expect(localStorage.getItem(storageKey)).toBeNull();
+  });
+});
+
 describe('whole-project background pass', () => {
   it('submits all cables exactly once with fresh registry and automatic output policy, without waiting for the engine', async () => {
     const props = setup(); render(<PathFinderRecalculateAll {...props} />);

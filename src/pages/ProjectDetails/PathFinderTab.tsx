@@ -303,11 +303,11 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { clearView(); setSecondaryDistance(value.value); }} /></Field>
         {!validSecondary ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
         <label><input type="checkbox" checked={preferVertical} onChange={event => { clearView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
-        {projectId && accountId && token ? <PathFinderRecalculateAll projectId={projectId} accountId={accountId} token={token}
+        <PathFinderRecalculateAll projectId={projectId} accountId={accountId ?? null} token={token}
           modelKey={JSON.stringify(data?.activeModel)} preferences={backgroundPreferences}
           blocker={calculationBlocker ?? (!data?.artifacts.length ? 'Prepare the tray network in Routes before recalculating all cables.' : null)}
           disabled={pf.busy || locationCheckBusy || networkCheckBusy || !data?.artifacts.length}
-          refreshState={pf.refreshState} onChanged={cableValuesChanged} onReviewReady={showReviewQueue} /> : null}
+          refreshState={pf.refreshState} onChanged={cableValuesChanged} onReviewReady={showReviewQueue}>
         {/* Keep command recovery active across viewer tool changes; its busy state stays local. */}
         <PathFinderRecalculationPanel projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           active={active} contextKey={JSON.stringify([data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, data?.activeModel.contentFingerprint])}
@@ -325,6 +325,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           onEndpointForegroundContexts={endpointForegroundChanged}
           onSelect={row => { setSelectedCableId(row.cable.id); setWorkflowSelection(row);
             setWorkflowCalculationPreferences(previous => previous?.cableId === row.cable.id ? previous : null); }} />
+        </PathFinderRecalculateAll>
         <details><summary>Advanced standalone path</summary><PathFinderPreview {...cablePurposes} pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={preferences} onInputChange={clearView} onEndpointNamesChange={() => {}} /></details>
         <details><summary>Advanced project cables and shared locations</summary>
         <Field label="Search cables"><Input aria-label="Search Path Finder cables" value={search} onChange={(_, value) => setSearch(value.value)} /></Field>

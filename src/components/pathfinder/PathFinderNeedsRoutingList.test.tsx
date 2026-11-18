@@ -2,10 +2,12 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { usePathFinderCableWorkflow } from '@/hooks/usePathFinderCableWorkflow';
+import { useFilteredCableRecalculation } from '@/pages/ProjectDetails/PathFinderRecalculateAll';
 import { cableWorkflowPageSchema, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import { PathFinderNeedsRoutingList, cableWorkflowReason, type PathFinderNeedsRoutingListProps } from './PathFinderNeedsRoutingList';
 
 vi.mock('@/hooks/usePathFinderCableWorkflow', () => ({ usePathFinderCableWorkflow: vi.fn() }));
+vi.mock('@/pages/ProjectDetails/PathFinderRecalculateAll', () => ({ useFilteredCableRecalculation: vi.fn(() => null) }));
 const id = (n: number) => `50000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const project = id(1), hash = 'a'.repeat(64), cable = id(10);
 function page() {
@@ -21,9 +23,29 @@ function state() { return { identity: 'owned', page: page(), detail: null, loadi
 function props(): PathFinderNeedsRoutingListProps { return { projectId: project, loadedProjectId: project, accountId: id(2), token: 'token', isAdmin: true,
   active: true, modelScopeKey: 'current-model', preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, onSelect: vi.fn() }; }
 function mount(options = props()) { return render(<FluentProvider theme={webLightTheme}><PathFinderNeedsRoutingList {...options} /></FluentProvider>); }
-beforeEach(() => { vi.resetAllMocks(); vi.mocked(usePathFinderCableWorkflow).mockReturnValue(state()); });
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(usePathFinderCableWorkflow).mockReturnValue(state());
+  vi.mocked(useFilteredCableRecalculation).mockReturnValue(null);
+});
 
 describe('read-only Needs routing list', () => {
+  it('recalculates the applied search and state independently of which results page is open', () => {
+    const start = vi.fn();
+    vi.mocked(useFilteredCableRecalculation).mockReturnValue({ disabled: false, start, progress: null });
+    vi.mocked(usePathFinderCableWorkflow).mockReturnValue({ ...state(), hasPrevious: true });
+    mount();
+    const recalculate = screen.getByRole('button', { name: 'Recalculate filtered cables' });
+    fireEvent.change(screen.getByLabelText('Cable state'), { target: { value: 'all' } });
+    expect(recalculate).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: ' JB_Prod12_01 ' } });
+    expect(recalculate).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(recalculate).toBeEnabled();
+    fireEvent.click(recalculate);
+    expect(start).toHaveBeenCalledExactlyOnceWith({ query: { filter: 'all', search: 'JB_Prod12_01', limit: 100,
+      secondaryDistanceMeters: 2, preferVerticalApproach: true }, contextSha256: hash });
+  });
   it('opens the project-wide review filter after completion and lets the user change it afterwards', () => {
     const options = props();
     const view = render(<PathFinderNeedsRoutingList {...options} />);

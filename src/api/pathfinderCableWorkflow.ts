@@ -1,8 +1,9 @@
 import { historicalSavedPathSchema } from '../../shared/pathfinderHistoricalSavedPath';
 import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
-import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
+import { canonicalPurposeJson, parsePurposeJson, policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
 import { cableWorkflowPageSchema, classifyCableWorkflow, type CableWorkflowPage, type CableWorkflowRow } from '../../shared/pathfinderCableWorkflow';
+import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation';
 import {
   cableWorkflowQuerySchema, cableWorkflowDetailQuerySchema, cableWorkflowDetailSchema,
   cableWorkflowQueryHashInput, cableWorkflowDetailQueryHashInput,
@@ -84,6 +85,38 @@ export async function fetchPathFinderCableWorkflowPage(projectId: string, token:
     return page.data;
   }, signal);
 }
+
+/** Resolves the complete applied filter before a calculation can be submitted. */
+export async function collectFilteredCableIds(projectId: string, token: string, query: Omit<CableWorkflowQuery, 'cursor'>,
+  contextSha256: string, signal: AbortSignal): Promise<string[]> {
+  const frozen = cableWorkflowQuerySchema.safeParse(query);
+  if (!frozen.success || frozen.data.cursor !== undefined || !policyHashSchema.safeParse(contextSha256).success) return invalidRequest();
+  const deadline = pathFinderRequestDeadline(signal, 120_000, () =>
+    new PathFinderCableWorkflowApiError('WORKFLOW_SEARCH_TIMEOUT', null, 'Collecting the filtered cables timed out. Narrow the filters and try again.'));
+  const ids: string[] = [];
+  const visited = new Set<string>();
+  let cursor: string | null = null, previousBoundary = '';
+  try {
+    do {
+      const page = await deadline.wait(() => fetchPathFinderCableWorkflowPage(projectId, token,
+        { ...frozen.data, ...(cursor === null ? {} : { cursor }) }, deadline.signal));
+      const boundary = page.scannedThroughCableId;
+      if (page.contextSha256 !== contextSha256 || (page.nextCursor !== null && visited.has(page.nextCursor))
+        || (boundary !== null && (boundary <= previousBoundary || page.rows.some(row => row.cable.id <= previousBoundary)))) {
+        throw new PathFinderCableWorkflowApiError('WORKFLOW_CONTEXT_CHANGED', 409, 'The cable list changed. Refresh it before recalculating the filtered cables.');
+      }
+      for (const row of page.rows) ids.push(row.cable.id);
+      if (ids.length > RECALCULATION_LIMITS.cables) {
+        throw new PathFinderCableWorkflowApiError('JOB_CABLE_BUDGET', 413, 'More than 10,000 cables match. Narrow the filters before recalculating.');
+      }
+      if (boundary !== null) previousBoundary = boundary;
+      cursor = page.nextCursor;
+      if (cursor !== null) visited.add(cursor);
+    } while (cursor !== null);
+    return ids;
+  } finally { deadline.dispose(); }
+}
+
 export async function fetchPathFinderCableWorkflowDetail(projectId: string, token: string, cableId: string, input: Partial<CableWorkflowDetailQuery> = {}, signal?: AbortSignal): Promise<CableWorkflowDetail> {
   if (!policyUuidSchema.safeParse(cableId).success) return invalidRequest();
   const parsed = cableWorkflowDetailQuerySchema.safeParse(input); if (!parsed.success) return invalidRequest();

@@ -4,6 +4,7 @@ import { usePathFinderCableWorkflow, type PathFinderCableWorkflowAccess } from '
 import { classifyCableWorkflow, SAVED_ROUTE_MODEL_CHANGED_NOTICE, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import type { CableWorkflowQuery } from '@/api/pathfinderCableWorkflow';
 import type { CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
+import { useFilteredCableRecalculation } from '@/pages/ProjectDetails/PathFinderRecalculateAll';
 
 type Filter = CableWorkflowQuery['filter'];
 export type PathFinderNeedsRoutingListProps = Omit<PathFinderCableWorkflowAccess, 'query'> & {
@@ -74,7 +75,9 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
   const styles = useStyles(), [filter, setFilter] = useState<Filter>(props.reviewRunId ? 'ready-for-review' : 'needs-routing'),
     [searchDraft, setSearchDraft] = useState(''), [search, setSearch] = useState('');
   const filterId = useId();
-  const workflow = usePathFinderCableWorkflow({ ...props, query: { ...props.preferences, filter, search, limit: 100 } });
+  const query = { ...props.preferences, filter, search, limit: 100 };
+  const workflow = usePathFinderCableWorkflow({ ...props, query });
+  const recalculation = useFilteredCableRecalculation();
   const page = workflow.page;
   const searching = search.normalize('NFC').trim().length > 0;
   const submitSearch = () => {
@@ -95,7 +98,12 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
       </select></Field>
       <Field label="Search tags, From or To"><Input value={searchDraft} maxLength={256} onChange={(_, data) => setSearchDraft(data.value)} /></Field>
       <Button type="submit">Search cables</Button><Button type="button" disabled={!workflow.enabled || workflow.busy} onClick={workflow.refresh}>Refresh cables</Button>
+      {recalculation ? <Button type="button" disabled={recalculation.disabled || !workflow.enabled || workflow.busy || Boolean(workflow.error)
+        || !page || (!searching && filter === 'all') || searchDraft.normalize('NFC').trim() !== search
+        || (!page.rows.length && !page.nextCursor && !workflow.hasPrevious)}
+        onClick={() => { if (page) void recalculation.start({ query, contextSha256: page.contextSha256 }); }}>Recalculate filtered cables</Button> : null}
     </form>
+    {recalculation?.progress}
     <p className={styles.small}>MV cables are excluded. Selecting a cable opens its workflow without changing cable values.</p>
     <p className={styles.small}>Each page shows live observations. Refresh to update earlier pages as calculations progress.</p>
     {workflow.loading ? <p role="status">{searching ? 'Searching for matching cables…' : 'Loading cable diagnostics…'}</p> : null}

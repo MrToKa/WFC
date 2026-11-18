@@ -1,17 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, Caption1, ProgressBar, Spinner } from '@fluentui/react-components';
 import { bulkCalculationRequestSchema, fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCalculationSubmission, type PathFinderJob, type PathFinderPreferences, type PathFinderState } from '@/api/pathfinder';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../../shared/pathfinderCalculationSubmission';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
+import { collectFilteredCableIds, PathFinderCableWorkflowApiError, type CableWorkflowQuery } from '@/api/pathfinderCableWorkflow';
 import { generateId } from '@/utils/generateId';
 
-type Props = {
-  projectId: string; accountId: string; token: string; modelKey: string;
+type Credentials = { projectId: string; accountId: string; token: string };
+type Props = Credentials & {
+  modelKey: string;
   preferences: PathFinderPreferences | null; disabled: boolean; blocker: string | null;
   refreshState: () => Promise<PathFinderState | null>; onChanged: () => void;
   onReviewReady?: (jobId: string) => void;
+  children?: ReactNode;
 };
+type FilteredSelection = { query: Omit<CableWorkflowQuery, 'cursor'>; contextSha256: string };
+const FilteredRecalculation = createContext<{ disabled: boolean; start: (selection: FilteredSelection) => Promise<void>; progress: ReactNode } | null>(null);
+export const useFilteredCableRecalculation = () => useContext(FilteredRecalculation);
 type JobItem = NonNullable<PathFinderJob['items']>[number];
 const isUnsavedCalculation = (item: JobItem) => item.status === 'calculated' && (!item.automaticUpdate
   || ['refused', 'stale', 'authority-expired', 'unknown'].includes(item.automaticUpdate.status));
@@ -64,36 +70,46 @@ function savingBreakdown(items: PathFinderJob['items']) {
 
 /** Owns only its submission and lightweight progress reads. Never owns the
  * viewer, popup selection, global busy flag or the continuous automatic mode. */
-export function PathFinderRecalculateAll(props: Props) {
+export function PathFinderRecalculateAll(props: Omit<Props, keyof Credentials> & { [K in keyof Credentials]: string | null }) {
+  if (!props.projectId || !props.accountId || !props.token) return props.children;
   const identity = JSON.stringify([props.projectId, props.accountId, props.token, props.modelKey]);
-  return <BackgroundPass key={identity} {...props} />;
+  return <BackgroundPass key={identity} {...props} projectId={props.projectId} accountId={props.accountId} token={props.token} />;
 }
 type BulkRequest = ReturnType<typeof bulkCalculationRequestSchema.parse>;
 const jobIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const filteredJobPrefix = 'filtered:';
+function storedJobId(value: string | null) {
+  const id = value?.startsWith(filteredJobPrefix) ? value.slice(filteredJobPrefix.length) : value;
+  return id && jobIdPattern.test(id) ? id : null;
+}
 const unknownMessage = 'The server has not confirmed this request. Retry the same request to recover its status. You can continue working with individual cables.';
 const legacyMessage = 'The previous request was not confirmed. Check the server for its job before starting another recalculation.';
 
 function pendingRequest(value: string | null, projectId: string): BulkRequest | 'legacy' | null {
-  if (!value || jobIdPattern.test(value)) return null;
+  if (!value || storedJobId(value)) return null;
   try {
     const request = bulkCalculationRequestSchema.parse(JSON.parse(value));
     return request.options.barrierRouting.scope.projectId === projectId ? request : 'legacy';
   } catch { return 'legacy'; }
 }
 
-function BackgroundPass({ projectId, accountId, token, preferences, disabled, blocker, refreshState, onChanged, onReviewReady }: Props) {
+function BackgroundPass({ projectId, accountId, token, preferences, disabled, blocker, refreshState, onChanged, onReviewReady, children }: Props) {
   const storageKey = `wfc.recalculate-all:${projectId}:${accountId}`;
   const [stored] = useState(() => {
     try { return localStorage.getItem(storageKey); } catch { return null; }
   });
-  const [jobId, setJobId] = useState<string | null>(() => stored && jobIdPattern.test(stored) ? stored : null);
+  const [jobId, setJobId] = useState(() => storedJobId(stored));
   const [job, setJob] = useState<PathFinderJob | null>(null);
   const [pending, setPending] = useState(() => pendingRequest(stored, projectId));
+  const [displayFiltered, setDisplayFiltered] = useState(() => Boolean(stored?.startsWith(filteredJobPrefix)
+    || (pending && pending !== 'legacy' && pending.cableIds)));
   const [submitting, setSubmitting] = useState(false);
+  const [findingMatches, setFindingMatches] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lifetime = useRef(new AbortController());
   const submittingRef = useRef(false), changed = useRef(onChanged), refresh = useRef(refreshState), lastSaved = useRef(0);
   const reviewReady = useRef(onReviewReady);
+  const filteredJob = useRef(Boolean(stored?.startsWith(filteredJobPrefix)));
   reviewReady.current = onReviewReady;
   changed.current = onChanged; refresh.current = refreshState;
   useEffect(() => {
@@ -120,14 +136,14 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
         again = ['queued', 'running'].includes(next.status) || progress.pendingUpdates > 0;
         if (!again) {
           changed.current();
-          if (next.status === 'complete' && progress.review > 0) reviewReady.current?.(next.id);
+          if (next.status === 'complete' && progress.review > 0 && !filteredJob.current) reviewReady.current?.(next.id);
         }
       } catch (cause) {
         if (controller.signal.aborted) return;
         setError(cause instanceof PathFinderApiError ? cause.message : 'Progress is temporarily unavailable. Checking again automatically; no new calculation was submitted.');
         if (cause instanceof PathFinderApiError && cause.code === 'JOB_NOT_FOUND' && cause.status === 404) {
           try {
-            if (localStorage.getItem(storageKey) === jobId) localStorage.removeItem(storageKey);
+            if (storedJobId(localStorage.getItem(storageKey)) === jobId) localStorage.removeItem(storageKey);
           } catch { /* The next submission checks browser storage again. */ }
           setJobId(null); setJob(null); again = false;
           setError('This recalculation job is no longer available. You can start a new recalculation.');
@@ -138,13 +154,16 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     void poll();
     return () => { controller.abort(); if (timer) clearTimeout(timer); };
   }, [projectId, token, jobId, storageKey]);
-  const observeJob = (id: string | null) => {
+  const observeJob = (id: string | null, filtered = false) => {
     lastSaved.current = 0;
+    filteredJob.current = filtered;
+    setDisplayFiltered(filtered);
     setJob(null); setJobId(id); setPending(null);
   };
   const readStoredSubmission = (value: string | null) => {
-    observeJob(value && jobIdPattern.test(value) ? value : null);
-    setPending(pendingRequest(value, projectId));
+    const request = pendingRequest(value, projectId);
+    observeJob(storedJobId(value), Boolean(value?.startsWith(filteredJobPrefix) || (request && request !== 'legacy' && request.cableIds)));
+    setPending(request);
   };
   const submit = async (body: BulkRequest, marker: string, signal: AbortSignal) => {
     const deadline = pathFinderRequestDeadline(signal, BULK_CALCULATION_SUBMISSION_LIMITS.responseMilliseconds, () => new Error('Calculation admission timed out.'));
@@ -154,10 +173,12 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     finally { deadline.dispose(); }
     if (signal.aborted) return;
     if (result.kind === 'acknowledged') {
+      const filtered = body.cableIds !== undefined;
       try {
-        if (localStorage.getItem(storageKey) === marker) localStorage.setItem(storageKey, result.jobId);
+        if (localStorage.getItem(storageKey) === marker)
+          localStorage.setItem(storageKey, filtered ? filteredJobPrefix + result.jobId : result.jobId);
       } catch { /* The persisted request still identifies the same job. */ }
-      observeJob(result.jobId);
+      observeJob(result.jobId, filtered);
     } else if (result.kind === 'unknown') {
       setJob(null); setJobId(null); setPending(body);
       setError(result.code === 'RECALCULATION_COLLECTION_DEADLINE'
@@ -165,8 +186,10 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
         : unknownMessage);
     } else {
       if (localStorage.getItem(storageKey) === marker) localStorage.removeItem(storageKey);
-      observeJob(null);
-      setError(new PathFinderApiError(result.code, result.kind === 'rejected' ? result.status : 0).message);
+      observeJob(null, body.cableIds !== undefined);
+      setError(body.cableIds && ['CABLE_NOT_FOUND', 'NO_CABLES'].includes(result.code)
+        ? 'The filtered cable list changed. Refresh cables before trying again.'
+        : new PathFinderApiError(result.code, result.kind === 'rejected' ? result.status : 0).message);
     }
   };
   const recover = async () => {
@@ -192,13 +215,15 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       if (!signal.aborted) setError('Could not check the previous recalculation. Try again when the connection is available.');
     } finally { submittingRef.current = false; if (!signal.aborted) setSubmitting(false); }
   };
-  const start = async () => {
+  const startDisabled = disabled || !preferences || submitting || running || Boolean(pending);
+  const start = async (selection?: FilteredSelection) => {
     if (submittingRef.current || running || pending || disabled || !preferences?.barrierRouting) return;
     submittingRef.current = true; setSubmitting(true); setError(null);
     const signal = lifetime.current.signal;
     try {
       const existing = localStorage.getItem(storageKey);
-      if (existing && existing !== jobId) { readStoredSubmission(existing); return; }
+      if (existing && (!jobId || storedJobId(existing) !== jobId)) { readStoredSubmission(existing); return; }
+      setDisplayFiltered(Boolean(selection));
       const frozen = structuredClone(preferences);
       const current = await refresh.current();
       if (signal.aborted) return;
@@ -208,9 +233,18 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
         || current.activeModel.selectionRevision !== scope.selectionRevision || current.activeModel.contentFingerprint !== scope.contentFingerprint) {
         setError('The active model changed. Refresh Path Finder and configure its obstacles before recalculating.'); return;
       }
+      let cableIds: string[] | undefined;
+      if (selection) {
+        setFindingMatches(true);
+        cableIds = await collectFilteredCableIds(projectId, token, selection.query, selection.contextSha256, signal);
+        if (signal.aborted) return;
+        setFindingMatches(false);
+        if (!cableIds.length) { setError('No cables match the applied filters.'); return; }
+      }
       const body = bulkCalculationRequestSchema.parse({
         submissionId: generateId(),
         expectedRegistryRevision: current.registryRevision, force: true, automaticPairPolicy: AUTOMATIC_PAIR_POLICY,
+        ...(cableIds ? { cableIds } : {}),
         options: { connectionToleranceMeters: Number(current.settings.connectionGap), sampleSpacingMeters: 0.125,
           maxGraphNodes: 200_000, maxGraphConnections: 1_000_000, ...frozen },
       });
@@ -222,18 +256,18 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       } catch { setError('Browser storage is unavailable. Enable site storage before starting background recalculation. No calculation was submitted.'); return; }
       setPending(body);
       await submit(body, marker, signal);
-    } catch {
-      if (!signal.aborted) setError('The current project could not be read. No new calculation was submitted. Try again.');
-    } finally { submittingRef.current = false; if (!signal.aborted) setSubmitting(false); }
+    } catch (error) {
+      if (!signal.aborted) setError(error instanceof PathFinderCableWorkflowApiError
+        ? error.message : 'The current project could not be read. No new calculation was submitted. Try again.');
+    } finally {
+      submittingRef.current = false;
+      if (!signal.aborted) { setSubmitting(false); setFindingMatches(false); }
+    }
   };
-  return <section aria-label="Recalculate all cables">
-    <Button appearance="primary" disabled={disabled || !preferences || submitting || running || Boolean(pending)} onClick={() => void start()}>Recalculate all the cables</Button>
+  const progress = <>
     {pending ? <Button disabled={submitting} onClick={() => void recover()}>{pending === 'legacy' ? 'Find previous recalculation' : 'Retry same recalculation request'}</Button> : null}
-    <Caption1 block>Recalculates the complete cable list in the background. You can continue working with the open cable.</Caption1>
-    <Caption1 block>Current Routing and Design length update automatically for unprotected cables. Protected routes remain unchanged; automatic results are retained separately. Cables with missing locations or unsupported purposes are skipped; MV is excluded.</Caption1>
-    {blocker ? <Caption1 block>{blocker}</Caption1> : null}
     <div role="status" aria-live="polite">
-      {submitting ? <Spinner size="tiny" label="Starting background recalculation…" /> : running ? <Spinner size="tiny" label={job?.status === 'complete' ? 'Saving calculated routes…' : 'Recalculating cables in the background…'} /> : job ? <Caption1 block>{job.status === 'complete' ? 'Background recalculation finished.' : `Background recalculation ${job.status}.`}</Caption1> : null}
+      {submitting ? <Spinner size="tiny" label={findingMatches ? 'Finding all cables that match the filters…' : 'Starting background recalculation…'} /> : running ? <Spinner size="tiny" label={job?.status === 'complete' ? 'Saving calculated routes…' : 'Recalculating cables in the background…'} /> : job ? <Caption1 block>{job.status === 'complete' ? 'Background recalculation finished.' : `Background recalculation ${job.status}.`}</Caption1> : null}
       {!submitting && !pending && job && counts ? <>
         <ProgressBar value={job.total ? job.completed / job.total : 1} />
         <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}.</Caption1>
@@ -247,5 +281,14 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       </> : null}
     </div>
     {error || pending && !submitting ? <Caption1 block role="alert">{error ?? (pending === 'legacy' ? legacyMessage : unknownMessage)}</Caption1> : null}
-  </section>;
+  </>;
+  return <><section aria-label="Recalculate all cables">
+    <Button appearance="primary" disabled={startDisabled} onClick={() => void start()}>Recalculate all the cables</Button>
+    <Caption1 block>Recalculates the complete cable list in the background. You can continue working with the open cable.</Caption1>
+    <Caption1 block>Current Routing and Design length update automatically for unprotected cables. Protected routes remain unchanged; automatic results are retained separately. Cables with missing locations or unsupported purposes are skipped; MV is excluded.</Caption1>
+    {blocker ? <Caption1 block>{blocker}</Caption1> : null}
+    {!displayFiltered ? progress : null}
+  </section><FilteredRecalculation.Provider value={{ disabled: startDisabled, start, progress: displayFiltered ? progress : null }}>
+    {children}
+  </FilteredRecalculation.Provider></>;
 }

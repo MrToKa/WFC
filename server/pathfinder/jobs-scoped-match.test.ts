@@ -67,11 +67,53 @@ describe('manual calculation uses the same exact cable scope for matching and ad
       expect(createJobSchema.safeParse({...legacy,automaticPairPolicy:invalid}).success).toBe(false);
     expect(createJobSchema.safeParse({...legacy,options:{...options,automaticPairPolicy}}).success).toBe(false);
   });
-  it('reserves a submission ID for forced whole-project calculations with automatic output',()=>{
+  it('reserves submission IDs for forced calculations with automatic output and a valid optional cable scope',()=>{
     const input={expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId:id(41)};
     expect(createJobSchema.parse(input)).toEqual(input);
-    for(const invalid of [{...input,cableIds:[cableId]},{...input,force:false},{...input,automaticPairPolicy:undefined},{...input,submissionId:'not-a-uuid'}])
+    expect(createJobSchema.parse({...input,cableIds:[cableId,id(20)]})).toEqual({...input,cableIds:[cableId,id(20)]});
+    for(const invalid of [{...input,cableIds:[]},{...input,cableIds:[cableId,cableId.toUpperCase()]},{...input,force:false},
+      {...input,automaticPairPolicy:undefined},{...input,submissionId:'not-a-uuid'}])
       expect(createJobSchema.safeParse(invalid).success).toBe(false);
+  });
+  it('admits only the selected cables and replays the same scope without repeating matching or writes',async()=>{
+    const f=fixture(),submissionId=id(41),cableIds=[cableId,id(20)];
+    const input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId,cableIds});
+    const collect=seams.collect.getMockImplementation()!;
+    seams.collect.mockImplementationOnce(async (...args)=>{
+      const batch=await collect(...args);
+      const item=batch.items[0];
+      return {...batch,items:cableIds.map(id=>({...item,id,cable:{...item.cable,id}}))};
+    });
+    expect(await f.jobs.create(projectId,who,input)).toEqual({jobId:submissionId,duplicate:false,registryRevision:'8'});
+    expect(f.match).toHaveBeenCalledExactlyOnceWith(projectId,who,'7',cableIds,f.client,expect.any(Function));
+    expect(seams.collect).toHaveBeenCalledExactlyOnceWith(f.client,expect.objectContaining({projectId,cableIds,options}));
+    expect(seams.automatic.mock.calls[0][1].items.map((item:{cableId:string})=>item.cableId)).toEqual(cableIds);
+    expect(seams.requalify).not.toHaveBeenCalled();
+    expect(seams.recover).not.toHaveBeenCalled();
+    expect(await f.jobs.create(projectId,{...who,loginId:id(42)},input)).toEqual({jobId:submissionId,duplicate:true,registryRevision:'8'});
+    await expect(f.jobs.create(projectId,who,{...input,cableIds:[cableId,id(21)]})).rejects.toMatchObject({code:'BULK_SUBMISSION_CONFLICT'});
+    expect(f.match).toHaveBeenCalledOnce();
+    expect(seams.collect).toHaveBeenCalledOnce();
+    expect(seams.persist).toHaveBeenCalledOnce();
+    expect(seams.automatic).toHaveBeenCalledOnce();
+  });
+  it.each(['matching','collection'] as const)('confirms no keyed job was submitted if a selected cable is absent during %s',async phase=>{
+    const f=fixture(),cableIds=[cableId,id(99)];
+    (phase==='matching'?f.match:seams.collect).mockRejectedValue(new PathFinderError('CABLE_NOT_FOUND',404));
+    const input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId:id(41),cableIds});
+    await expect(f.jobs.create(projectId,who,input)).rejects.toMatchObject({code:'CABLE_NOT_FOUND',status:409,message:expect.stringContaining('Refresh the filter')});
+    expect(f.match).toHaveBeenCalledExactlyOnceWith(projectId,who,'7',cableIds,f.client,expect.any(Function));
+    expect(seams.collect).toHaveBeenCalledTimes(phase==='matching'?0:1);
+    expect(seams.persist).not.toHaveBeenCalled();
+    expect(seams.automatic).not.toHaveBeenCalled();
+    expect(f.state.storedBulk).toBeUndefined();
+  });
+  it('retains the not-found result for an unkeyed popup calculation',async()=>{
+    const f=fixture();
+    f.match.mockRejectedValue(new PathFinderError('CABLE_NOT_FOUND',404));
+    const input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,cableIds:[cableId]});
+    await expect(f.jobs.create(projectId,who,input)).rejects.toMatchObject({code:'CABLE_NOT_FOUND',status:404});
+    expect(seams.transaction).not.toHaveBeenCalled();
   });
   it('replays the exact whole-project admission after the registry and login session change',async()=>{
     const f=fixture(),submissionId=id(41),input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId});

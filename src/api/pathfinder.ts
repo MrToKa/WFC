@@ -144,7 +144,8 @@ const popupCalculationRequestSchema = z.object({ cableIds: z.array(uuid).min(1).
   options: z.object({ connectionToleranceMeters: z.number().finite().positive().max(100), sampleSpacingMeters: z.literal(0.125),
     maxGraphNodes: z.literal(200_000), maxGraphConnections: z.literal(1_000_000), secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000),
     preferVerticalApproach: z.boolean(), barrierRouting: barrierAdmissionIntentSchema }).strict() }).strict();
-export const bulkCalculationRequestSchema = popupCalculationRequestSchema.omit({ cableIds: true }).extend({
+export const bulkCalculationRequestSchema = popupCalculationRequestSchema.extend({
+  cableIds: popupCalculationRequestSchema.shape.cableIds.optional(),
   submissionId: uuid, automaticPairPolicy: automaticPairPolicySchema,
 });
 const popupCalculationAcknowledgementSchema = z.object({ jobId: uuid, registryRevision: revision, duplicate: z.boolean() }).strict();

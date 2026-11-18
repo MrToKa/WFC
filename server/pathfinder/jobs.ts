@@ -186,6 +186,11 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
       if(!input.options?.barrierRouting)throw new PathFinderError('BARRIER_ROUTING_INTENT_REQUIRED',409,
         'Refresh Path Finder and configure the current barriers, or explicitly enable drilling for this calculation.');
       const bulkSubmission = input.submissionId ? {id:input.submissionId,sha256:hash(input)} : undefined;
+      const rethrowScopeError = (error:unknown):never => {
+        if (bulkSubmission && input.cableIds && error instanceof PathFinderError && error.status === 404 && error.code === 'CABLE_NOT_FOUND')
+          throw new PathFinderError('CABLE_NOT_FOUND',409,'The selected cable list changed. Refresh the filter and start the recalculation again.');
+        throw error;
+      };
       const legacyMatch = bulkSubmission ? null : await registry.match(projectId,who,input.expectedRegistryRevision,input.cableIds);
       return principalTransaction(pool,projectId,who,async client => {
         if(bulkSubmission){
@@ -198,7 +203,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         // A keyed submission owns the project mutex from the receipt lookup
         // through matching and admission. A retry cannot observe a committed
         // registry change from its original invocation without its job receipt.
-        const matched = legacyMatch ?? await registry.match(projectId,who,input.expectedRegistryRevision,undefined,client,checkBulkDeadline);
+        const matched = legacyMatch ?? await registry.match(projectId,who,input.expectedRegistryRevision,input.cableIds,client,checkBulkDeadline).catch(rethrowScopeError);
         const revision = (await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR UPDATE',[projectId])).rows[0];
         if (revision.registry_revision !== matched.registryRevision) throw new PathFinderError('REGISTRY_CONFLICT',409);
         const deadline=bulkDeadline??Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
@@ -215,7 +220,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
           } finally { clearTimeout(timer); }
         }
         const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline,
-          dependencyVersion:'pathfinder.dependencies.v8'});
+          dependencyVersion:'pathfinder.dependencies.v8'}).catch(rethrowScopeError);
         const calculationSha256=batchHash(batch,input.timeoutMilliseconds??60000);
         // A write policy is exact request authority, never a mathematical input.
         // Historical requests without it retain their original hash and meaning.
