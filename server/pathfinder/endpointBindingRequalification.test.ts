@@ -64,26 +64,30 @@ async function fixture(assignObject = false) {
   return { ...f, source, target, command, fromId, toId, endpointRepo, setActive: (value: boolean) => { active = value; } };
 }
 
+function mockAutomaticRecoveryReads(f: Awaited<ReturnType<typeof fixture>>, cables: typeof f.state.cables) {
+  const original=f.query.getMockImplementation()!;
+  f.query.mockImplementation(async(sql,args=[])=>{
+    if(sql.startsWith('/* automatic-endpoint-recovery:cables */'))return {rows:cables};
+    if(sql.startsWith('/* automatic-endpoint-recovery:aliases */'))return {rows:[...f.state.aliases.values()].filter(a=>(args[1] as string[]).includes(a.normalized_alias)).map(a=>({normalized_alias:a.normalized_alias,location_id:a.location_id}))};
+    if(sql.startsWith('SAVEPOINT ')||sql.startsWith('RELEASE SAVEPOINT ')||sql.startsWith('ROLLBACK TO SAVEPOINT '))return {rows:[]};
+    if(sql.startsWith('SELECT h.location_id,')&&sql.includes('h.location_id=ANY'))return {rows:(args[1] as string[]).flatMap(locationId=>{const l=f.state.locations.get(locationId)!,binding=f.state.bindings.get(f.state.heads.get(locationId)??'');return binding?[{location_id:locationId,location_revision:l.revision,binding_id:binding.id,binding_revision:binding.bindingRevision,record_sha256:binding.contentSha256,record:binding}]:[];})};
+    return original(sql,args);
+  });
+}
+
 describe('same-model endpoint requalification', () => {
-  it('automatic preflight carries a stale saved end when its other end is unbound, then performs no repeated writes',async()=>{
+  it.each(['unbound','changed'] as const)('automatic preflight carries a stale saved end when the other end is %s',async other=>{
     const f=await fixture(),cable=f.state.cables[0],before=f.state.bindings.get(f.state.heads.get(f.fromId)!)!;
-    cable.to_location='NO_BOUND_LOCATION';
+    if(other==='unbound')cable.to_location='NO_BOUND_LOCATION';
     f.state.locations.get(f.toId)!.revision='99';
-    f.state.cables.unshift({id:id(951),from_location:'Alias',to_location:'NO_BOUND_LOCATION'});
-    const original=f.query.getMockImplementation()!;
-    f.query.mockImplementation(async(sql,args=[])=>{
-      if(sql.startsWith('/* automatic-endpoint-recovery:cables */'))return {rows:[f.state.cables[0],cable]};
-      if(sql.startsWith('/* automatic-endpoint-recovery:aliases */'))return {rows:[...f.state.aliases.values()].filter(a=>(args[1] as string[]).includes(a.normalized_alias)).map(a=>({normalized_alias:a.normalized_alias,location_id:a.location_id}))};
-      if(sql.startsWith('SAVEPOINT ')||sql.startsWith('RELEASE SAVEPOINT ')||sql.startsWith('ROLLBACK TO SAVEPOINT '))return {rows:[]};
-      if(sql.startsWith('SELECT h.location_id,')&&sql.includes('h.location_id=ANY'))return {rows:(args[1] as string[]).flatMap(locationId=>{const l=f.state.locations.get(locationId)!,binding=f.state.bindings.get(f.state.heads.get(locationId)??'');return binding?[{location_id:locationId,location_revision:l.revision,binding_id:binding.id,binding_revision:binding.bindingRevision,record_sha256:binding.contentSha256,record:binding}]:[];})};
-      return original(sql,args);
-    });
+    f.state.cables.unshift({id:id(951),from_location:'Alias',to_location:cable.to_location});
+    mockAutomaticRecoveryReads(f, [f.state.cables[0], cable]);
     expect(await requalifyAutomaticEndpointBindingsInTransaction(f.client as unknown as PoolClient,f.projectId,f.who,AbortSignal.timeout(30000))).toBe(1);
     const after=f.state.bindings.get(f.state.heads.get(f.fromId)!)!;expect(after.pointProjectMetres).toEqual(before.pointProjectMetres);expect(after.aggregateId).toBe(f.target.aggregate.id);
     const count=f.state.commands.size;expect(await requalifyAutomaticEndpointBindingsInTransaction(f.client as unknown as PoolClient,f.projectId,f.who,AbortSignal.timeout(30000))).toBe(0);expect(f.state.commands.size).toBe(count);
   });
 
-  it.each(['republished', 'new-trace', 'identity-changed', 'missing-original', 'ambiguous'] as const)('verifies saved object identity and its anchor: %s', async scenario => {
+  it.each(['republished', 'batch-with-changed-peer', 'new-trace', 'identity-changed', 'missing-original', 'ambiguous'] as const)('verifies saved object identity and its anchor: %s', async scenario => {
     const f = await fixture(true), binding = f.state.bindings.get(f.state.heads.get(f.fromId)!)!;
     const original = f.built.records[2], object = structuredClone(original);
     if (scenario === 'new-trace') {
@@ -133,8 +137,24 @@ describe('same-model endpoint requalification', () => {
       return;
     }
     expect(display).toMatchObject({ sdkObjectId: original.identity.dbId, object: { objectRevisionId: object.id, traceId: current.traceId } });
-    const receipt = await requalifyCableEndpointBindings(f.pool, f.projectId, f.who, f.command);
-    expect(receipt.updatedLocationIds).toContain(f.fromId);
+    if (scenario === 'batch-with-changed-peer') {
+      const cable = f.state.cables[0], otherHead = f.state.heads.get(f.toId);
+      f.state.locations.get(f.toId)!.revision = '99';
+      const shared = { ...cable, id: id(952) };
+      f.state.cables.push(shared);
+      mockAutomaticRecoveryReads(f, [cable, shared]);
+      const recover = () => requalifyAutomaticEndpointBindingsInTransaction(f.client as unknown as PoolClient,
+        f.projectId, f.who, AbortSignal.timeout(30000));
+      const commandCount = f.state.commands.size;
+      expect(await recover()).toBe(1);
+      expect(f.state.heads.get(f.toId)).toBe(otherHead);
+      expect(f.state.commands.size).toBe(commandCount + 1);
+      expect(await recover()).toBe(0);
+      expect(f.state.commands.size).toBe(commandCount + 1);
+    } else {
+      const receipt = await requalifyCableEndpointBindings(f.pool, f.projectId, f.who, f.command);
+      expect(receipt.updatedLocationIds).toContain(f.fromId);
+    }
     const saved = f.state.bindings.get(f.state.heads.get(f.fromId)!)!;
     expect(saved).toMatchObject({ sourceObject: display!.object, pointProjectMetres: binding.pointProjectMetres,
       sameModelReuse: { sourceBindingId: binding.id, sourceTraceId: original.traceId, targetTraceId: current.traceId } });

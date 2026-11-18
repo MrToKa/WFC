@@ -119,8 +119,9 @@ export async function readRequalifiedEndpointObject(client: PoolClient, projectI
 }
 
 /** Caller owns the project/authority transaction; cached frames are immutable and transaction-local. */
-export async function requalifyCableEndpointBindingsInTransaction(client: PoolClient, projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal, frameCache?: FrameCache) {
-  const command = endpointRequalifySchema.parse(raw), request = { schemaVersion: 'wfc.pf.endpoint-requalify-owner.v1', command };
+export async function requalifyCableEndpointBindingsInTransaction(client: PoolClient, projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal, frameCache?: FrameCache, onlyLocationId?: string) {
+  const command = endpointRequalifySchema.parse(raw), request = { schemaVersion: 'wfc.pf.endpoint-requalify-owner.v1', command,
+    ...(onlyLocationId ? { onlyLocationId } : {}) };
   const commandSha256 = endpointBindingHash(command);
     const check = () => { signal?.throwIfAborted(); assertLoginNotExpired(who); }; check();
     const saved = (await client.query<{ kind: string; request_sha256: string; request: unknown; receipt: unknown }>(`/* endpoint-requalify:replay */
@@ -149,6 +150,7 @@ export async function requalifyCableEndpointBindingsInTransaction(client: PoolCl
     if (rows.length > 2 || new Set(rows.map(row => row.normalized_alias)).size !== rows.length) return fail();
     const byLocation = new Map<string, { row: Head; binding: EndpointBinding }>();
     for (const row of rows) {
+      if (onlyLocationId && row.location_id !== onlyLocationId) continue;
       const binding = endpointBindingSchema.parse(row.record), { contentSha256, ...body } = binding;
       if (!names.includes(row.normalized_alias) || binding.id !== row.binding_id || binding.projectId !== projectId || binding.locationId !== row.location_id
         || binding.bindingRevision !== row.binding_revision || contentSha256 !== row.record_sha256 || endpointBindingHash(body) !== contentSha256) return fail('ENDPOINT_HEAD_INTEGRITY');
@@ -210,18 +212,23 @@ export async function requalifyAutomaticEndpointBindingsInTransaction(client: Po
   if(aliases.length>20000)throw new PathFinderError('ENDPOINT_NEEDED_LOCATION_LIMIT',413);
   const byName=new Map(aliases.map(a=>[a.normalized_alias,a.location_id]));
   const heads=await readNeededEndpointBindingHeads(client,{projectId,current,locationIds:[...new Set(aliases.map(a=>a.location_id))],deadline:Date.now()+30000,signal});
-  const recovered=new Set<string>(),frames:FrameCache=new Map();
+  const attempted=new Set<string>(),frames:FrameCache=new Map();
+  let recovered=0;
   for(const cable of cables){
     check();const ids=[cable.from_location,cable.to_location].map(n=>n?byName.get(normalizeLocation(n)):undefined);
-    if(!ids.some(id=>id&&heads.has(id)&&!heads.get(id)!.ready&&!recovered.has(id)))continue;
-    await client.query('SAVEPOINT automatic_endpoint_recovery');
-    try{
-      const receipt=await requalifyCableEndpointBindingsInTransaction(client,projectId,who,{schemaVersion:'wfc.pf.endpoint-requalify.v1',cableId:cable.id,idempotencyKey:randomUUID(),expectedCurrent:current},signal,frames);
-      for(const id of receipt.updatedLocationIds)recovered.add(id);
-      await client.query('RELEASE SAVEPOINT automatic_endpoint_recovery');
-    }catch(error){
-      await client.query('ROLLBACK TO SAVEPOINT automatic_endpoint_recovery');await client.query('RELEASE SAVEPOINT automatic_endpoint_recovery');
-      if(!(error instanceof PathFinderError&&error.code==='ENDPOINT_REQUALIFICATION_UNAVAILABLE'))throw error;
+    for(const id of ids){
+      const head=id?heads.get(id):undefined;
+      if(!id||!head||head.ready||head.binding.modelVersionId!==current.modelVersionId||attempted.has(id))continue;
+      attempted.add(id);
+      await client.query('SAVEPOINT automatic_endpoint_recovery');
+      try{
+        const receipt=await requalifyCableEndpointBindingsInTransaction(client,projectId,who,{schemaVersion:'wfc.pf.endpoint-requalify.v1',cableId:cable.id,idempotencyKey:randomUUID(),expectedCurrent:current},signal,frames,id);
+        recovered+=receipt.updatedLocationIds.length;
+        await client.query('RELEASE SAVEPOINT automatic_endpoint_recovery');
+      }catch(error){
+        await client.query('ROLLBACK TO SAVEPOINT automatic_endpoint_recovery');await client.query('RELEASE SAVEPOINT automatic_endpoint_recovery');
+        if(!(error instanceof PathFinderError&&error.code==='ENDPOINT_REQUALIFICATION_UNAVAILABLE'))throw error;
+      }
     }
-  }check();return recovered.size;
+  }check();return recovered;
 }
