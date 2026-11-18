@@ -40,6 +40,10 @@ export interface ViewerDescriptor {
 }
 export type CanonicalPoint = [number, number, number];
 export interface SavedRouteEndpoints { from?: CanonicalPoint; to?: CanonicalPoint }
+export interface SavedRouteForeground {
+  endpoints?: SavedRouteEndpoints;
+  endpointObjectIds?: number[];
+}
 export interface ComputedPath { pathId: string; points: CanonicalPoint[]; objectIds: number[]; routeNames?: string[] }
 export function validateComputedRouteNames(value: unknown): value is string[];
 /** Display-only target in the current protected model load. */

@@ -984,23 +984,25 @@ test('partial/missing/ambiguous/non-drawable matches remain occurrence-preservin
   assert.ok(result.warnings.some(warning => warning.code === 'UNMODELLED_CONNECTOR')); f.bridge.dispose();
 });
 
-test('saved route endpoints reach the renderer while the route result keeps its existing shape', async () => {
+test('saved route points and equipment reach the renderer while the result keeps its existing shape', async () => {
   let received;
   const f = fixture({ showRoute: async (raw, options) => {
-    received = options.endpoints;
+    received = { endpoints: options.endpoints, endpointObjectIds: options.endpointObjectIds };
     return { segments: parseRouting(raw).segments.map(() => ({ status: 'found', count: 1, drawable: true })), lineCount: 1 };
   } });
   await f.loaded();
   const endpoints = { from: [15.166498219775821, 70.48999990102271, 13.079999998941831],
     to: [7.669998219775822, 69.52053115102271, 13.452350005045348] };
   const rawRouting = '/BC907/BC022/BC021/BC023/SECONDARY';
-  f.send('SHOW_ROUTE', { rawRouting, source: 'cable', cableId: uuid(12), endpoints });
+  const foreground = { endpoints, endpointObjectIds: [27, 53] };
+  f.send('SHOW_ROUTE', { rawRouting, source: 'cable', cableId: uuid(12), ...foreground });
   await turn();
-  assert.deepEqual(received, endpoints);
+  assert.deepEqual(received, foreground);
   const result = f.messages('ROUTE_RESULT')[0].payload;
   assert.equal(result.rawRouting, rawRouting);
   assert.equal(result.lineCount, 1);
   assert.equal(Object.hasOwn(result, 'endpoints'), false);
+  assert.equal(Object.hasOwn(result, 'endpointObjectIds'), false);
   f.bridge.dispose();
 });
 

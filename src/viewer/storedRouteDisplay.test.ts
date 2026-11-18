@@ -29,8 +29,9 @@ describe('saved cable routing display without calculation or writes',()=>{
   });
   it('falls back to current trays with the confirmed points when there is no recorded polyline', async () => {
     const f=fixture(), draw=vi.fn(), endpoints: SavedRouteEndpoints = { from: [2, 3, 4], to: [5, 6, 7] };
-    const shown=f.display.showSaved('/BC001',id(6),async()=>null,draw,{ endpoints });
-    await vi.waitFor(()=>expect(f.viewer.showRoute).toHaveBeenCalledExactlyOnceWith('/BC001','cable',id(6),endpoints));
+    const foreground = { endpoints, endpointObjectIds: [27, 53] };
+    const shown=f.display.showSaved('/BC001',id(6),async()=>null,draw,foreground);
+    await vi.waitFor(()=>expect(f.viewer.showRoute).toHaveBeenCalledExactlyOnceWith('/BC001','cable',id(6),foreground));
     f.request.resolve(id(5));f.db.resolve([{id:id(7),projectId:id(2),name:'BC001'}]);f.display.onEvent(f.event());
     expect((await shown)?.status).toBe('complete');expect(draw).not.toHaveBeenCalled();
   });

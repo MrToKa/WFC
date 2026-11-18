@@ -547,7 +547,10 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       return Promise.resolve(null);
     if (!run.storedRoute || !run.viewer || !projectId || !token) return Promise.resolve(null);
     const viewer = run.viewer;
-    if (!options.cableWriteRevision || options.designLength == null) return run.storedRoute.show(rawRouting, cableId, options);
+    const objectIds = computedPathObjectIds([], options.endpointObjectIds ?? []);
+    if (!objectIds) return Promise.reject(new Error('The assigned locations exceed the viewer object limit.'));
+    const preview = { signal: options.signal, endpoints: options.endpoints, endpointObjectIds: objectIds };
+    if (!options.cableWriteRevision || options.designLength == null) return run.storedRoute.show(rawRouting, cableId, preview);
     return run.storedRoute.showSaved(rawRouting, cableId, async signal => {
       let saved;
       try { saved = await fetchHistoricalSavedPath(projectId, token, cableId, signal); }
@@ -563,10 +566,8 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         || active.contentFingerprint !== scope.contentFingerprint || artifact.modelVersionId !== scope.modelVersionId
         || artifact.id !== scope.artifactId || artifact.snapshotSha256 !== scope.projectionSha256)
         throw new Error('The saved route or model changed. Refresh the cable before showing its path.');
-      const objectIds = computedPathObjectIds([], options.endpointObjectIds ?? []);
-      if (!objectIds) throw new Error('The assigned locations exceed the viewer object limit.');
       return { pathId: saved.proposalId, points: saved.points, objectIds };
-    }, path => viewer.showComputedPath(path), options);
+    }, path => viewer.showComputedPath(path), preview);
   }, [accessFailure, isAdmin, live, projectId, token]);
   const clearStoredRoute = useCallback(() => { runRef.current?.storedRoute?.clear(); }, []);
   return { ...visible, setTrayAssignmentContext, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,

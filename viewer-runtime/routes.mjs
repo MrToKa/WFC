@@ -258,7 +258,7 @@ export function createRouteController(viewer, { signal } = {}) {
     }
   }
 
-  async function showRoute(text, { onProgress, routingBindings, endpoints } = {}) {
+  async function showRoute(text, { onProgress, routingBindings, endpoints, endpointObjectIds = [] } = {}) {
     const tokens = parseRoute(text);
     const ticket = ++generation;
     const index = await indexNames(onProgress);
@@ -308,8 +308,11 @@ export function createRouteController(viewer, { signal } = {}) {
       to: endpoints?.to && coordinates.toDisplay(endpoints.to),
     });
     active(ticket);
-    const ids = [...new Set(found.flatMap(segment => segment.ids))];
-    if (!ids.length && cad.size && (typeof model.visibilityManager?.setAllVisibility !== 'function' || !captureVisibility())) throw visibilityUnavailable();
+    const trayIds = found.flatMap(segment => segment.ids);
+    if (!trayIds.length && cad.size && (typeof model.visibilityManager?.setAllVisibility !== 'function' || !captureVisibility())) throw visibilityUnavailable();
+    // Equipment shares the tray visibility lifecycle but never supplies tray geometry.
+    const equipmentIds = endpointObjectIds.filter(id => id !== tree.getRootId() && inventoryIds.has(id));
+    const ids = [...new Set([...trayIds, ...equipmentIds])];
     viewer.clearSelection();
     captureGhostState();
     if (ids.length) viewer.isolate(ids, model);

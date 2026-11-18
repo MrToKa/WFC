@@ -207,9 +207,13 @@ function payload(type, value) {
     case 'LOAD_MODEL': return exact(value, ['sessionId']) && isUuid(value.sessionId);
     case 'SHOW_ROUTE': {
       const keys = ['rawRouting', 'source', 'cableId'];
-      if (!exact(value, keys) && !(exact(value, [...keys, 'endpoints']) && value.source === 'cable'
-        && (exact(value.endpoints, ['from']) || exact(value.endpoints, ['to']) || exact(value.endpoints, ['from', 'to']))
-        && Object.values(value.endpoints).every(isCanonicalPoint))) return false;
+      if (!record(value)) return false;
+      if (Object.hasOwn(value, 'endpoints')) keys.push('endpoints');
+      if (Object.hasOwn(value, 'endpointObjectIds')) keys.push('endpointObjectIds');
+      if (!exact(value, keys) || keys.length > 3 && value.source !== 'cable') return false;
+      if (keys.includes('endpoints') && !((exact(value.endpoints, ['from']) || exact(value.endpoints, ['to'])
+        || exact(value.endpoints, ['from', 'to'])) && Object.values(value.endpoints).every(isCanonicalPoint))) return false;
+      if (keys.includes('endpointObjectIds') && !boundedIds(value.endpointObjectIds, 2 * MAX_LOCATION_OBJECT_IDS)) return false;
       return typeof value.rawRouting === 'string' && value.rawRouting.length <= 8000 && source(value);
     }
     case 'CLEAR_ROUTE': return (exact(value, ['reason']) || exact(value, ['reason', 'preserveCamera']) || exact(value, ['reason', 'preserveSelection']) || exact(value, ['reason', 'preserveCamera', 'preserveSelection']))
@@ -246,7 +250,8 @@ export function validateEnvelope(value, direction) {
     if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'PICK_PLACEMENT_POINT', 'POINT_PICKED', 'PLACEMENT_POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'PREPARATION_PROGRESS', 'RESOLVE_TRAY_IDENTITIES', 'TRAY_IDENTITIES', 'READ_SELECTION', 'MODEL_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'OBJECT_GUID', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'LOCATION_SHOWN', 'LOCATION_POINT_SHOWN', 'SHOW_TRAY', 'TRAY_SHOWN', 'SET_TRAY_ASSIGNMENTS', 'TRAY_ASSIGNMENTS_UPDATED', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'CAD_BEGIN', 'CAD_APPEND', 'CAD_COMMIT', 'CAD_TRANSFORM', 'CAD_REMOVE', 'CAD_FOCUS', 'CAD_COLOR', 'CAD_ROUTE', 'CAD_PROPERTIES', 'CAD_VISIBILITY', 'CAD_ACK'].includes(value.type) && value.modelVersionId === null) return null;
     const serialized = JSON.stringify(value);
     const maximumBytes = value.type === 'START_BARRIER_CAPTURE' ? MAX_BARRIER_SELECTION_MESSAGE_BYTES
-      : value.type === 'BEGIN_COMPUTED_PATH' ? MAX_COMPUTED_PATH_MESSAGE_BYTES : MAX_MESSAGE_BYTES;
+      : value.type === 'BEGIN_COMPUTED_PATH' || value.type === 'SHOW_ROUTE' && value.payload.endpointObjectIds
+        ? MAX_COMPUTED_PATH_MESSAGE_BYTES : MAX_MESSAGE_BYTES;
     if (new TextEncoder().encode(serialized).byteLength > maximumBytes) return null;
     return JSON.parse(serialized);
   } catch { return null; }

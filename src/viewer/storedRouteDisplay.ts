@@ -4,10 +4,10 @@ import type { ViewerController, ViewerEvent, ViewerLoadSnapshot } from './Viewer
 import { aggregateRouteCheck, buildProjectRouteCheck, createLocalRouteCheck, parseRouteInput,
   type RouteAttempt, type RouteCheckResult } from './routeValidation';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
-import { isUuid, type ComputedPath, type SavedRouteEndpoints } from '../../viewer-runtime/protocol.mjs';
+import { isUuid, type ComputedPath, type SavedRouteForeground } from '../../viewer-runtime/protocol.mjs';
 
 type Viewer = Pick<ViewerController, 'getLoadSnapshot' | 'showRoute' | 'cancel' | 'clear'>;
-type PreviewOptions = { signal?: AbortSignal; endpoints?: SavedRouteEndpoints };
+type PreviewOptions = SavedRouteForeground & { signal?: AbortSignal };
 type Pending = { load: ViewerLoadSnapshot; raw: string; cableId: string; operationId: string; requestId: string | null;
   abort: AbortController; early: Map<string, ViewerEvent>; event?: ViewerEvent; trays?: RoutingTray[] | null; databaseDone: boolean;
   finish: (result: RouteCheckResult | null, error?: unknown) => void };
@@ -77,7 +77,7 @@ export function createStoredRouteDisplay(options: { viewer: Viewer; projectId: s
       if (event.requestId !== attempt.requestId || attempt.event) return;
       attempt.event = event; combine(attempt);
     },
-    show(raw: string, cableId: string, { signal, endpoints }: PreviewOptions = {}): Promise<RouteCheckResult | null> {
+    show(raw: string, cableId: string, { signal, ...foreground }: PreviewOptions = {}): Promise<RouteCheckResult | null> {
       cancel(true);
       const load = options.viewer.getLoadSnapshot();
       if (!load?.ready || !current(load) || signal?.aborted) return Promise.resolve(null);
@@ -111,7 +111,8 @@ export function createStoredRouteDisplay(options: { viewer: Viewer; projectId: s
           }
           attempt.trays = null; attempt.databaseDone = true; combine(attempt);
         });
-        const showRoute = () => endpoints ? options.viewer.showRoute(raw, 'cable', cableId, endpoints)
+        const showRoute = () => foreground.endpoints || foreground.endpointObjectIds?.length
+          ? options.viewer.showRoute(raw, 'cable', cableId, foreground)
           : options.viewer.showRoute(raw, 'cable', cableId);
         const request = options.prepare ? options.prepare().then(ready => {
           if (pending !== attempt || !current(load)) return null;
@@ -138,7 +139,8 @@ export function createStoredRouteDisplay(options: { viewer: Viewer; projectId: s
   return {
     ...display,
     async showSaved(raw: string, cableId: string, readPath: (signal: AbortSignal) => Promise<ComputedPath | null>,
-      draw: (path: ComputedPath) => Promise<string | null>, { signal, endpoints }: PreviewOptions = {}): Promise<RouteCheckResult | {status: 'historical'} | null> {
+      draw: (path: ComputedPath) => Promise<string | null>, preview: PreviewOptions = {}): Promise<RouteCheckResult | {status: 'historical'} | null> {
+      const { signal } = preview;
       cancel(true);
       const load = options.viewer.getLoadSnapshot();
       if (!load?.ready || !current(load) || signal?.aborted) return null;
@@ -153,7 +155,7 @@ export function createStoredRouteDisplay(options: { viewer: Viewer; projectId: s
         if (!owned()) return null;
         if (!path) {
           recording = null;
-          return display.show(raw, cableId, { signal, endpoints });
+          return display.show(raw, cableId, preview);
         }
         const shown = await deadline.wait(() => draw(path));
         if (!shown || !owned()) return null;

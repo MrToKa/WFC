@@ -71,6 +71,26 @@ test('published multiple roots resolve one unchanged project code without suffix
   assert.deepEqual(f.facts.vertices, [2, 3]);
 });
 
+test('saved route shows both equipment locations together with the trays and restores visibility on Hide', async t => {
+  const f = fixture(t, {
+    1: { name: 'Model', parent: null },
+    2: { name: 'BC908', parent: 1, fragment: true },
+    3: { name: 'BC024', parent: 1, fragment: true },
+    4: { name: 'MSR_15-JB_Prod12_03', parent: 1, fragment: true },
+    5: { name: '15-PT-3414', parent: 1, fragment: true },
+    6: { name: 'Second instrument part', parent: 5, fragment: true },
+  });
+  const visibility = nativeVisibility(f);
+  const result = await f.controller.showRoute('/BC908/BC024/SECONDARY', {
+    endpointObjectIds: [4, 5, 6, 1, 999],
+  });
+  assert.equal(result.lineCount, 1);
+  assert.deepEqual(f.facts.isolates.at(-1), [2, 3, 4, 5, 6]);
+  assert.deepEqual(f.facts.vertices, [2, 3]);
+  f.controller.clearRoute({ preserveCamera: true });
+  assert.deepEqual(visibility.at(-1), { visible: true, states: [] });
+});
+
 test('saved mixed CAD and SDK routing resolves and draws native names absent from the SDK tree', async t => {
   const f = fixture(t, { 1: { name: 'Model', parent: null }, 2: { name: 'BC025', parent: 1, fragment: true }, 3: { name: 'BC026', parent: 1, fragment: true } });
   Object.assign(f.viewer.model, { getUnitScale: () => 1, getUpVector: () => [0, 0, 1], getGlobalOffset: () => [0, 0, 0] });
