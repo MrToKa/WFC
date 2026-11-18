@@ -188,7 +188,7 @@ describe('location impact claim, admission and bounded failure recovery with syn
   });
   it('admits only current eligible targets and preserves an unaffected sibling after partial supersession', async () => {
     const f = fixture(); f.state.currentTargets.delete(id(20)); expect(await f.repo.enrollClaim(f.claim)).toEqual({ status: 'enrolled', jobId: f.jobId });
-    expect(f.admit.mock.calls[0][1].cableIds).toEqual([id(21)]); expect(f.admit.mock.calls[0][1]).toMatchObject({ preferences: f.record.calculation!.preferences, timeoutMilliseconds: 60000 });
+    expect(f.admit.mock.calls[0][1].cableIds).toEqual([id(21)]); expect(f.admit.mock.calls[0][1]).toMatchObject({ savedLocationId: f.record.locationId, preferences: f.record.calculation!.preferences, timeoutMilliseconds: 60000 });
     expect(f.state.enrollmentWrites[0]).toEqual([f.record.projectId, f.record.id, f.jobId, 'e'.repeat(64), id(31), 1, 1, 0]);
     expect(f.query.mock.calls.map(([sql]) => sql).join('\n')).not.toMatch(/UPDATE cables|INSERT INTO pf_reviews|pf_recalculation_grants|pf_recalculation_dirty/);
   });

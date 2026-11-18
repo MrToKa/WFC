@@ -1,11 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchPathFinderJob, submitAllPathFinderCalculations, type PathFinderJob, type PathFinderState } from '@/api/pathfinder';
+import { fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderJob, type PathFinderState } from '@/api/pathfinder';
 import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 import { backgroundCalculationCounts, PathFinderRecalculateAll } from './PathFinderRecalculateAll';
-vi.mock('@/api/pathfinder', async original => ({ ...await original<typeof import('@/api/pathfinder')>(), fetchPathFinderJob: vi.fn(), submitAllPathFinderCalculations: vi.fn() }));
+vi.mock('@/api/pathfinder', async original => ({ ...await original<typeof import('@/api/pathfinder')>(), fetchLegacyBulkCalculationJob: vi.fn(), fetchPathFinderJob: vi.fn(), submitAllPathFinderCalculations: vi.fn() }));
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const storageKey = `wfc.recalculate-all:${id(1)}:${id(2)}`;
 const preferences = barrierCalculationFixture(id).preferences;
 const current = { projectId: id(1), registryRevision: '12', activeModel: { modelVersionId: id(8), selectionRevision: '1', contentFingerprint: 'a'.repeat(64) }, settings: { connectionGap: '1.5' } } as PathFinderState;
 const item = (status: string, output?: string) => ({ cableId: id(30), state: 'complete', status, message: null,
@@ -27,6 +28,7 @@ describe('whole-project background pass', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Recalculate all the cables' }));
     await waitFor(() => expect(fetchPathFinderJob).toHaveBeenCalled());
     expect(submitAllPathFinderCalculations).toHaveBeenCalledExactlyOnceWith(id(1), 'token', {
+      submissionId: expect.any(String),
       expectedRegistryRevision: '12', force: true, automaticPairPolicy: AUTOMATIC_PAIR_POLICY,
       options: { connectionToleranceMeters: 1.5, sampleSpacingMeters: 0.125, maxGraphNodes: 200000, maxGraphConnections: 1000000, ...preferences },
     }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
@@ -68,13 +70,53 @@ describe('whole-project background pass', () => {
     expect(backgroundCalculationCounts(makeJob('complete', [item('calculated'), item('calculated', 'unknown'), item('calculated', 'review-required')]))).toMatchObject({ saved: 0, review: 1, unsaved: 2 });
     expect(backgroundCalculationCounts(makeJob('complete', [{ ...item('locations_required'), state: 'blocked' }]))).toMatchObject({ blocked: 1, calculated: 0 });
   });
-  it('retains uncertain admission across reload and model changes rather than issuing another forced POST', async () => {
+  it('retries the identical command after reopening with uncertain admission', async () => {
     const props = setup(); vi.mocked(submitAllPathFinderCalculations).mockResolvedValue({ kind: 'unknown', code: 'CALCULATION_SUBMISSION_UNKNOWN' });
     const view = render(<PathFinderRecalculateAll {...props} />); fireEvent.click(screen.getByRole('button'));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('not confirmed'));
+    const submitted = vi.mocked(submitAllPathFinderCalculations).mock.calls[0][2];
     view.unmount(); render(<PathFinderRecalculateAll {...props} modelKey="another-model-revision" />);
-    expect(screen.getByRole('button')).toBeDisabled(); expect(screen.getByRole('alert')).toHaveTextContent('individual cables');
+    expect(screen.getByRole('button', { name: 'Recalculate all the cables' })).toBeDisabled();
     expect(submitAllPathFinderCalculations).toHaveBeenCalledOnce();
+    vi.mocked(submitAllPathFinderCalculations).mockResolvedValue({ kind: 'acknowledged', jobId: id(20), registryRevision: '12', duplicate: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry same recalculation request' }));
+    await waitFor(() => expect(fetchPathFinderJob).toHaveBeenCalled());
+    expect(vi.mocked(submitAllPathFinderCalculations).mock.calls[1][2]).toEqual(submitted);
+    expect(props.refreshState).toHaveBeenCalledOnce();
+  });
+  it('reconciles old pending markers with the server without starting a new pass', async () => {
+    const props = setup(); localStorage.setItem(storageKey, 'pending');
+    vi.mocked(fetchLegacyBulkCalculationJob).mockResolvedValue(id(20));
+    render(<PathFinderRecalculateAll {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Find previous recalculation' }));
+    await waitFor(() => expect(fetchPathFinderJob).toHaveBeenCalledWith(id(1), 'token', id(20), expect.any(AbortSignal)));
+    expect(localStorage.getItem(storageKey)).toBe(id(20));
+    expect(submitAllPathFinderCalculations).not.toHaveBeenCalled();
+  });
+  it('unlocks a legacy marker when the server has no previous bulk job to recover', async () => {
+    const props = setup(); localStorage.setItem(storageKey, 'pending');
+    vi.mocked(fetchLegacyBulkCalculationJob).mockResolvedValue(null);
+    render(<PathFinderRecalculateAll {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Find previous recalculation' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Recalculate all the cables' })).toBeEnabled());
+    expect(localStorage.getItem(storageKey)).toBeNull();
+    expect(submitAllPathFinderCalculations).not.toHaveBeenCalled();
+  });
+  it('allows a fresh pass when the server confirms a saved job ID is unavailable', async () => {
+    const props = setup(); localStorage.setItem(storageKey, id(20));
+    vi.mocked(fetchPathFinderJob).mockRejectedValue(new PathFinderApiError('JOB_NOT_FOUND', 404));
+    render(<PathFinderRecalculateAll {...props} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('no longer available');
+    expect(screen.getByRole('button', { name: 'Recalculate all the cables' })).toBeEnabled();
+    expect(localStorage.getItem(storageKey)).toBeNull();
+  });
+  it('explains how to proceed when stale network preparation blocks every cable', async () => {
+    const props = setup();
+    const blocked = [30, 31, 32].map(n => ({ ...item('routing_preparation_required'), cableId: id(n), state: 'blocked' as const }));
+    vi.mocked(fetchPathFinderJob).mockResolvedValue(makeJob('complete', blocked));
+    render(<PathFinderRecalculateAll {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Recalculate all the cables' }));
+    expect(await screen.findByText(/Open Routes and choose Regenerate network/)).toBeVisible();
   });
   it('stops before POST when pending ownership cannot be saved', async () => {
     const props = setup(); vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage blocked'); });

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import type { PoolClient } from 'pg';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { readAutomaticEndpointCandidates, readAutomaticNamedEndpointCandidate } from './automaticEndpointCandidates.js';
+import { createAutomaticNamedEndpointCandidateReader, readAutomaticEndpointCandidates, readAutomaticNamedEndpointCandidate } from './automaticEndpointCandidates.js';
 import { geometryTraceFixture } from './geometryTraceFixtures.js';
 import { buildGeometryTrace, geometryTraceHash } from './geometryTraceBuilder.js';
 import { automaticEndpointContentHash } from './endpointCalculationProvenance.js';
@@ -212,6 +212,18 @@ describe('automatic proposal endpoint candidates from frozen immutable evidence'
 });
 
 describe('standalone named Path endpoint uses the same immutable eligibility reader',()=>{
+  it('reuses verified publication reads across names and still checks each exact name', async () => {
+    const f = fixture(), controller = new AbortController();
+    const read = createAutomaticNamedEndpointCandidateReader(f.client, { ...f.request, signal: controller.signal });
+    expect(await read('EQ01')).toMatchObject({ status: 'automatic-ready', objectId: 'dbid:5' });
+    f.state.namedObjectIds = [];
+    expect(await read('MISSING')).toMatchObject({ status: 'missing', objectId: null });
+    for (const source of ['automatic-endpoints:plan', 'automatic-endpoints:trace'])
+      expect(f.query.mock.calls.filter(([sql]) => sql.includes(source))).toHaveLength(1);
+    expect(f.query.mock.calls.filter(([sql]) => sql.includes('automatic-endpoints:named'))).toHaveLength(2);
+    controller.abort();
+    await expect(read('EQ01')).rejects.toMatchObject({ name: 'AbortError' });
+  });
   it('corroborates a custom property on an exact prepared object without creating a shared location',async()=>{
     const f=fixture(),row=f.state.objects[0];row.record.historicalModel.name='Consumer';
     row.record.historicalModel.properties=[{category:'Human data',name:'Supply identification',value:'/EQ01'}];row.record_sha256=geometryTraceHash(row.record);

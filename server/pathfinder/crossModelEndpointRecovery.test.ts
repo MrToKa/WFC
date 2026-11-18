@@ -2,7 +2,7 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({current:vi.fn(),candidate:vi.fn(),confirm:vi.fn(),display:vi.fn()}));
 vi.mock('./endpointBindingRepository.js',async original=>({...await original<typeof import('./endpointBindingRepository.js')>(),readCurrentEndpointBindingContext:mocks.current,confirmEndpointBindingChangeInTransaction:mocks.confirm}));
-vi.mock('./automaticEndpointCandidates.js',()=>({readAutomaticNamedEndpointCandidate:mocks.candidate}));
+vi.mock('./automaticEndpointCandidates.js',()=>({createAutomaticNamedEndpointCandidateReader:()=>mocks.candidate}));
 vi.mock('./modelLocationMatchDisplay.js',()=>({readMatchedLocationDisplay:mocks.display}));
 import {endpointBindingFixture,endpointFixtureId as id} from './endpointBindingFixtures.js';
 import {recoverCrossModelEndpointsInTransaction} from './crossModelEndpointRecovery.js';

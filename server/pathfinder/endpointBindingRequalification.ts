@@ -198,12 +198,13 @@ export async function requalifyCableEndpointBindingsInTransaction(client: PoolCl
 }
 
 
-/** Same-model recovery precedes automatic admission. Changed shared heads dirty the
- * generation normally; caller commits recovery and requests a fresh claim rather
- * than rebasing an admission silently. No legacy point is promoted. */
-export async function requalifyAutomaticEndpointBindingsInTransaction(client: PoolClient, projectId: string, who: JobPrincipal, signal: AbortSignal) {
+/** Carry only verified shared heads before freezing calculation dependencies. */
+export async function requalifyAutomaticEndpointBindingsInTransaction(client: PoolClient, projectId: string, who: JobPrincipal, signal: AbortSignal,
+  scope?: { cableIds: readonly string[]; savedLocationId?: string }) {
   const check=()=>{signal.throwIfAborted();assertLoginNotExpired(who);};check();
-  const cables=(await client.query<{id:string;from_location:string|null;to_location:string|null}>(`/* automatic-endpoint-recovery:cables */ SELECT id,from_location,to_location FROM cables WHERE project_id=$1 AND mto IS DISTINCT FROM 'MV' ORDER BY id LIMIT 10001`,[projectId])).rows;
+  const cables=(await client.query<{id:string;from_location:string|null;to_location:string|null}>(`/* automatic-endpoint-recovery:cables */
+    SELECT id,from_location,to_location FROM cables WHERE project_id=$1 AND mto IS DISTINCT FROM 'MV'
+    ${scope ? 'AND id=ANY($2::uuid[])' : ''} ORDER BY id LIMIT 10001`,scope ? [projectId,scope.cableIds] : [projectId])).rows;
   if(cables.length>10000)throw new PathFinderError('JOB_CABLE_BUDGET',413);
   if(!cables.length)return 0;
   const current=await readCurrentEndpointBindingContext(client,projectId);if(!current)return 0;
@@ -218,7 +219,7 @@ export async function requalifyAutomaticEndpointBindingsInTransaction(client: Po
     check();const ids=[cable.from_location,cable.to_location].map(n=>n?byName.get(normalizeLocation(n)):undefined);
     for(const id of ids){
       const head=id?heads.get(id):undefined;
-      if(!id||!head||head.ready||head.binding.modelVersionId!==current.modelVersionId||attempted.has(id))continue;
+      if(!id||id===scope?.savedLocationId||!head||head.ready||head.binding.modelVersionId!==current.modelVersionId||attempted.has(id))continue;
       attempted.add(id);
       await client.query('SAVEPOINT automatic_endpoint_recovery');
       try{

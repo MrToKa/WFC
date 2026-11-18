@@ -22,11 +22,18 @@ const options={...defaultOptions,barrierRouting:{schemaVersion:'wfc.pf.barrier-a
   expectedSnapshot:{snapshotId:id(7),scope,registryRevision:'4',contentSha256:'c'.repeat(64),mode:'explicit-empty' as const}}};
 const automaticPairPolicy={schemaVersion:'wfc.pf.automatic-pair-policy.v1' as const,mode:'when-both-empty-or-unchanged-automatic' as const};
 function fixture() {
-  const state={duplicate:false};
-  const match=vi.fn().mockResolvedValue({registryRevision:'8'}),query=vi.fn(async(sql:string,_args:unknown[]=[])=>{
+  type StoredBulk = {id:unknown;requested_by:unknown;bulk_submission_sha256:unknown;registry_revision:unknown};
+  const state:{duplicate:boolean;storedBulk?:StoredBulk;legacyJobId?:string}={duplicate:false};
+  const match=vi.fn().mockResolvedValue({registryRevision:'8'}),query=vi.fn(async(sql:string,args:unknown[]=[])=>{
     if(sql.startsWith('SELECT registry_revision'))return {rows:[{registry_revision:'8'}]};
+    if(sql.includes('bulk-submission:by-id'))return {rows:state.storedBulk?.id===args[1]?[state.storedBulk]:[]};
+    if(sql.includes('bulk-submission:legacy'))return {rows:state.legacyJobId?[{id:state.legacyJobId}]:[]};
     if(sql.includes('FROM pf_jobs'))return {rows:state.duplicate&&sql.startsWith('SELECT id FROM')?[{id:id(40)}]:[]};
-    if(sql.startsWith('INSERT INTO pf_jobs')||sql.startsWith('INSERT INTO pf_job_items'))return {rows:[]};
+    if(sql.startsWith('INSERT INTO pf_jobs')){
+      if(args[13])state.storedBulk={id:args[0],requested_by:args[2],bulk_submission_sha256:args[13],registry_revision:args[14]};
+      return {rows:[]};
+    }
+    if(sql.startsWith('INSERT INTO pf_job_items'))return {rows:[]};
     if(sql.includes('FROM project_model_selections s JOIN'))return {rows:[{id:scope.modelVersionId,selectionRevision:'2',contentFingerprint:'a'.repeat(64)}]};
     if(sql.startsWith('SET LOCAL'))return {rows:[]};
     throw Error('Unexpected scoped-admission fixture SQL: '+sql);
@@ -59,6 +66,57 @@ describe('manual calculation uses the same exact cable scope for matching and ad
     for(const invalid of [null,{}, {...automaticPairPolicy,extra:true}, {...automaticPairPolicy,mode:'always'}])
       expect(createJobSchema.safeParse({...legacy,automaticPairPolicy:invalid}).success).toBe(false);
     expect(createJobSchema.safeParse({...legacy,options:{...options,automaticPairPolicy}}).success).toBe(false);
+  });
+  it('reserves a submission ID for forced whole-project calculations with automatic output',()=>{
+    const input={expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId:id(41)};
+    expect(createJobSchema.parse(input)).toEqual(input);
+    for(const invalid of [{...input,cableIds:[cableId]},{...input,force:false},{...input,automaticPairPolicy:undefined},{...input,submissionId:'not-a-uuid'}])
+      expect(createJobSchema.safeParse(invalid).success).toBe(false);
+  });
+  it('replays the exact whole-project admission after the registry and login session change',async()=>{
+    const f=fixture(),submissionId=id(41),input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId});
+    expect(await f.jobs.create(projectId,who,input)).toEqual({jobId:submissionId,duplicate:false,registryRevision:'8'});
+    expect(seams.transaction).toHaveBeenCalledOnce();
+    expect(seams.transaction.mock.invocationCallOrder[0]).toBeLessThan(f.match.mock.invocationCallOrder[0]);
+    expect(f.match).toHaveBeenCalledExactlyOnceWith(projectId,who,'7',undefined,f.client);
+    expect(seams.collect.mock.calls[0][0]).toBe(f.client);
+    f.match.mockRejectedValue(new PathFinderError('REGISTRY_CONFLICT',409));
+    const renewed={...who,loginId:id(42)};
+    expect(await f.jobs.create(projectId,renewed,input)).toEqual({jobId:submissionId,duplicate:true,registryRevision:'8'});
+    expect(f.match).toHaveBeenCalledOnce();
+    expect(seams.transaction).toHaveBeenLastCalledWith(expect.anything(),projectId,renewed,expect.any(Function));
+    expect(seams.persist).toHaveBeenCalledOnce();
+    expect(seams.automatic).toHaveBeenCalledOnce();
+    await expect(f.jobs.create(projectId,who,{...input,expectedRegistryRevision:'9'})).rejects.toMatchObject({code:'BULK_SUBMISSION_CONFLICT'});
+    await expect(f.jobs.create(projectId,{...who,userId:id(43)},input)).rejects.toMatchObject({code:'BULK_SUBMISSION_CONFLICT'});
+  });
+  it('observes a concurrently committed job when it acquires the project transaction',async()=>{
+    const f=fixture(),submissionId=id(41),input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId});
+    seams.transaction.mockImplementationOnce(async(_pool:unknown,_project:unknown,_principal:unknown,operation:(c:PoolClient)=>Promise<unknown>)=>{
+      f.state.storedBulk={id:submissionId,requested_by:who.userId,bulk_submission_sha256:hash(input),registry_revision:'8'};
+      return operation(f.client);
+    });
+    expect(await f.jobs.create(projectId,who,input)).toEqual({jobId:submissionId,duplicate:true,registryRevision:'8'});
+    expect(f.match).not.toHaveBeenCalled();
+    expect(seams.collect).not.toHaveBeenCalled();
+    expect(seams.persist).not.toHaveBeenCalled();
+  });
+  it('checks the locked job receipt before refusing a stale registry on a keyed retry',async()=>{
+    const f=fixture(),submissionId=id(41),input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId});
+    f.match.mockRejectedValueOnce(new PathFinderError('REGISTRY_CONFLICT',409));
+    await expect(f.jobs.create(projectId,who,input)).rejects.toMatchObject({code:'REGISTRY_CONFLICT',status:409});
+    expect(f.query.mock.calls[0][0]).toContain('bulk-submission:by-id');
+    expect(f.query.mock.invocationCallOrder[0]).toBeLessThan(f.match.mock.invocationCallOrder[0]);
+    expect(seams.transaction).toHaveBeenCalledOnce();
+    expect(seams.collect).not.toHaveBeenCalled();
+  });
+  it('looks up legacy whole-project jobs for the current project and account',async()=>{
+    const f=fixture();
+    expect(await f.jobs.legacyBulkSubmission(projectId,who)).toEqual({jobId:null});
+    f.state.legacyJobId=id(41);
+    expect(await f.jobs.legacyBulkSubmission(projectId,who)).toEqual({jobId:id(41)});
+    expect(f.query).toHaveBeenLastCalledWith(expect.stringContaining("m.record#>>'{source,kind}'='explicit-job'"),[projectId,who.userId]);
+    expect(f.query).toHaveBeenLastCalledWith(expect.stringContaining('i.cable_id=c.id'),[projectId,who.userId]);
   });
   it('retains the historical request hash and creates no automatic mandate when policy is absent',async()=>{
     const f=fixture();await f.jobs.create(projectId,who,createJobSchema.parse({expectedRegistryRevision:'7',options}));

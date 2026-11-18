@@ -1,11 +1,12 @@
 // @vitest-environment node
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import type {PoolClient} from 'pg';
-const seams=vi.hoisted(()=>({collect:vi.fn(),insert:vi.fn(),barriers:vi.fn(),automatic:vi.fn()}));
+const seams=vi.hoisted(()=>({collect:vi.fn(),insert:vi.fn(),barriers:vi.fn(),automatic:vi.fn(),requalify:vi.fn()}));
 vi.mock('./dependencyBatch.js',()=>({collectDependencyBatchInTransaction:seams.collect}));
 vi.mock('./jobs.js',()=>({insertCalculationBatch:seams.insert}));
 vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:seams.barriers}));
 vi.mock('./automaticPairMandates.js',()=>({appendAutomaticPairMandatesInTransaction:seams.automatic}));
+vi.mock('./endpointBindingRequalification.js',()=>({requalifyAutomaticEndpointBindingsInTransaction:seams.requalify}));
 import {locationImpactAdmission} from './locationImpactAdmission.js';
 import {hash} from './dependencies.js';
 const id=(n:number)=>`da300000-0000-4000-8000-${String(n).padStart(12,'0')}`;
@@ -18,7 +19,7 @@ function fixture(blocked=false){
   const batch={items:[item],options:{sampleSpacingMeters:0.125},registryRevision:'4',bytes:100};seams.collect.mockResolvedValue(batch);seams.insert.mockResolvedValue(id(5));
   seams.barriers.mockResolvedValue(barriers);
   const query=vi.fn().mockResolvedValue({rows:[{id:id(6)}]}),client={query} as unknown as PoolClient;
-  const input={projectId:id(1),impactId:id(2),principal:{userId:id(8),loginId:id(9),loginExpiresAt:Date.now()+60000},cableIds:[id(3)],
+  const input={projectId:id(1),impactId:id(2),principal:{userId:id(8),loginId:id(9),loginExpiresAt:Date.now()+60000},cableIds:[id(3)],savedLocationId:id(13),
     preferences:{secondaryDistanceMeters:2,preferVerticalApproach:true,barrierRouting},timeoutMilliseconds:10000,signal:new AbortController().signal,beforeInsert:vi.fn().mockResolvedValue(undefined)};
   return {input,batch,client,query};
 }
@@ -87,6 +88,11 @@ describe('targeted location impact admission (real adapter, mocked batch/inserti
   });
   it('admits exact affected ids with explicit preferences, v8 and an independent admission kind',async()=>{
     const f=fixture();const result=await locationImpactAdmission(f.client,f.input);
+    expect(f.query).toHaveBeenNthCalledWith(1,"SET LOCAL wfc.pathfinder_location_impact='1'");
+    expect(seams.requalify).toHaveBeenCalledExactlyOnceWith(f.client,f.input.projectId,f.input.principal,f.input.signal,
+      {cableIds:f.input.cableIds,savedLocationId:f.input.savedLocationId});
+    expect(f.query.mock.invocationCallOrder[0]).toBeLessThan(seams.requalify.mock.invocationCallOrder[0]);
+    expect(seams.requalify.mock.invocationCallOrder[0]).toBeLessThan(seams.collect.mock.invocationCallOrder[0]);
     expect(seams.collect).toHaveBeenCalledWith(f.client,expect.objectContaining({cableIds:f.input.cableIds,dependencyVersion:'pathfinder.dependencies.v8',options:expect.objectContaining(f.input.preferences)}));
     expect(f.input.beforeInsert).toHaveBeenCalledOnce();expect(seams.insert.mock.invocationCallOrder[0]).toBeGreaterThan(f.input.beforeInsert.mock.invocationCallOrder[0]);
     expect(seams.insert).toHaveBeenCalledWith(f.client,f.input.projectId,f.input.principal,f.batch,10000,expect.stringMatching(/^[a-f0-9]{64}$/),expect.anything(),{kind:'location-impact',generation:null});

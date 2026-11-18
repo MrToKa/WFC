@@ -67,7 +67,10 @@ async function fixture(assignObject = false) {
 function mockAutomaticRecoveryReads(f: Awaited<ReturnType<typeof fixture>>, cables: typeof f.state.cables) {
   const original=f.query.getMockImplementation()!;
   f.query.mockImplementation(async(sql,args=[])=>{
-    if(sql.startsWith('/* automatic-endpoint-recovery:cables */'))return {rows:cables};
+    if(sql.startsWith('/* automatic-endpoint-recovery:cables */')) {
+      const ids = args[1] as string[] | undefined;
+      return { rows: ids ? cables.filter(cable => ids.includes(cable.id)) : cables };
+    }
     if(sql.startsWith('/* automatic-endpoint-recovery:aliases */'))return {rows:[...f.state.aliases.values()].filter(a=>(args[1] as string[]).includes(a.normalized_alias)).map(a=>({normalized_alias:a.normalized_alias,location_id:a.location_id}))};
     if(sql.startsWith('SAVEPOINT ')||sql.startsWith('RELEASE SAVEPOINT ')||sql.startsWith('ROLLBACK TO SAVEPOINT '))return {rows:[]};
     if(sql.startsWith('SELECT h.location_id,')&&sql.includes('h.location_id=ANY'))return {rows:(args[1] as string[]).flatMap(locationId=>{const l=f.state.locations.get(locationId)!,binding=f.state.bindings.get(f.state.heads.get(locationId)??'');return binding?[{location_id:locationId,location_revision:l.revision,binding_id:binding.id,binding_revision:binding.bindingRevision,record_sha256:binding.contentSha256,record:binding}]:[];})};
@@ -76,6 +79,26 @@ function mockAutomaticRecoveryReads(f: Awaited<ReturnType<typeof fixture>>, cabl
 }
 
 describe('same-model endpoint requalification', () => {
+  it('carries the other saved endpoint for an exact location impact without rewriting its originating binding', async () => {
+    const f = await fixture();
+    const cable = f.state.cables[0];
+    const fromBindingId = f.state.heads.get(f.fromId);
+    const toBindingId = f.state.heads.get(f.toId)!;
+    const before = { cable: structuredClone(cable), registry: f.state.registry, to: structuredClone(f.state.bindings.get(toBindingId)!) };
+    mockAutomaticRecoveryReads(f, f.state.cables);
+    const scope = { cableIds: [cable.id], savedLocationId: f.fromId };
+    expect(await requalifyAutomaticEndpointBindingsInTransaction(f.client as unknown as PoolClient, f.projectId, f.who,
+      AbortSignal.timeout(30000), scope)).toBe(1);
+    expect(f.query.mock.calls.find(([sql]) => sql.startsWith('/* automatic-endpoint-recovery:cables */'))?.[1]).toEqual([f.projectId, scope.cableIds]);
+    expect(f.state.heads.get(f.fromId)).toBe(fromBindingId);
+    expect(f.state.bindings.get(toBindingId)).toEqual(before.to);
+    expect(f.state.bindings.get(f.state.heads.get(f.toId)!)).toMatchObject({
+      supersedesBindingId: toBindingId, artifactId: f.target.aggregate.artifactId, pointProjectMetres: before.to.pointProjectMetres,
+    });
+    expect(f.state.registry).toBe(before.registry);
+    expect(cable).toEqual(before.cable);
+  });
+
   it.each(['unbound','changed'] as const)('automatic preflight carries a stale saved end when the other end is %s',async other=>{
     const f=await fixture(),cable=f.state.cables[0],before=f.state.bindings.get(f.state.heads.get(f.fromId)!)!;
     if(other==='unbound')cable.to_location='NO_BOUND_LOCATION';

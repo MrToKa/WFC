@@ -9,6 +9,7 @@ import { collectBarrierCalculationScope } from './barrierCalculationScope.js';
 import { PathFinderError } from './errors.js';
 import { appendAutomaticPairMandatesInTransaction } from './automaticPairMandates.js';
 import { automaticPairPolicySchema } from '../../shared/pathfinderAutomaticPair.js';
+import { requalifyAutomaticEndpointBindingsInTransaction } from './endpointBindingRequalification.js';
 
 /** Exact affected ids only: no project matching, whole-project request or global cancel gate. */
 export const locationImpactAdmission:LocationImpactAdapter['admitInTransaction']=async(client,input)=>{
@@ -16,6 +17,12 @@ export const locationImpactAdmission:LocationImpactAdapter['admitInTransaction']
   const preferences=recalculationPreferencesSchema.parse(input.preferences);
   if(!preferences.barrierRouting)throw new PathFinderError('BARRIER_ROUTING_INTENT_REQUIRED',409,
     'Refresh Path Finder and choose the current barrier scope before recalculating shared locations.');
+  // These carries keep the assigned points and belong to this exact impact.
+  // As with its originating Save, defer to the scoped admission instead of
+  // acquiring the project-wide scheduler lock from the endpoint-head trigger.
+  await client.query("SET LOCAL wfc.pathfinder_location_impact='1'");
+  await requalifyAutomaticEndpointBindingsInTransaction(client, input.projectId, input.principal, input.signal,
+    { cableIds: input.cableIds, savedLocationId: input.savedLocationId });
   const batch=await collectDependencyBatchInTransaction(client,{projectId:input.projectId,
     options:{...defaultOptions,...preferences},cableIds:input.cableIds,
     signal:input.signal,deadline,dependencyVersion:'pathfinder.dependencies.v8'});

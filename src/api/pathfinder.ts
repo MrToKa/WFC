@@ -143,6 +143,9 @@ const popupCalculationRequestSchema = z.object({ cableIds: z.array(uuid).min(1).
   options: z.object({ connectionToleranceMeters: z.number().finite().positive().max(100), sampleSpacingMeters: z.literal(0.125),
     maxGraphNodes: z.literal(200_000), maxGraphConnections: z.literal(1_000_000), secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000),
     preferVerticalApproach: z.boolean(), barrierRouting: barrierAdmissionIntentSchema }).strict() }).strict();
+export const bulkCalculationRequestSchema = popupCalculationRequestSchema.omit({ cableIds: true }).extend({
+  submissionId: uuid, automaticPairPolicy: automaticPairPolicySchema,
+});
 const popupCalculationAcknowledgementSchema = z.object({ jobId: uuid, registryRevision: revision, duplicate: z.boolean() }).strict();
 const popupCalculationRefusalSchema = z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{0,95}$/), error: z.string().max(4096) }).strict();
 export type PathFinderPreviewInput = Omit<z.infer<typeof previewInputSchema>, 'artifactId' | 'expectedSelectionRevision' | 'expectedSettingsRevision' | 'expectedRegistryRevision'>;
@@ -151,6 +154,8 @@ export class PathFinderApiError extends Error {
     super(code === 'PREVIEW_LOCATION_MISSING' ? 'A From/To name was not found. Choose a point or save a shared location, then calculate again.'
       : code === 'PREVIEW_LOCATION_AMBIGUOUS' ? 'A From/To name matches more than one object. Choose the intended point or save a shared location.'
       : code === 'PREVIEW_LOCATION_STALE' ? 'A shared From/To location needs confirmation against the active model.'
+      : code === 'ROUTING_PREPARATION_REQUIRED' ? 'Open Routes and choose Regenerate network, then recalculate the cables again.'
+      : code === 'CAD_ROUTE_BASE_CHANGED' || code === 'CAD_ROUTE_CATALOG_CHANGED' ? 'Withdraw and republish the affected CAD routes against the current prepared network, then recalculate the cables again.'
       : code === 'APPEARANCE_RESTORE_FAILED' ? 'Some viewer appearance could not be restored. Press Clear again, or reload the model.'
       : status === 401 ? 'Sign in again to use Path Finder.' : status === 403 ? 'Path Finder requires current administrator access.'
       : status === 409 ? 'The project changed. Refresh Path Finder and review the latest values before trying again.'
@@ -167,7 +172,7 @@ async function read(response: Response, maximumBytes = 32 * 1024 * 1024, strict 
   try { const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); return strict ? parsePurposeJson(text, { maximumBytes }) : JSON.parse(text); } catch { throw new PathFinderApiError('INVALID_RESPONSE', 502); }
 }
 export async function pathFinderRequest(projectId: string, token: string, path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
-  if (!uuid.safeParse(projectId).success || !token || !/^\/(?:state|locations(?:\/[0-9a-f-]{36}(?:\/binding)?)?|artifacts|match|jobs(?:\/[0-9a-f-]{36})?|lookups(?:\/(?:plan|[0-9a-f-]{36}))?|previews(?:\/[0-9a-f-]{36})?|proposals(?:\/[0-9a-f-]{36}(?:\/(?:apply|review|reverse|close-pending-apply))?)?)$/.test(path)) throw new PathFinderApiError('INVALID_REQUEST', 400);
+  if (!uuid.safeParse(projectId).success || !token || !/^\/(?:state|locations(?:\/[0-9a-f-]{36}(?:\/binding)?)?|artifacts|match|jobs(?:\/(?:[0-9a-f-]{36}|bulk-submission))?|lookups(?:\/(?:plan|[0-9a-f-]{36}))?|previews(?:\/[0-9a-f-]{36})?|proposals(?:\/[0-9a-f-]{36}(?:\/(?:apply|review|reverse|close-pending-apply))?)?)$/.test(path)) throw new PathFinderApiError('INVALID_REQUEST', 400);
   const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder${path}`, { method, signal, cache: 'no-store', credentials: 'same-origin', redirect: 'error',
     headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const value = await read(response);
@@ -182,8 +187,8 @@ export async function submitPathFinderCalculation(projectId: string, token: stri
   options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<PathFinderCalculationSubmission> {
   return submitCalculation(projectId, token, body, options, false);
 }
-/** Admit the whole project once. Omitted cableIds means the server reads the
- * complete list, independently of the visible search/page. Never retries POST. */
+/** Omitted cableIds selects the whole project. The submission ID makes an
+ * explicit retry of the same request safe after an uncertain response. */
 export async function submitAllPathFinderCalculations(projectId: string, token: string, body: unknown,
   options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<PathFinderCalculationSubmission> {
   return submitCalculation(projectId, token, body, options, true);
@@ -191,10 +196,12 @@ export async function submitAllPathFinderCalculations(projectId: string, token: 
 async function submitCalculation(projectId: string, token: string, body: unknown,
   options: { signal?: AbortSignal; isCurrent?: () => boolean }, allCables: boolean): Promise<PathFinderCalculationSubmission> {
   let encoded: string;
+  let submissionId: string | null = null;
   try {
     if (!uuid.safeParse(projectId).success || !token) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
-    const parsed = (allCables ? popupCalculationRequestSchema.omit({ cableIds: true }) : popupCalculationRequestSchema).safeParse(body);
+    const parsed = (allCables ? bulkCalculationRequestSchema : popupCalculationRequestSchema).safeParse(body);
     if (!parsed.success || parsed.data.options.barrierRouting.scope.projectId !== projectId) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
+    if ('submissionId' in parsed.data) submissionId = parsed.data.submissionId;
     encoded = JSON.stringify(parsed.data);
     if (options.signal?.aborted) return { kind: 'not-submitted', code: 'CALCULATION_CANCELLED' };
     if (options.isCurrent && !options.isCurrent()) return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
@@ -205,7 +212,8 @@ async function submitCalculation(projectId: string, token: string, body: unknown
     const value = await read(response, 8192, true);
     if (response.status === 202) {
       const acknowledgement = popupCalculationAcknowledgementSchema.safeParse(value);
-      return acknowledgement.success ? { kind: 'acknowledged', ...acknowledgement.data } : { kind: 'unknown', code: 'INVALID_CALCULATION_ACKNOWLEDGEMENT' };
+      return acknowledgement.success && (!submissionId || acknowledgement.data.jobId === submissionId)
+        ? { kind: 'acknowledged', ...acknowledgement.data } : { kind: 'unknown', code: 'INVALID_CALCULATION_ACKNOWLEDGEMENT' };
     }
     const confirmedRefusal = calculationSubmissionRefusalSchema.safeParse(value);
     if (response.status === 409 && confirmedRefusal.success)
@@ -234,6 +242,12 @@ export async function fetchPathFinderProposal(projectId: string, token: string, 
 export async function fetchPathFinderJob(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderJob> {
   const parsed = jobSchema.extend({ items: z.array(jobItemSchema) }).safeParse(await pathFinderRequest(projectId, token, `/jobs/${jobId}`, 'GET', undefined, signal));
   if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
+}
+export async function fetchLegacyBulkCalculationJob(projectId: string, token: string, signal?: AbortSignal): Promise<string | null> {
+  const value = z.object({ jobId: uuid.nullable() }).strict().safeParse(
+    await pathFinderRequest(projectId, token, '/jobs/bulk-submission', 'GET', undefined, signal));
+  if (!value.success) throw new PathFinderApiError('INVALID_RESPONSE', 502);
+  return value.data.jobId;
 }
 export async function fetchPathFinderLookup(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderLookup> {
   const parsed = lookupSchema.safeParse(await pathFinderRequest(projectId, token, `/lookups/${jobId}`, 'GET', undefined, signal));

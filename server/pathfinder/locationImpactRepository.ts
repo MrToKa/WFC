@@ -200,7 +200,7 @@ export async function readLocationImpactPriority(client: Pick<PoolClient, 'query
 
 export type LocationImpactClaim = { projectId: string; impactId: string; ownerToken: string; leaseExpiresAt: string; principal: JobPrincipal };
 export type LocationImpactAdmission = { jobId: string | null; inputSha256: string; admissionId?: string | null; total: number; readyCables: number; blockedCables: number; reasonCodes?: string[] };
-export type LocationImpactAdmissionInput = { projectId: string; impactId: string; principal: JobPrincipal; cableIds: string[];
+export type LocationImpactAdmissionInput = { projectId: string; impactId: string; principal: JobPrincipal; cableIds: string[]; savedLocationId: string;
   preferences: LocationImpactCalculation['preferences']; timeoutMilliseconds: number; signal: AbortSignal; beforeInsert(): Promise<void>;
   automaticPair?: { policy: AutomaticPairPolicy; createdAt: string; authorityExpiresAt: string } };
 export type LocationImpactAdapter = { admitInTransaction(client: PoolClient, input: LocationImpactAdmissionInput): Promise<LocationImpactAdmission> };
@@ -242,7 +242,7 @@ export function createLocationImpactRepository(pool: Pool, adapter: LocationImpa
         if (guarded || !dispatch || dispatch.status !== 'collecting' || dispatch.owner_token !== claim.ownerToken || iso(dispatch.lease_until) !== claim.leaseExpiresAt || Date.parse(claim.leaseExpiresAt) <= Date.now()) return fail('LOCATION_IMPACT_CLAIM_FENCED'); guarded = true;
       };
       if (!targets.length) { await beforeInsert(); await client.query("UPDATE pf_location_impact_dispatch SET status='superseded',reason_codes='[\"LOCATION_IMPACT_TARGET_SUPERSEDED\"]',owner_token=NULL,lease_until=NULL,due_at=NULL,updated_at=clock_timestamp() WHERE project_id=$1 AND impact_id=$2", [claim.projectId, claim.impactId]); return { status: 'superseded', jobId: null }; }
-      const admission = await adapter.admitInTransaction(client, { projectId: claim.projectId, impactId: claim.impactId, principal: claim.principal, cableIds: targets,
+      const admission = await adapter.admitInTransaction(client, { projectId: claim.projectId, impactId: claim.impactId, principal: claim.principal, cableIds: targets, savedLocationId: record.locationId,
         preferences: record.calculation.preferences, timeoutMilliseconds: record.calculation.timeoutMilliseconds, signal, beforeInsert,
         ...(record.schemaVersion === 'wfc.pf.location-impact-record.v3' && record.automaticPairPolicy ? {automaticPair:{policy:record.automaticPairPolicy,
           createdAt:record.createdAt,authorityExpiresAt:record.authorityExpiresAt}} : {}) });

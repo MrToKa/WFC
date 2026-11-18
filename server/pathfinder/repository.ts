@@ -201,9 +201,10 @@ export function createPathFinderRepository(pool: Pool) {
         return {artifactId:id,snapshotSha256:saved.sha256,engineeringAccepted:false,registryRevision:await bumpRegistry(client,projectId)};
       });
     },
-    async match(projectId: string, who: JobPrincipal, expectedRegistryRevision: string, cableIds?: string[]) {
+    /** A supplied transaction must already hold this project's mutex and current login authority. */
+    async match(projectId: string, who: JobPrincipal, expectedRegistryRevision: string, cableIds?: string[], withinTransaction?: PoolClient) {
       const actorId = who.userId;
-      return registryTransaction(pool,projectId,who,async client => {
+      const match = async (client: PoolClient) => {
         await stateRevision(client,projectId,expectedRegistryRevision);
         if (cableIds && cableIds.length > RECALCULATION_LIMITS.cables) throw new PathFinderError('JOB_CABLE_BUDGET',413);
         const requested = cableIds ? [...new Set(cableIds.map(value => uuid.parse(value)))].sort() : undefined;
@@ -270,7 +271,8 @@ export function createPathFinderRepository(pool: Pool) {
           }
         }
         return {createdLocations:created,matchedLocations:bound,registryRevision:created || bound ? await bumpRegistry(client,projectId) : expectedRegistryRevision};
-      });
+      };
+      return withinTransaction ? match(withinTransaction) : registryTransaction(pool,projectId,who,match);
     },
   };
 }

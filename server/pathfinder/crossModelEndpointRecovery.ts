@@ -5,7 +5,7 @@ import {endpointBindingSchema,normalizeEndpointLocation} from '../../shared/path
 import {canonicalPurposeJson} from '../../shared/pathfinderPurposePolicy.js';
 import {geometryObjectRevisionSchema} from '../../shared/pathfinderGeometryTrace.js';
 import {readCurrentEndpointBindingContext,endpointBindingHash,confirmEndpointBindingChangeInTransaction} from './endpointBindingRepository.js';
-import {readAutomaticNamedEndpointCandidate} from './automaticEndpointCandidates.js';
+import {createAutomaticNamedEndpointCandidateReader} from './automaticEndpointCandidates.js';
 import {assertLoginNotExpired} from './auth.js';
 import {PathFinderError} from './errors.js';
 import {CROSS_MODEL_ENDPOINT_TOLERANCE_METRES} from './crossModelEndpointMatch.js';
@@ -19,13 +19,14 @@ export async function recoverCrossModelEndpointsInTransaction(c:PoolClient,pid:s
  const current=await readCurrentEndpointBindingContext(c,pid);if(!current)return 0;
  const rows=(await c.query<{id:string;name:string;revision:string;record:unknown;aliases:string[]}>(`/* cross-model-endpoints:heads */ SELECT l.id,l.name,l.revision::text,r.record,COALESCE((SELECT array_agg(a.display_alias ORDER BY a.normalized_alias) FROM pf_location_aliases a WHERE a.project_id=l.project_id AND a.location_id=l.id AND a.normalized_alias<>normalize(upper(btrim(l.name)),NFC)),ARRAY[]::text[]) AS aliases FROM pf_locations l JOIN pf_endpoint_binding_heads h ON h.project_id=l.project_id AND h.location_id=l.id JOIN pf_endpoint_binding_revisions r ON r.project_id=h.project_id AND r.id=h.binding_id WHERE l.project_id=$1 AND r.model_version_id<>$2 AND r.record->>'status'='confirmed' AND EXISTS(SELECT 1 FROM cables b JOIN pf_location_aliases a ON a.project_id=b.project_id AND (a.normalized_alias=normalize(upper(btrim(b.from_location)),NFC) OR a.normalized_alias=normalize(upper(btrim(b.to_location)),NFC)) WHERE b.project_id=l.project_id AND b.mto IS DISTINCT FROM 'MV' AND a.location_id=l.id) ORDER BY l.id LIMIT 20001 FOR SHARE OF l,h,r`,[pid,current.modelVersionId])).rows;
  if(rows.length>20000)throw new PathFinderError('ENDPOINT_NEEDED_LOCATION_LIMIT',413);
+ const readCandidate = createAutomaticNamedEndpointCandidateReader(c, { projectId: pid, current, signal });
  let changed=0;
  for(const row of rows){
   check();const old=endpointBindingSchema.parse(row.record),{contentSha256,...body}=old;
   if(old.projectId!==pid||old.locationId!==row.id||endpointBindingHash(body)!==contentSha256)throw new PathFinderError('ENDPOINT_HEAD_INTEGRITY',409);
   if(old.status!=='confirmed'||old.locationRevision!==row.revision||old.modelVersionId===current.modelVersionId)continue;
   const names=[...new Set([row.name,...row.aliases].map(normalizeEndpointLocation))];
-  const candidates=await Promise.all(names.map(name=>readAutomaticNamedEndpointCandidate(c,{projectId:pid,current,name,signal})));
+  const candidates=await Promise.all(names.map(readCandidate));
   const identities=[...new Set(candidates.flatMap(v=>v.candidateObjectIds))];
   let reason:string|null=candidates.some(v=>['ambiguous','object-unverified'].includes(v.status))?'MODEL_LOCATION_CROSS_MODEL_AMBIGUOUS':identities.length>1?'MODEL_LOCATION_CROSS_MODEL_AMBIGUOUS':null;
   const selected=candidates.find(v=>v.status==='automatic-ready'&&v.point&&v.objectId);

@@ -73,6 +73,9 @@ pathfinderRouter.post('/match',async (req,res) => {
   try {const {projectId} = identity(req); res.json(await repository.match(projectId,principal(req),matchSchema.parse(req.body).expectedRegistryRevision));} catch(error){failure(res,error);}
 });
 pathfinderRouter.post('/jobs',createJobSubmissionHandler((projectId, who, input) => getPathFinderRuntime().jobs.create(projectId,who,input)));
+pathfinderRouter.get('/jobs/bulk-submission',async (req,res) => {
+  try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.legacyBulkSubmission(projectId,principal(req)));} catch(error){failure(res,error);}
+});
 pathfinderRouter.get('/jobs/:jobId',async (req,res) => {
   try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.get(projectId,principal(req),uuid.parse(req.params.jobId)));} catch(error){failure(res,error);}
 });

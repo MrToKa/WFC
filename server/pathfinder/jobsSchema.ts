@@ -41,6 +41,8 @@ export async function initializePathFinderJobs(pool: Pool): Promise<void> {
       ALTER TABLE pf_jobs DROP CONSTRAINT IF EXISTS pf_jobs_kind_check;
       ALTER TABLE pf_jobs ADD CONSTRAINT pf_jobs_kind_check CHECK(kind IN ('calculate','lookup','preview'));
       ALTER TABLE pf_jobs ADD COLUMN IF NOT EXISTS diagnostic_input JSONB;
+      ALTER TABLE pf_jobs ADD COLUMN IF NOT EXISTS bulk_submission_sha256 TEXT CHECK(bulk_submission_sha256 ~ '^[a-f0-9]{64}$');
+      ALTER TABLE pf_jobs ADD COLUMN IF NOT EXISTS bulk_submission_registry_revision BIGINT CHECK(bulk_submission_registry_revision >= 0);
       CREATE TABLE IF NOT EXISTS pf_lookup_results (
         project_id UUID NOT NULL,job_id UUID NOT NULL,dependencies JSONB NOT NULL,result JSONB NOT NULL,stale_at_completion BOOLEAN NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(project_id,job_id),

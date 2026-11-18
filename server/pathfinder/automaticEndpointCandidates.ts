@@ -26,10 +26,15 @@ const result = (status: AutomaticEndpointCandidateResult['status'], candidateObj
 
 type CandidateReadInput = { projectId:string; current:EndpointCurrentScope; deadline?:number; signal?:AbortSignal };
 type CandidateControls = { check:()=>void; account:(value:unknown)=>void };
-function candidateControls(input:CandidateReadInput):CandidateControls {
+function candidateControls(input:CandidateReadInput) {
   const deadline=Math.min(input.deadline??Infinity,Date.now()+RECALCULATION_LIMITS.collectionMilliseconds);let bytes=0;
+  const accountBytes = (amount: number) => {
+    bytes += amount;
+    if (bytes > RECALCULATION_LIMITS.neededLocationBytes) fail('ENDPOINT_NEEDED_LOCATION_BYTES', 413);
+  };
   return {check:()=>{input.signal?.throwIfAborted();if(Date.now()>deadline)fail('RECALCULATION_COLLECTION_DEADLINE',503);},
-    account:value=>{bytes+=Buffer.byteLength(canonicalPurposeJson(value));if(bytes>RECALCULATION_LIMITS.neededLocationBytes)fail('ENDPOINT_NEEDED_LOCATION_BYTES',413);}};
+    account: (value: unknown) => accountBytes(Buffer.byteLength(canonicalPurposeJson(value))),
+    accountBytes, bytes: () => bytes };
 }
 async function readCandidateSource(client:PoolClient,projectId:string,current:EndpointCurrentScope,{check,account}:CandidateControls){
   // Do not materialize the full plan's potentially million-object manifest for
@@ -194,23 +199,43 @@ export type AutomaticNamedEndpointCandidate = {
  * display proof before counting duplicates. A capacity refusal is never a
  * truncated unique candidate. No shared location or confirmation is created.
  */
-export async function readAutomaticNamedEndpointCandidate(client:PoolClient,input:CandidateReadInput&{name:string}):Promise<AutomaticNamedEndpointCandidate>{
-  const projectId=policyUuidSchema.parse(input.projectId),current=endpointCurrentScopeSchema.parse(input.current);
-  const name=normalizeLocation(z.string().min(1).max(500).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u).parse(input.name));
-  const controls=candidateControls(input);controls.check();
-  const refused=(status:AutomaticNamedEndpointCandidate['status']):AutomaticNamedEndpointCandidate=>({status,candidateObjectIds:[],point:null,objectId:null});
-  if(!current.traceId)return refused('preparation-required');
-  const source=await readCandidateSource(client,projectId,current,controls);
-  if(!source.currentVisibility)return refused('preparation-required');
-  const rows=(await client.query<{object_id:string}>(`/* automatic-endpoints:named */ SELECT object_id FROM pf_model_objects
-    WHERE project_id=$1 AND artifact_id=$2 AND geometry_role='object' AND visibility<>'hidden' AND match_names ? $3
-    ORDER BY object_id LIMIT $4`,[projectId,current.artifactId,name,RECALCULATION_LIMITS.neededLocations+1])).rows;
-  controls.check();controls.account(rows);
-  if(rows.length>RECALCULATION_LIMITS.neededLocations)fail('ENDPOINT_NEEDED_LOCATION_LIMIT',413);
-  const objectIds=rows.map(row=>preparationObjectIdSchema.parse(row.object_id));
-  if(new Set(objectIds).size!==objectIds.length)fail('AUTOMATIC_ENDPOINT_OBJECT_INTEGRITY');
-  const objects=await readCandidateObjects(client,projectId,current,source.aggregate,objectIds,controls);
-  const selected=verifyCandidateObjects(objectIds,()=>[name],objects,source,controls);
-  controls.check();
-  return {status:selected.status,candidateObjectIds:selected.candidateObjectIds,point:selected.anchor?.point??null,objectId:selected.anchor?.saved.record.identity.objectId??null};
+export async function readAutomaticNamedEndpointCandidate(client: PoolClient, input: CandidateReadInput & { name: string }): Promise<AutomaticNamedEndpointCandidate> {
+  return createAutomaticNamedEndpointCandidateReader(client, input)(input.name);
+}
+
+/** Reuse the locked preparation and trace within one transaction. */
+export function createAutomaticNamedEndpointCandidateReader(client: PoolClient, input: CandidateReadInput) {
+  const projectId = policyUuidSchema.parse(input.projectId);
+  const current = endpointCurrentScopeSchema.parse(input.current);
+  let prepared: Promise<{ source: CandidateSource; bytes: number }> | undefined;
+  const readSource = async () => {
+    const controls = candidateControls(input);
+    const source = await readCandidateSource(client, projectId, current, controls);
+    return { source, bytes: controls.bytes() };
+  };
+
+  return async (rawName: string): Promise<AutomaticNamedEndpointCandidate> => {
+    const name = normalizeLocation(z.string().min(1).max(500).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u).parse(rawName));
+    const controls = candidateControls(input);
+    controls.check();
+    const unavailable: AutomaticNamedEndpointCandidate = { status: 'preparation-required', candidateObjectIds: [], point: null, objectId: null };
+    if (!current.traceId) return unavailable;
+    const { source, bytes } = await (prepared ??= readSource());
+    controls.check();
+    controls.accountBytes(bytes);
+    if (!source.currentVisibility) return unavailable;
+    const rows = (await client.query<{ object_id: string }>(`/* automatic-endpoints:named */ SELECT object_id FROM pf_model_objects
+      WHERE project_id=$1 AND artifact_id=$2 AND geometry_role='object' AND visibility<>'hidden' AND match_names ? $3
+      ORDER BY object_id LIMIT $4`, [projectId, current.artifactId, name, RECALCULATION_LIMITS.neededLocations + 1])).rows;
+    controls.check();
+    controls.account(rows);
+    if (rows.length > RECALCULATION_LIMITS.neededLocations) fail('ENDPOINT_NEEDED_LOCATION_LIMIT', 413);
+    const objectIds = rows.map(row => preparationObjectIdSchema.parse(row.object_id));
+    if (new Set(objectIds).size !== objectIds.length) fail('AUTOMATIC_ENDPOINT_OBJECT_INTEGRITY');
+    const objects = await readCandidateObjects(client, projectId, current, source.aggregate, objectIds, controls);
+    const selected = verifyCandidateObjects(objectIds, () => [name], objects, source, controls);
+    controls.check();
+    return { status: selected.status, candidateObjectIds: selected.candidateObjectIds,
+      point: selected.anchor?.point ?? null, objectId: selected.anchor?.saved.record.identity.objectId ?? null };
+  };
 }

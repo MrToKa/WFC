@@ -41,7 +41,9 @@ export function proposalRoutingPreferences(options:unknown):{secondaryDistanceMe
 }
 export const createJobSchema = z.object({cableIds:z.array(uuid).min(1).max(10_000).optional(),expectedRegistryRevision:revision,
   options:optionsSchema.optional(),timeoutMilliseconds:z.number().int().min(100).max(120_000).optional(),force:z.boolean().optional(),
-  automaticPairPolicy:automaticPairPolicySchema.optional()}).strict();
+  automaticPairPolicy:automaticPairPolicySchema.optional(),submissionId:uuid.optional()}).strict()
+  .refine(input => !input.submissionId || (input.force === true && input.automaticPairPolicy !== undefined && input.cableIds === undefined),
+    {path:['submissionId'],message:'Submission IDs are reserved for forced whole-project calculations with automatic output policy.'});
 export type EngineOptions = z.infer<typeof optionsSchema>;
 export type ProjectSettings = {revision:string;connectionGap:string;secondaryTrayLength:string|null;endConnectionLength:string;additionalBendingPercent:string;
   routingBalance?:{mode:'destination-groups-v1';layoutSha256:string};
