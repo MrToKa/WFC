@@ -20,6 +20,8 @@ import { appendLocationImpactInTransaction } from './locationImpactRepository.js
 import { appendInitialFillMandateInTransaction } from './initialFillMandates.js';
 import { readAutomaticNamedEndpointCandidate } from './automaticEndpointCandidates.js';
 import { readCableEndpointDisplay } from './cableEndpointDisplay.js';
+import { readRequalifiedEndpointObject } from './endpointBindingRequalification.js';
+import { readReopenedFixedEndpointDisplay } from './reopenedFixedEndpointDisplay.js';
 import { collectBarrierCalculationScope } from './barrierCalculationScope.js';
 import { CABLE_ENDPOINT_PAIR_LIMITS, cableEndpointPairCommandSchema, cableEndpointPairReceiptSchema,
   cableEndpointPairClosedSchema, cableEndpointPairRecoverySchema, type CableEndpointPairCommand } from '../../shared/pathfinderCableEndpointPair.js';
@@ -142,9 +144,26 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
   }
   let confirmedDisplaySelection = head && location && current && reasons.length === 0
     ? await readCableEndpointDisplay(client, { projectId, head, location, current }, check) : null;
+  let reopenedObject: CableEndpointContext['reopenedObject'];
+  if (!confirmedSelection && !confirmedDisplaySelection && !reasons.length && current && location && head?.status === 'confirmed'
+    && head.locationRevision === location.revision && head.modelVersionId === current.modelVersionId
+    && (head.mode === 'fixed-world' || head.aggregateId !== current.aggregateId || head.artifactId !== current.artifactId || head.captureFrameId !== current.captureFrameId
+      || head.projectionSha256 !== current.projectionSha256 || (head.sourceObject && head.sourceObject.traceId !== current.traceId))) {
+    let display;
+    if (head.mode === 'fixed-world') {
+      display = await readReopenedFixedEndpointDisplay(client, { projectId, head, location, current }, check);
+    } else if (head.mode === 'object-derived') {
+      const evidence = await readRequalifiedEndpointObject(client, projectId, head, current, check);
+      if (evidence?.object) {
+        const object = await objectDisplay(client, projectId, evidence.object, check);
+        if (object?.sdkObjectId === evidence.sdkObjectId) display = object;
+      }
+    }
+    if (display) reopenedObject = { ...display, bindingId: head.id, bindingContentSha256: head.contentSha256, current };
+  }
   // Reconnect presentation from current retained geometry, without replacing a
   // saved point or turning the match into an unsaved automatic assignment.
-  if (!confirmedDisplaySelection && head?.status === 'confirmed' && head.mode === 'fixed-world'
+  if (!reopenedObject && !confirmedDisplaySelection && head?.status === 'confirmed' && head.mode === 'fixed-world'
     && head.sourceObject === null && head.attachment === null && !head.autoMatchEvidence?.objectGroup
     && location && head.locationRevision === location.revision && current && reasons.length === 0
     && head.modelVersionId === current.modelVersionId && head.aggregateId === current.aggregateId
@@ -169,6 +188,7 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
     }
   }
   const draft = cableEndpointContextSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-context.v1', projectId, cableId, end,
+    ...(reopenedObject && { reopenedObject }),
     cableWriteRevision: cable.cable_write_revision, logicalName, logicalKey, mto: cable.mto, canBind: reasons.length === 0,
     reasonCodes: reasons, registryRevision: registry.revision, location, head, current, automaticSelection, confirmedSelection,
     confirmedDisplaySelection, contextSha256: '0'.repeat(64) });

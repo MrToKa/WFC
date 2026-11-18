@@ -142,7 +142,7 @@ function planningIdentity(profile: string, implementation = 'c'.repeat(64)) {
 }
 /** Synthetic explicit-empty publication exercises the real immutable response,
  * strategy, ledger and receipt checks; it does not claim production geometry. */
-function planningSavedFixture(prior: 0 | 1 | 2 = 0, next: 0 | 1 | 2 = 2) {
+function planningSavedFixture(prior: 0 | 1 | 2 = 0, next: 0 | 1 | 2 = 2, includeObstacleReport = false) {
   const f = barrierFixture(), dependencies = f.dependencies as unknown as Data, result = f.result as Data;
   dependencies.cableWriteRevision = '1'; f.before.cable_write_revision = '1';
   f.after.cable_write_revision = '2'; f.cable.cableWriteRevision = '2';
@@ -162,6 +162,8 @@ function planningSavedFixture(prior: 0 | 1 | 2 = 0, next: 0 | 1 | 2 = 2) {
       domain: MIXED_BARRIER_QUERY_DOMAIN, globalModelCoverageVerified: false, physicalCableRadiusChecked: false },
     directSecondary: { ...result.barriers.directSecondary, schemaVersion: 'wfc.pf.mixed-constrained-direct-secondary.v2', binding } };
   delete result.barriers.directSecondary.policyVersion;
+  if (includeObstacleReport) result.barriers.obstacleReport = { status: 'complete', selectedParents: [],
+    crossedParentSelectionIds: [], blockingParentSelectionIds: [], checkedSegments: 1, totalSegments: 1, reasonCode: 'ROUTE_OBSTACLE_REPORT' };
   optionsSchema.parse(dependencies.options); mixedBarrierRuntimeContextSchema.parse(context); mixedBarrierExecutionSchema.parse(result.barriers);
   const { calculationMode: _mode, ...response } = result; engineResponseSchema.parse(response);
   f.reseal();
@@ -178,6 +180,25 @@ function planningSavedFixture(prior: 0 | 1 | 2 = 0, next: 0 | 1 | 2 = 2) {
 }
 
 describe('receipt-proven saved routes across canonical search-only profile upgrades', () => {
+  it('binds historical geometry to the latest receipt and exact cable write independently of current calculation authority', async () => {
+    const f = planningSavedFixture();
+    const saved = await f.reader.writtenProposal(f.cable);
+    expect(saved?.verified.raw.id).toBe(proposalId);
+    expect(saved?.verified.result.route?.pathPoints).toEqual(f.result.route.pathPoints);
+    expect(await f.reader.writtenProposal({ ...f.cable, cableWriteRevision: '3' })).toBeNull();
+    expect(await f.reader.writtenProposal({ ...f.cable, routing: '/OTHER' })).toBeNull();
+    expect(await f.reader.writtenProposal({ ...f.cable, designLength: '999' })).toBeNull();
+    f.receipt.proposal_id = id(99);
+    expect(await f.reader.writtenProposal(f.cable)).toBeNull();
+  });
+  it('restores the exact path when saving it cleared a previous obstacle note and retained the user remarks', async () => {
+    const f = planningSavedFixture(0, 2, true);
+    Object.assign(f.before, { remarks: 'Leave slack.\n[PathFinder obstacles] Crosses obstacles: #17.' });
+    Object.assign(f.after, { remarks: 'Leave slack.' });
+    expect(await f.reader.savedExactDisplay(f.cable, f.fresh, f.expected)).toBe(true);
+    Object.assign(f.after, { remarks: 'Changed user text.' });
+    expect(await f.reader.savedExactDisplay(f.cable, f.fresh, f.expected)).toBe(false);
+  });
   it.each([[0, 1], [0, 2], [1, 2], [0, 0]] as const)('retains the saved pair for profile %i to %i without approving the old calculation', async (prior, next) => {
     const f = planningSavedFixture(prior, next), before = structuredClone(f.current), frozen = structuredClone(f.dependencies);
     expect(await f.reader.savedExactDisplay(f.cable, f.fresh, f.expected)).toBe(true);

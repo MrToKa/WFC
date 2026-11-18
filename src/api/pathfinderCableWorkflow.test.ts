@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy';
 import { cableWorkflowPageSchema } from '../../shared/pathfinderCableWorkflow';
 import { cableWorkflowQueryHashInput, cableWorkflowQuerySchema, cableWorkflowDetailQueryHashInput, cableWorkflowDetailQuerySchema } from '../../shared/pathfinderCableWorkflowQueries';
-import { fetchPathFinderCableWorkflowPage, fetchPathFinderCableWorkflowDetail, CABLE_WORKFLOW_REQUEST_MILLISECONDS, CABLE_WORKFLOW_RESPONSE_BYTES } from './pathfinderCableWorkflow';
+import { fetchHistoricalSavedPath, fetchPathFinderCableWorkflowPage, fetchPathFinderCableWorkflowDetail, CABLE_WORKFLOW_REQUEST_MILLISECONDS, CABLE_WORKFLOW_RESPONSE_BYTES } from './pathfinderCableWorkflow';
 
 const id = (n: number) => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const project = id(1), cable = id(10), hash = 'a'.repeat(64);
@@ -26,6 +26,15 @@ beforeEach(() => { vi.stubGlobal('fetch', vi.fn()); vi.stubGlobal('crypto', webc
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('bounded read-only cable workflow transport', () => {
+  it('reads recorded geometry only for the requested project and cable', async()=>{
+    const path={projectId:project,cableId:cable,cableWriteRevision:'2',routing:'/BC1',designLength:'18',proposalId:id(9),
+      current:{modelVersionId:id(2),selectionRevision:'1',contentFingerprint:hash,aggregateId:id(3),artifactId:id(4),projectionSha256:hash,
+        captureFrameId:id(5),geometryRevision:'6',traceId:id(7)},points:[[1,2,3],[4,5,6]]};
+    const get=()=>fetchHistoricalSavedPath(project,'token',cable,new AbortController().signal);
+    vi.mocked(fetch).mockResolvedValueOnce(response(path)).mockResolvedValueOnce(response(null)).mockResolvedValueOnce(response({...path,cableId:id(33)}));
+    expect(await get()).toEqual(path);expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/'+cable+'/saved-path'),expect.objectContaining({method:'GET'}));
+    expect(await get()).toBeNull();await expect(get()).rejects.toMatchObject({code:'INVALID_RESPONSE'});
+  });
   it.each([false, true])('retains exact barrier JSON and hashes for list/detail requests (drill=%s)', async drillThroughWalls => {
     const input = { barrierRouting: barrierIntent(drillThroughWalls) }, page = fixture(input);
     const detail = { schemaVersion: 'wfc.pf.cable-workflow-detail.v1', projectId: project, cableId: cable, contextSha256: hash,

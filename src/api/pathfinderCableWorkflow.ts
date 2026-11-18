@@ -1,3 +1,4 @@
+import { historicalSavedPathSchema } from '../../shared/pathfinderHistoricalSavedPath';
 import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
 import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
@@ -56,7 +57,7 @@ async function read<T>(projectId: string, token: string, suffix: string, hashInp
     try { value = parsePurposeJson(new TextDecoder('utf-8', { fatal: true }).decode(bytes), { maximumBytes: CABLE_WORKFLOW_RESPONSE_BYTES }); }
     catch { return response.ok ? invalid() : refusal(response.status, null); }
     if (!response.ok) return refusal(response.status, value);
-    const queryHash = await deadline.wait(() => sha256(hashInput));
+    const queryHash = hashInput === undefined ? '' : await deadline.wait(() => sha256(hashInput));
     deadline.check(); return verify(value, queryHash);
   } finally { if (reader) releasePathFinderReader(reader); deadline.dispose(); }
 }
@@ -94,5 +95,14 @@ export async function fetchPathFinderCableWorkflowDetail(projectId: string, toke
     const detail = cableWorkflowDetailSchema.safeParse(value);
     return detail.success && detail.data.projectId === projectId && detail.data.cableId === cableId && detail.data.row.cable.id === cableId
       && detail.data.row.projectId === projectId && detail.data.querySha256 === queryHash && detail.data.row.mto !== 'MV' ? detail.data : invalid();
+  }, signal);
+}
+
+export function fetchHistoricalSavedPath(projectId: string, token: string, cableId: string, signal: AbortSignal) {
+  if (!policyUuidSchema.safeParse(cableId).success) return invalidRequest();
+  return read(projectId, token, `/${cableId}/saved-path`, undefined, value => {
+    if (value === null) return null;
+    const parsed = historicalSavedPathSchema.safeParse(value);
+    return parsed.success && parsed.data.projectId === projectId && parsed.data.cableId === cableId ? parsed.data : invalid();
   }, signal);
 }

@@ -84,6 +84,18 @@ describe('explicit cable status recovery', () => {
     expect(panelProps.pathVisible).toBe(true);expect(panelProps.storedRouteMessage).toContain('does not validate barriers');
     expect(p.pf.submitCalculation).not.toHaveBeenCalled();
   });
+  it('labels recorded geometry as historical and submits no calculation',async()=>{
+    listRow.cable.routing='/RECORDED';listRow.cable.designLength='18';
+    const p=props(), show=vi.fn(async()=>({status:'historical' as const}));
+    p.pf.showStoredRoute=show;p.pf.clearStoredRoute=vi.fn();
+    vi.mocked(fetchCableRows).mockResolvedValue({cables:[{id:listRow.cable.id,projectId:p.projectId,routing:'/RECORDED',cableWriteRevision:listRow.cable.cableWriteRevision}]}as never);
+    render(<PathFinderCableWorkspace {...p}/>);await openListCable();
+    await act(async()=>{await panelProps.onTogglePath?.();});
+    expect(panelProps.pathVisible).toBe(true);expect(panelProps.storedRouteMessage).toContain('recorded path');
+    expect(show).toHaveBeenCalledWith('/RECORDED',id(3),expect.objectContaining({cableWriteRevision:listRow.cable.cableWriteRevision,designLength:'18'}));
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+    await act(async()=>{await panelProps.onTogglePath?.();});expect(p.pf.clearStoredRoute).toHaveBeenCalledOnce();
+  });
   it('refuses a changed saved routing rather than drawing the stale row',async()=>{
     listRow.cable.routing='/MANUAL';const p=props(),show=vi.fn();p.pf.showStoredRoute=show;
     vi.mocked(fetchCableRows).mockResolvedValue({cables:[{id:listRow.cable.id,projectId:p.projectId,routing:'/CHANGED',cableWriteRevision:listRow.cable.cableWriteRevision}]}as never);

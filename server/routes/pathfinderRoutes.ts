@@ -40,6 +40,7 @@ pathfinderRouter.get('/authorization',async(req,res)=>{
 });
 pathfinderRouter.get('/cable-workflow', cableWorkflow.page);
 pathfinderRouter.get('/cable-workflow/:cableId', cableWorkflow.detail);
+pathfinderRouter.get('/cable-workflow/:cableId/saved-path', cableWorkflow.savedPath);
 pathfinderRouter.get('/location-impacts',(req,res)=>createLocationImpactReadHandlers(getPathFinderRuntime().locationImpacts).list(req,res));
 pathfinderRouter.get('/location-impacts/:impactId',(req,res)=>createLocationImpactReadHandlers(getPathFinderRuntime().locationImpacts).progress(req,res));
 pathfinderRouter.get('/initial-fill-progress/:impactId',(req,res)=>createInitialFillProgressReadHandler(getPathFinderRuntime().initialFillProgress)(req,res));

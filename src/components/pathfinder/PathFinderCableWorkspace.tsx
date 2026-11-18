@@ -139,7 +139,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const [storedDisplay,setStoredDisplay]=useState<{owner:string;working:boolean;visible:boolean;message:string}|null>(null);
   const storedDisplayAbort=useRef<AbortController|null>(null);
   const storedDisplayVisible=useRef(false);storedDisplayVisible.current=storedDisplay?.visible===true;
-  const storedDisplayOwner=JSON.stringify([props.accountId,props.projectId,props.token,props.active,props.pf.preparationViewerGeneration,props.pf.data?.activeModel,selected?.cable.id,selected?.cable.cableWriteRevision,selected?.cable.routing]);
+  const storedDisplayOwner=JSON.stringify([props.accountId,props.projectId,props.token,props.active,props.pf.preparationViewerGeneration,props.pf.data?.activeModel,selected?.cable.id,selected?.cable.cableWriteRevision,selected?.cable.routing,selected?.cable.designLength,props.pf.data?.artifacts?.[0]?.id,props.pf.data?.artifacts?.[0]?.snapshotSha256]);
   const storedDisplayLive=useRef(storedDisplayOwner);storedDisplayLive.current=storedDisplayOwner;
   useEffect(()=>{setStoredDisplay(null);return()=>{storedDisplayAbort.current?.abort();storedDisplayAbort.current=null;if(storedDisplayVisible.current)props.pf.clearStoredRoute?.();};},[storedDisplayOwner]);
   const verifiedRefreshScope = useRef<{ scope: string; cableId: string; jobId: string | null; proposalId: string | null; proposalHash: string | null } | null>(null);
@@ -897,9 +897,13 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       const latest=(await fetchCableRows(projectId,[cableId])).cables.find(cable=>cable.id===cableId);
       if(!live())return;
       if(!latest||latest.projectId!==projectId||latest.routing!==routing||String(latest.cableWriteRevision??'')!==String(revision??''))throw Error('The saved route changed. Refresh cable status before showing it.');
-      const result=await props.pf.showStoredRoute(routing,cableId,{signal:ticket.signal});
+      const result=await props.pf.showStoredRoute(routing,cableId,{signal:ticket.signal,cableWriteRevision:revision,designLength:selected.cable.designLength == null ? null : String(selected.cable.designLength)});
       if(!live())return;
       if(!result){setStoredDisplay({owner,working:false,visible:false,message:'The model display changed. Try Show again when the current model is ready.'});return;}
+      if(result.status==='historical'){
+        setStoredDisplay({owner,working:false,visible:true,message:'Showing the recorded path of the saved cable route, including both endpoint approaches. Its length and barriers have not been recalculated.'});
+        return;
+      }
       const missingProject=result.segments.filter(segment=>segment.project.state==='missing').map(segment=>segment.token);
       const missingModel=result.segments.filter(segment=>segment.model.state==='missing').map(segment=>segment.token);
       const ambiguous=result.segments.filter(segment=>segment.project.state==='ambiguous'||segment.model.state==='ambiguous').map(segment=>segment.token);

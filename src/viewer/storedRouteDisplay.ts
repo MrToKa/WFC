@@ -3,7 +3,8 @@ import { generateId } from '@/utils/generateId';
 import type { ViewerController, ViewerEvent, ViewerLoadSnapshot } from './ViewerController';
 import { aggregateRouteCheck, buildProjectRouteCheck, createLocalRouteCheck, parseRouteInput,
   type RouteAttempt, type RouteCheckResult } from './routeValidation';
-import { isUuid } from '../../viewer-runtime/protocol.mjs';
+import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
+import { isUuid, type ComputedPath } from '../../viewer-runtime/protocol.mjs';
 
 type Viewer = Pick<ViewerController, 'getLoadSnapshot' | 'showRoute' | 'cancel' | 'clear'>;
 type Pending = { load: ViewerLoadSnapshot; raw: string; cableId: string; operationId: string; requestId: string | null;
@@ -21,9 +22,11 @@ export function createStoredRouteDisplay(options: { viewer: Viewer; projectId: s
   prepare?: () => Promise<boolean>;
   fetchTrays?: typeof fetchRoutingTrays; onAccessFailure?: (error: RoutingTrayApiError) => void }) {
   let pending: Pending | null = null, displayed: ViewerLoadSnapshot | null = null;
+  let recording: { load: ViewerLoadSnapshot; abort: AbortController } | null = null;
   const current = (load: ViewerLoadSnapshot) => options.isCurrent() && sameLoad(options.viewer.getLoadSnapshot(), load);
   const cancel = (clear = false) => {
-    const old = pending, owned = old?.load ?? displayed; pending = null; displayed = null;
+    const old = pending, owned = recording?.load ?? old?.load ?? displayed;
+    recording?.abort.abort(); recording = null; pending = null; displayed = null;
     if (old) { old.abort.abort(); old.early.clear(); old.finish(null); if (old.requestId) options.viewer.cancel(old.requestId); }
     if (clear && owned && current(owned)) options.viewer.clear('user', { preserveCamera: true });
   };
@@ -43,7 +46,7 @@ export function createStoredRouteDisplay(options: { viewer: Viewer; projectId: s
       attempt.finish(null, error);
     }
   };
-  return {
+  const display = {
     cancel,
     clear: () => cancel(true),
     onEvent(event: ViewerEvent) {
@@ -127,6 +130,41 @@ export function createStoredRouteDisplay(options: { viewer: Viewer; projectId: s
           pending = null; displayed = null; attempt.finish(null, error);
         });
       });
+    },
+  };
+  return {
+    ...display,
+    async showSaved(raw: string, cableId: string, readPath: (signal: AbortSignal) => Promise<ComputedPath | null>,
+      draw: (path: ComputedPath) => Promise<string | null>, signal?: AbortSignal): Promise<RouteCheckResult | {status: 'historical'} | null> {
+      cancel(true);
+      const load = options.viewer.getLoadSnapshot();
+      if (!load?.ready || !current(load) || signal?.aborted) return null;
+      const attempt = { load, abort: new AbortController() };
+      recording = attempt;
+      const abort = () => { if (recording === attempt) cancel(true); };
+      signal?.addEventListener('abort', abort, { once: true });
+      const deadline = pathFinderRequestDeadline(attempt.abort.signal, 75000, () => new Error('The saved route display timed out.'));
+      const owned = () => recording === attempt && current(load);
+      try {
+        const path = await deadline.wait(() => readPath(deadline.signal));
+        if (!owned()) return null;
+        if (!path) {
+          recording = null;
+          return display.show(raw, cableId, {signal});
+        }
+        const shown = await deadline.wait(() => draw(path));
+        if (!shown || !owned()) return null;
+        displayed = load;
+        return {status: 'historical'};
+      } catch (error) {
+        if (!owned()) return null;
+        options.viewer.clear('user', { preserveCamera: true });
+        throw error;
+      } finally {
+        if (recording === attempt) recording = null;
+        deadline.dispose();
+        signal?.removeEventListener('abort', abort);
+      }
     },
   };
 }

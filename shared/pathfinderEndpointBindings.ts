@@ -111,9 +111,13 @@ export const endpointBindingSchema = z.object(bindingFields).strict().superRefin
   } else if (v.autoMatchEvidence !== undefined) ctx.addIssue({ code: 'custom', message: 'Only a matched fixed point carries model-match observation evidence.' });
   if ((v.derivation === ENDPOINT_MODEL_CENTRE_DERIVATION) !== (v.centreFallbackEvidence !== undefined))
     ctx.addIssue({ code: 'custom', message: 'A centre fallback retains its distinct machine proof.' });
-  if (v.sameModelReuse && (v.mode !== 'fixed-world' || v.sourceObject !== null || v.attachment !== null || v.sourceDecisionId !== null
-    || v.sameModelReuse.modelVersionId !== v.modelVersionId || v.sameModelReuse.sourceBindingId !== v.supersedesBindingId))
-    ctx.addIssue({ code: 'custom', message: 'Same-model reuse retains only an unchanged fixed point with its prior binding proof.' });
+  if (v.sameModelReuse) {
+    const evidenceMatches = v.mode === 'fixed-world' && v.sourceObject === null
+      || v.mode === 'object-derived' && v.sourceObject?.traceId === v.sameModelReuse.targetTraceId;
+    if (!evidenceMatches || v.attachment !== null || v.sourceDecisionId !== null
+      || v.sameModelReuse.modelVersionId !== v.modelVersionId || v.sameModelReuse.sourceBindingId !== v.supersedesBindingId)
+      ctx.addIssue({ code: 'custom', message: 'Same-model reuse requires an unchanged endpoint and its prior binding proof.' });
+  }
   if (v.mode === 'object-derived' && (!v.sourceObject || v.attachment !== null || v.derivation !== ENDPOINT_ANCHOR_RULE)) ctx.addIssue({ code: 'custom', message: 'Derived anchors require exact immutable object evidence.' });
   if (v.mode === 'object-attached' && (!v.sourceObject || !v.attachment || !v.qualifiedProjectFrameId || !['qualified-local-point.v1', 'durable-connector.v1'].includes(v.derivation))) ctx.addIssue({ code: 'custom', message: 'Attachments require separately qualified frame and identity evidence.' });
   if (v.mode === 'object-attached' && v.attachment && (v.derivation === 'durable-connector.v1') !== (v.attachment.connectorId !== null)) ctx.addIssue({ code: 'custom', message: 'Connector derivation and durable connector evidence must agree.' });

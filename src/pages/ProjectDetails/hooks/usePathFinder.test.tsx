@@ -6,6 +6,7 @@ import { fetchPathFinderState, fetchPathFinderLookupPlan, fetchPathFinderProposa
 import { requalifyStaleCableEndpoints, hasPendingEndpointRequalification } from '@/api/pathfinderEndpointRequalification';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerAccessError } from '@/viewer/sessionApi';
+import { fetchHistoricalSavedPath } from '@/api/pathfinderCableWorkflow';
 import { createPublishedCadDisplay } from '@/viewer/publishedCadDisplay';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
@@ -16,18 +17,19 @@ vi.mock('@/viewer/publishedCadDisplay', () => ({ createPublishedCadDisplay: vi.f
   cadDisplays.push(display); return display;
 }) }));
 
-const facts = vi.hoisted(() => ({ setTrayAssignments: vi.fn(), disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), resolveTrayIdentities: vi.fn(), ready: true, showLocationPoint: vi.fn(), showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
+const facts = vi.hoisted(() => ({ showComputedPath: vi.fn(), setTrayAssignments: vi.fn(), disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), resolveTrayIdentities: vi.fn(), ready: true, showLocationPoint: vi.fn(), showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
   return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn(), submitPathFinderCalculation: vi.fn() };
 });
+vi.mock('@/api/pathfinderCableWorkflow', async original => ({ ...await original<typeof import('@/api/pathfinderCableWorkflow')>(), fetchHistoricalSavedPath: vi.fn() }));
 vi.mock('@/api/pathfinderEndpointRequalification', () => ({ requalifyStaleCableEndpoints: vi.fn(), hasPendingEndpointRequalification: vi.fn() }));
 vi.mock('@/api/pathfinderPreparation', () => ({ fetchPreparationContext: vi.fn() }));
 vi.mock('@/api/projectModels', () => ({ fetchProjectModels: vi.fn() }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) { facts.instances++; facts.events.push(options.onEvent); } dispose = facts.disposed; load = facts.load;
   readSelection = facts.readSelection; readTrayRootSelection = facts.readTrayRootSelection; showLocation = facts.showLocation; showLocationPoint = facts.showLocationPoint; showTray = facts.showTray; hideTray = facts.hideTray; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
-  captureModel = facts.capture; getLoadSnapshot = () => ({ ready: facts.ready });
+  showComputedPath = facts.showComputedPath; captureModel = facts.capture; getLoadSnapshot = () => ({ ready: facts.ready });
   captureBarriers = facts.barrierCapture; publishBarriers = facts.barrierPublish;
   setTrayAssignments = facts.setTrayAssignments;
   resolveTrayIdentities = facts.resolveTrayIdentities;
@@ -60,6 +62,28 @@ beforeEach(() => {
 
 describe('published Routings builder geometry in Path Finder', () => {
   const mount = () => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false }));
+  it.each(['verified', 'different-frame', 'changed-cable', 'different-model'] as const)('displays historical points for the checked cable and current artifact: %s',async scenario=>{
+    const current=state();
+    current.artifacts=[{id:locationId,modelVersionId:modelId,snapshotSha256:'b'.repeat(64),objectCount:3,engineeringAccepted:false,
+      readiness:'needs_review',capture:{},coordinates:{},createdAt:'2026-10-18T00:00:00Z'}];
+    vi.mocked(fetchPathFinderState).mockResolvedValue(current);
+    vi.mocked(fetchHistoricalSavedPath).mockResolvedValue({projectId,cableId:locationId,cableWriteRevision:scenario==='changed-cable'?'8':'7',
+      routing:'/RECORDED',designLength:'18',proposalId:locationId,current:{...preparationModelScope,aggregateId:locationId,artifactId:locationId,
+        modelVersionId:scenario==='different-model'?locationId:modelId,projectionSha256:(scenario==='different-frame'?'c':'b').repeat(64),
+        captureFrameId:locationId,geometryRevision:'1',traceId:locationId},points:[[1,2,3],[4,5,6],[7,8,9]]});
+    const view=mount();await waitFor(()=>expect(facts.instances).toBe(1));
+    act(()=>facts.events[0]({type:'MODEL_LOADED',payload:{}}));
+    facts.showComputedPath.mockResolvedValue(locationId);
+    const show=()=>view.result.current.showStoredRoute('/RECORDED',locationId,{cableWriteRevision:'7',designLength:'18'});
+    if(scenario==='verified'){
+      await expect(show()).resolves.toEqual({status:'historical'});
+      expect(facts.showComputedPath).toHaveBeenCalledExactlyOnceWith({pathId:locationId,objectIds:[],points:[[1,2,3],[4,5,6],[7,8,9]]});
+    }else{
+      await expect(show()).rejects.toThrow('saved route or model changed');
+      expect(facts.showComputedPath).not.toHaveBeenCalled();
+    }
+    expect(submitPathFinderCalculation).not.toHaveBeenCalled();
+  });
   it('loads published CAD geometry only after the protected model has loaded, using the current project and model', async () => {
     const view = mount();
     await waitFor(() => expect(facts.instances).toBe(1));

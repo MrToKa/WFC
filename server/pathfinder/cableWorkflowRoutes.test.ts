@@ -10,14 +10,23 @@ import { PathFinderError } from './errors.js';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function fixture() {
   const page = vi.fn(async () => ({ observed: 'owned synthetic read only' })), detail = vi.fn(async () => ({ observed: 'owned synthetic detail' }));
-  const handlers = createCableWorkflowReadHandlers({ page, detail } as unknown as CableWorkflowRepository);
+  const savedPath = vi.fn(async () => null);
+  const handlers = createCableWorkflowReadHandlers({ page, detail, savedPath } as unknown as CableWorkflowRepository);
   const req = Object.assign(new EventEmitter(), { params: { projectId: id(1), cableId: id(4) }, query: { search: '%_\\' },
     userId: id(2), loginId: id(3), loginExpiresAt: Date.now() + 100000 });
   const res = Object.assign(new EventEmitter(), { writableEnded: false, destroyed: false, setHeader: vi.fn(), status: vi.fn(), json: vi.fn() });
   res.status.mockReturnValue(res); res.json.mockImplementation(() => { res.writableEnded = true; return res; });
-  return { page, detail, handlers, req, res, run: (kind: 'page' | 'detail' = 'page') => handlers[kind](req as unknown as Request, res as unknown as Response) };
+  return { page, detail, savedPath, handlers, req, res, run: (kind: 'page' | 'detail' | 'savedPath' = 'page') => handlers[kind](req as unknown as Request, res as unknown as Response) };
 }
 describe('protected read-only workflow handlers', () => {
+  it('looks up historical path geometry only for the requested cable, without accepting model or calculation authority from the client', async () => {
+    const f = fixture(); Object.assign(f.req, { query: {} });
+    await f.run('savedPath');
+    expect(f.savedPath).toHaveBeenCalledWith(id(1), expect.objectContaining({ userId: id(2) }), id(4), expect.any(AbortSignal));
+    expect(f.res.json).toHaveBeenCalledWith(null);
+    const invalid = fixture(); await invalid.run('savedPath');
+    expect(invalid.res.status).toHaveBeenCalledWith(400); expect(invalid.savedPath).not.toHaveBeenCalled();
+  });
   it('passes raw HTTP query only to the exact authorized repository page boundary', async () => {
     const f = fixture(); await f.run();
     expect(f.page).toHaveBeenCalledExactlyOnceWith(id(1), { userId: id(2), loginId: id(3), loginExpiresAt: f.req.loginExpiresAt }, f.req.query, expect.any(AbortSignal), true);

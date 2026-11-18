@@ -55,6 +55,11 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
   registryRevision: policyRevisionSchema, location: endpointLocationSchema.nullable(), head: endpointBindingSchema.nullable(),
   current: endpointCurrentScopeSchema.nullable(), automaticSelection: cableEndpointAutomaticSelectionSchema.nullable().optional(),
   confirmedSelection: cableEndpointConfirmedSelectionSchema.nullable().optional(),
+  reopenedObject: z.object({
+    sdkObjectId: cableEndpointSdkObjectIdSchema, name: z.string().max(2048).optional(),
+    sdkObjectIds: z.array(cableEndpointSdkObjectIdSchema).min(2).max(ENDPOINT_MODEL_MATCH_OBJECT_LIMIT).optional(),
+    bindingId: policyUuidSchema, bindingContentSha256: policyHashSchema, current: endpointCurrentScopeSchema,
+  }).strict().optional(),
   confirmedDisplaySelection: cableEndpointConfirmedDisplaySelectionSchema.nullable().optional(),
   contextSha256: policyHashSchema }).strict().superRefine((value, context) => {
   if (value.logicalName !== null && value.logicalName !== value.logicalName.normalize('NFC').trim()
@@ -73,6 +78,16 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     || canonicalPurposeJson(value.confirmedSelection.object) !== canonicalPurposeJson(value.head.sourceObject)
     || canonicalPurposeJson(value.confirmedSelection.pointProjectMetres) !== canonicalPurposeJson(value.head.pointProjectMetres)))
     context.addIssue({ code: 'custom', message: 'Confirmed model display belongs to the exact current object-derived head.' });
+  const reopened = value.reopenedObject;
+  if (reopened && (!value.canBind || !value.head || !value.location || !value.current || value.head.status !== 'confirmed'
+    || (value.head.mode !== 'fixed-world' && value.head.mode !== 'object-derived')
+    || value.head.modelVersionId !== value.current.modelVersionId || value.head.locationRevision !== value.location.revision
+    || value.head.id !== reopened.bindingId || value.head.contentSha256 !== reopened.bindingContentSha256
+    || canonicalPurposeJson(reopened.current) !== canonicalPurposeJson(value.current)
+    || value.confirmedSelection || value.confirmedDisplaySelection || value.automaticSelection
+    || (reopened.sdkObjectIds && (reopened.sdkObjectIds[0] !== reopened.sdkObjectId
+      || !reopened.sdkObjectIds.every((id, i, ids) => i === 0 || ids[i - 1] < id)))))
+    context.addIssue({ code: 'custom', message: 'Reopened object display requires the verified shared binding and current model.' });
   const display = value.confirmedDisplaySelection;
   if (display?.reconnection && (!value.location || ![value.location.name, ...value.location.aliases]
     .some(name => name.normalize('NFC').trim().toUpperCase() === display.reconnection!.logicalName.normalize('NFC').trim().toUpperCase())))

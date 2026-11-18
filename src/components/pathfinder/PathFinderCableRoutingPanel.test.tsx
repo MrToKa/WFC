@@ -210,6 +210,19 @@ describe('showing the popup From/To locations without changing them', () => {
     expect(show).toHaveBeenCalledExactlyOnceWith(55); expect(assignment.save).not.toHaveBeenCalled();
     expect((screen.getByRole('textbox', { name: 'From assigned model object' }) as HTMLTextAreaElement).value).toContain('New selected object');
   });
+  it('shows the verified object on reopening a cable before recalculation', async () => {
+    const saved = context('to', 'confirmed'), head = saved.head!;
+    assignment.to.context = cableEndpointContextSchema.parse({ ...saved, head: { ...head, aggregateId: id(91) }, confirmedSelection: null,
+      reopenedObject: { sdkObjectId: 444, name: '15-GC-73308', current: saved.current!,
+        bindingId: head.id, bindingContentSha256: head.contentSha256 } });
+    const show = vi.fn(async () => true), p = props();
+    render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    expect((screen.getByRole('textbox', { name: 'To assigned model object' }) as HTMLTextAreaElement).value).toContain('15-GC-73308');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show To location' })); });
+    expect(show).toHaveBeenCalledExactlyOnceWith(444);
+    expect(assignment.save).not.toHaveBeenCalled();
+    expect(p.onCalculate).not.toHaveBeenCalled();
+  });
   it('can show an automatic candidate and a confirmed display-only fixed-world object', async () => {
     assignment.from.context = context('from');
     const saved = context('to', 'confirmed');

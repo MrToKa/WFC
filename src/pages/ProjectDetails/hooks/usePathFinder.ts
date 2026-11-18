@@ -14,7 +14,7 @@ import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-c
 import { AUTOMATIC_PAIR_POLICY } from '../../../../shared/pathfinderAutomaticPair';
 import { requalifyStaleCableEndpoints, hasPendingEndpointRequalification } from '@/api/pathfinderEndpointRequalification';
 import { createStoredRouteDisplay, type StoredRouteDisplay } from '@/viewer/storedRouteDisplay';
-import type { RouteCheckResult } from '@/viewer/routeValidation';
+import { fetchHistoricalSavedPath, PathFinderCableWorkflowApiError } from '@/api/pathfinderCableWorkflow';
 import { createPublishedCadDisplay, type PublishedCadDisplay } from '@/viewer/publishedCadDisplay';
 
 export type ProjectPreparationViewer = {
@@ -284,7 +284,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       for (const cableId of frozenCableIds) {
         const cable = data.cables.find(value => value.id === cableId);
         if (cable?.fromMatch.status !== 'stale' && cable?.toMatch.status !== 'stale'
-          && !await hasPendingEndpointRequalification(projectId, token, cableId)) continue;
+          && !await hasPendingEndpointRequalification(projectId, token, cableId, model)) continue;
         try { requalified = await requalifyStaleCableEndpoints(projectId, token, cableId, model, run.abort.signal) || requalified; }
         catch {
           return { kind: 'not-submitted', code: 'ENDPOINT_REQUALIFICATION_UNCONFIRMED' };
@@ -537,12 +537,31 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     try { runRef.current?.viewer?.clear('user', { preserveCamera: options.preserveCamera !== false }); }
     catch { /* A terminal viewer is already closed. */ }
   }, []);
-  const showStoredRoute = useCallback((rawRouting: string, cableId: string, options: {signal?:AbortSignal} = {}): Promise<RouteCheckResult | null> => {
+  const showStoredRoute = useCallback((rawRouting: string, cableId: string, options: {signal?:AbortSignal; cableWriteRevision?:string; designLength?:string | null} = {}) => {
     const run = runRef.current;
     if (!run || !live(run) || !isAdmin || latestView.current.busy || projectPreparationCapture.current || planningCapture.current || lookupCapture.current)
       return Promise.resolve(null);
-    return run.storedRoute?.show(rawRouting, cableId, options) ?? Promise.resolve(null);
-  }, [isAdmin, live]);
+    if (!run.storedRoute || !run.viewer || !projectId || !token) return Promise.resolve(null);
+    const viewer = run.viewer;
+    if (!options.cableWriteRevision || options.designLength == null) return run.storedRoute.show(rawRouting, cableId, options);
+    return run.storedRoute.showSaved(rawRouting, cableId, async signal => {
+      let saved;
+      try { saved = await fetchHistoricalSavedPath(projectId, token, cableId, signal); }
+      catch (error) {
+        if (error instanceof PathFinderCableWorkflowApiError && error.status && [401,403,404].includes(error.status))
+          accessFailure(run, new PathFinderApiError(error.code, error.status));
+        throw error;
+      }
+      if (!saved) return null;
+      const active = dataRef.current?.activeModel, artifact = dataRef.current?.artifacts[0], scope = saved.current;
+      if (saved.cableWriteRevision !== options.cableWriteRevision || saved.routing !== rawRouting || saved.designLength !== options.designLength
+        || !active || !artifact || active.modelVersionId !== scope.modelVersionId || active.selectionRevision !== scope.selectionRevision
+        || active.contentFingerprint !== scope.contentFingerprint || artifact.modelVersionId !== scope.modelVersionId
+        || artifact.id !== scope.artifactId || artifact.snapshotSha256 !== scope.projectionSha256)
+        throw new Error('The saved route or model changed. Refresh the cable before showing its path.');
+      return {pathId: saved.proposalId, points: saved.points, objectIds: []};
+    }, path => viewer.showComputedPath(path), options.signal);
+  }, [accessFailure, isAdmin, live, projectId, token]);
   const clearStoredRoute = useCallback(() => { runRef.current?.storedRoute?.clear(); }, []);
   return { ...visible, setTrayAssignmentContext, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),

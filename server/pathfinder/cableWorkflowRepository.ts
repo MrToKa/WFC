@@ -20,6 +20,7 @@ import { PathFinderError } from './errors.js';
 import { cableWorkflowReadTransaction } from './cableWorkflowRead.js';
 import { createCableWorkflowCursor } from './cableWorkflowCursor.js';
 import { createCableWorkflowProofReader } from './cableWorkflowProof.js';
+import { readHistoricalSavedPath } from './historicalSavedPath.js';
 import { isExpectedBarrierCurrentnessError } from './barrierCurrentness.js';
 
 type Data = Record<string, any>;
@@ -272,6 +273,14 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
 export function createCableWorkflowRepository(pool: Pool, options: { cursorKey?: Buffer } = {}) {
   const cursors = createCableWorkflowCursor(options.cursorKey ?? randomBytes(32));
   return {
+    async savedPath(projectId: string, who: JobPrincipal, cableId: string, signal?: AbortSignal) {
+      return cableWorkflowReadTransaction(pool, projectId, who, async (client, check) => {
+        policyUuidSchema.parse(cableId);
+        const values = (await client.query<Data>(candidatesSql, [projectId, null, cableId, null])).rows; check();
+        if (values.length !== 1) return fail('CABLE_NOT_FOUND', 404);
+        return readHistoricalSavedPath(client, projectId, snapshot(values[0]), check);
+      }, signal);
+    },
     async page(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal, http = false) {
       return cableWorkflowReadTransaction(pool, projectId, who, async (client, check) => {
         const query: CableWorkflowQuery = http ? parseCableWorkflowHttpQuery(raw) : cableWorkflowQuerySchema.parse(raw), queryHash = hash(cableWorkflowQueryHashInput(query));

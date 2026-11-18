@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { readCableEndpointSelection } from './cableEndpointSelection.js';
 import type { Pool, PoolClient } from 'pg';
 import { endpointBindingSchema, endpointRequalifySchema, endpointRequalifyReceiptSchema, type EndpointBinding, type EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
 import { preparationAggregateSchema } from '../../shared/pathfinderPreparation.js';
 import { geometryTraceManifestSchema, geometryObjectRevisionSchema, GEOMETRY_TRACE_LIMITS } from '../../shared/pathfinderGeometryTrace.js';
 import { canonicalPurposeJson, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy.js';
-import { endpointBindingHash, endpointBindingTransaction, readCurrentEndpointBindingContext, readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
+import { endpointBindingHash, endpointBindingTransaction, objectEvidence, readCurrentEndpointBindingContext, readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
 import { barrierFrameProjectionHash } from './barrierScope.js';
 import { normalizeLocation } from './matching.js';
 import { assertLoginNotExpired } from './auth.js';
@@ -20,18 +21,18 @@ const scopeMatches = (binding: EndpointBinding, current: EndpointCurrentScope) =
 
 /** Verifies a historical/current publication and its actual common world frame.
  * Equal deterministic frame IDs alone never establish this proof. */
-export async function readEndpointPublicationFrame(client: PoolClient, projectId: string, aggregateId: string) {
+export async function readEndpointPublicationFrame(client: PoolClient, projectId: string, aggregateId: string, traceId: string | null = null) {
   const rows = (await client.query<{ aggregate: unknown; trace: unknown; artifact_id: string; snapshot_sha256: string }>(`/* endpoint-requalify:publication */
     SELECT a.manifest AS aggregate,t.manifest AS trace,f.id AS artifact_id,f.snapshot_sha256
     FROM pf_preparation_aggregates a JOIN pf_artifacts f ON f.project_id=a.project_id AND f.id=a.artifact_id
     JOIN pf_geometry_trace_sets t ON t.project_id=a.project_id AND t.aggregate_id=a.id
-    WHERE a.project_id=$1 AND a.id=$2 AND octet_length(a.manifest::text)<=16777216 AND octet_length(t.manifest::text)<=262144
-    ORDER BY t.created_at DESC,t.id DESC LIMIT 1 FOR SHARE OF a,f,t`, [projectId, aggregateId])).rows;
+    WHERE a.project_id=$1 AND a.id=$2 AND ($3::uuid IS NULL OR t.id=$3) AND octet_length(a.manifest::text)<=16777216 AND octet_length(t.manifest::text)<=262144
+    ORDER BY t.created_at DESC,t.id DESC LIMIT 1 FOR SHARE OF a,f,t`, [projectId, aggregateId, traceId])).rows;
   if (rows.length !== 1) return fail();
   const a = preparationAggregateSchema.safeParse(rows[0].aggregate), t = geometryTraceManifestSchema.safeParse(rows[0].trace);
   if (!a.success || !t.success) return fail();
   const aggregate = a.data, trace = t.data, { contentSha256, ...body } = trace;
-  if (endpointBindingHash(body) !== contentSha256 || aggregate.projectId !== projectId || aggregate.id !== aggregateId || trace.projectId !== projectId
+  if (endpointBindingHash(body) !== contentSha256 || aggregate.projectId !== projectId || aggregate.id !== aggregateId || trace.projectId !== projectId || traceId !== null && trace.id !== traceId
     || trace.aggregateId !== aggregate.id || trace.modelVersionId !== aggregate.modelVersionId || trace.captureFrameId !== aggregate.coordinateFrameId
     || trace.projection.sha256 !== aggregate.projection.sha256 || trace.sessionId !== aggregate.sessionId || trace.geometryRevision !== aggregate.geometryRevision
     || aggregate.artifactId !== rows[0].artifact_id || aggregate.projection.sha256 !== rows[0].snapshot_sha256) return fail();
@@ -60,14 +61,63 @@ export async function readEndpointPublicationFrame(client: PoolClient, projectId
   return { aggregate, trace, frameSha256 };
 }
 
-/** Explicit calculation preflight: carry at most this cable's two shared fixed
- * locations. It changes neither points nor the original confirming principal. */
+/** Explicit calculation preflight: carry at most this cable's two shared
+ * locations or their verified object anchors, retaining the original confirmation. */
 export function requalifyCableEndpointBindings(pool: Pool, projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) {
   endpointRequalifySchema.parse(raw);
   return endpointBindingTransaction(pool, projectId, who, client => requalifyCableEndpointBindingsInTransaction(client, projectId, who, raw, signal));
 }
 
 type FrameCache = Map<string, Promise<Awaited<ReturnType<typeof readEndpointPublicationFrame>>>>;
+async function publicationPair(client: PoolClient, projectId: string, binding: EndpointBinding, current: EndpointCurrentScope, frames: FrameCache) {
+  const frame = (aggregateId: string, traceId: string | null) => {
+    const key = aggregateId + ':' + (traceId ?? '');
+    if (!frames.has(key)) frames.set(key, readEndpointPublicationFrame(client, projectId, aggregateId, traceId));
+    return frames.get(key)!;
+  };
+  const source = await frame(binding.aggregateId, binding.sourceObject?.traceId ?? binding.sameModelReuse?.targetTraceId ?? null);
+  const target = await frame(current.aggregateId, current.traceId);
+  if (source.aggregate.modelVersionId !== current.modelVersionId || target.aggregate.modelVersionId !== current.modelVersionId
+    || source.aggregate.contentFingerprint !== current.contentFingerprint || target.aggregate.contentFingerprint !== current.contentFingerprint
+    || source.aggregate.artifactId !== binding.artifactId || source.aggregate.projection.sha256 !== binding.projectionSha256
+    || source.aggregate.coordinateFrameId !== binding.captureFrameId || target.aggregate.artifactId !== current.artifactId
+    || target.aggregate.projection.sha256 !== current.projectionSha256 || target.aggregate.coordinateFrameId !== current.captureFrameId
+    || target.trace.id !== current.traceId || source.frameSha256 !== target.frameSha256) return fail();
+  return { source, target };
+}
+
+async function resolveEquipment(client: PoolClient, projectId: string, binding: EndpointBinding, current: EndpointCurrentScope, check: () => void) {
+  if (!binding.sourceObject || binding.mode !== 'object-derived' || binding.status !== 'confirmed'
+    || binding.projectId !== projectId || binding.sourceDecisionId !== null) return null;
+  try {
+    const original = await objectEvidence(client, projectId, { ...current, aggregateId: binding.aggregateId,
+      projectionSha256: binding.projectionSha256, captureFrameId: binding.captureFrameId }, binding.sourceObject);
+    check();
+    if (!original.identity.dbId || original.provenance.contentFingerprint !== current.contentFingerprint
+      || !same(original.geometry.equipmentAnchor?.pointMetres ?? null, binding.pointProjectMetres)) return null;
+    const selected = await readCableEndpointSelection(client, { projectId, current, sdkObjectId: original.identity.dbId }, check);
+    if (!selected.object || !same(selected.pointProjectMetres, binding.pointProjectMetres)
+      || !same(selected.bounds, original.geometry.bounds)) return null;
+    const object = await objectEvidence(client, projectId, current, selected.object);
+    return same(original.identity, object.identity) ? selected : null;
+  } catch (error) {
+    if (error instanceof PathFinderError && ['ENDPOINT_OBJECT_NOT_FOUND', 'ENDPOINT_OBJECT_SCOPE'].includes(error.code)) return null;
+    throw error;
+  }
+}
+
+/** Prove an assigned object for display before its binding is carried for calculation. */
+export async function readRequalifiedEndpointObject(client: PoolClient, projectId: string, binding: EndpointBinding, current: EndpointCurrentScope, check: () => void) {
+  if (binding.mode !== 'object-derived' || binding.modelVersionId !== current.modelVersionId) return null;
+  try {
+    await publicationPair(client, projectId, binding, current, new Map()); check();
+    return await resolveEquipment(client, projectId, binding, current, check);
+  } catch (error) {
+    if (error instanceof PathFinderError && error.code === 'ENDPOINT_REQUALIFICATION_UNAVAILABLE') return null;
+    throw error;
+  }
+}
+
 /** Caller owns the project/authority transaction; cached frames are immutable and transaction-local. */
 export async function requalifyCableEndpointBindingsInTransaction(client: PoolClient, projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal, frameCache?: FrameCache) {
   const command = endpointRequalifySchema.parse(raw), request = { schemaVersion: 'wfc.pf.endpoint-requalify-owner.v1', command };
@@ -79,7 +129,8 @@ export async function requalifyCableEndpointBindingsInTransaction(client: PoolCl
     if (saved) {
       if (saved.kind !== 'confirm' || saved.request_sha256 !== endpointBindingHash(request) || !same(saved.request, request)) return fail('ENDPOINT_REQUALIFICATION_IDEMPOTENCY_CONFLICT');
       const receipt = endpointRequalifyReceiptSchema.parse(saved.receipt);
-      if (receipt.projectId !== projectId || receipt.cableId !== command.cableId || receipt.idempotencyKey !== command.idempotencyKey || receipt.commandSha256 !== commandSha256) return fail();
+      if (receipt.projectId !== projectId || receipt.cableId !== command.cableId || receipt.idempotencyKey !== command.idempotencyKey || receipt.commandSha256 !== commandSha256)
+        return fail('ENDPOINT_REQUALIFICATION_RECEIPT_INVALID');
       return { ...receipt, duplicate: true };
     }
     const current = await readCurrentEndpointBindingContext(client, projectId);
@@ -104,24 +155,20 @@ export async function requalifyCableEndpointBindingsInTransaction(client: PoolCl
       byLocation.set(row.location_id, { row, binding });
     }
     const updatedLocationIds: string[] = [], frames = frameCache ?? new Map<string, Promise<Awaited<ReturnType<typeof readEndpointPublicationFrame>>>>();
-    const frame = (id: string) => { if (!frames.has(id)) frames.set(id, readEndpointPublicationFrame(client, projectId, id)); return frames.get(id)!; };
     for (const { row, binding } of byLocation.values()) {
       check();
-      if (scopeMatches(binding, current) && (binding.sameModelReuse
+      if (scopeMatches(binding, current) && (binding.mode !== 'object-derived' || binding.sourceObject?.traceId === current.traceId) && (binding.sameModelReuse
         ? binding.sameModelReuse.targetTraceId === current.traceId && binding.sameModelReuse.contentFingerprint === current.contentFingerprint
         : !['matched-model-bottom-aabb.v1','matched-model-centre-fallback.v1'].includes(binding.derivation) || same(binding.centreFallbackEvidence?.current ?? binding.autoMatchEvidence?.current, current))) continue;
-      if (binding.mode !== 'fixed-world' || binding.status !== 'confirmed' || binding.locationRevision !== row.location_revision
-        || binding.sourceObject !== null || binding.attachment !== null || binding.sourceDecisionId !== null || binding.modelVersionId !== current.modelVersionId) return fail();
-      const source = await frame(binding.aggregateId), target = await frame(current.aggregateId); check();
-      if (source.aggregate.modelVersionId !== current.modelVersionId || target.aggregate.modelVersionId !== current.modelVersionId
-        || source.aggregate.contentFingerprint !== current.contentFingerprint || target.aggregate.contentFingerprint !== current.contentFingerprint
-        || source.aggregate.artifactId !== binding.artifactId || source.aggregate.projection.sha256 !== binding.projectionSha256
-        || source.aggregate.coordinateFrameId !== binding.captureFrameId || target.aggregate.artifactId !== current.artifactId
-        || target.aggregate.projection.sha256 !== current.projectionSha256 || target.aggregate.coordinateFrameId !== current.captureFrameId
-        || target.trace.id !== current.traceId || source.frameSha256 !== target.frameSha256) return fail();
+      if (binding.mode === 'object-attached' || binding.status !== 'confirmed' || binding.locationRevision !== row.location_revision
+        || binding.mode === 'fixed-world' && binding.sourceObject !== null || binding.attachment !== null || binding.sourceDecisionId !== null || binding.modelVersionId !== current.modelVersionId) return fail();
+      const { source, target } = await publicationPair(client, projectId, binding, current, frames); check();
+      const derived = binding.mode === 'object-derived'
+        ? await resolveEquipment(client, projectId, binding, current, check) : null;
+      if (binding.mode === 'object-derived' && !derived?.object) return fail();
       const bindingRevision = (BigInt(policyRevisionSchema.parse(binding.bindingRevision)) + 1n).toString(); policyRevisionSchema.parse(bindingRevision);
       const draft = { ...binding, id: randomUUID(), bindingRevision, aggregateId: current.aggregateId, artifactId: current.artifactId,
-        projectionSha256: current.projectionSha256, captureFrameId: current.captureFrameId, supersedesBindingId: binding.id,
+        projectionSha256: current.projectionSha256, captureFrameId: current.captureFrameId, supersedesBindingId: binding.id, sourceObject: derived?.object ?? binding.sourceObject,
         sameModelReuse: { schemaVersion: 'wfc.pf.endpoint-same-model-reuse.v1' as const, sourceBindingId: binding.id, sourceBindingSha256: binding.contentSha256,
           originalBindingId: binding.sameModelReuse?.originalBindingId ?? binding.id, originalBindingSha256: binding.sameModelReuse?.originalBindingSha256 ?? binding.contentSha256,
           sourceAggregateId: binding.aggregateId, sourceArtifactId: binding.artifactId, sourceProjectionSha256: binding.projectionSha256, sourceCaptureFrameId: binding.captureFrameId,
@@ -133,8 +180,8 @@ export async function requalifyCableEndpointBindingsInTransaction(client: PoolCl
       const carried = endpointBindingSchema.parse({ ...body, contentSha256: endpointBindingHash(body) });
       if (Buffer.byteLength(canonicalPurposeJson(carried)) > 65536) return fail();
       await client.query(`INSERT INTO pf_endpoint_binding_revisions(id,project_id,location_id,model_version_id,aggregate_id,binding_revision,trace_id,object_revision_id,record_sha256,record,created_by)
-        VALUES($1,$2,$3,$4,$5,$6,NULL,NULL,$7,$8,$9)`, [carried.id, projectId, carried.locationId, carried.modelVersionId, carried.aggregateId,
-      carried.bindingRevision, carried.contentSha256, carried, who.userId]);
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [carried.id, projectId, carried.locationId, carried.modelVersionId, carried.aggregateId,
+      carried.bindingRevision, carried.sourceObject?.traceId ?? null, carried.sourceObject?.objectRevisionId ?? null, carried.contentSha256, carried, who.userId]);
       // Keep the normal head-change trigger: dependency caches must observe the
       // new binding authority even though the shared coordinates did not move.
       await client.query('UPDATE pf_endpoint_binding_heads SET binding_id=$3,binding_revision=$4 WHERE project_id=$1 AND location_id=$2',

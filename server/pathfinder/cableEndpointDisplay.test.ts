@@ -58,7 +58,12 @@ describe('fixed-world endpoint command display recovery', () => {
     f.command.selection.displaySdkObjectId = null; f.rehash(); expect(await f.read()).toBe(null); expect(f.query).toHaveBeenCalledTimes(2);
     expect(f.query.mock.calls[1][0]).toContain('preserved-display');
   });
-  it.each(['request-hash', 'command-hash', 'actor', 'key', 'end', 'cable', 'logical-name', 'head', 'point', 'model', 'selection', 'fingerprint', 'frame', 'aggregate', 'artifact', 'trace', 'oversize', 'pair', 'closed'])(
+  it.each([{ selectionRevision: '999' }, { traceId: id(999) }])('keeps the display ID when only current session metadata changes', async change => {
+    const f = await fixture();
+    f.input.current = { ...f.input.current, ...change };
+    expect(await f.read()).toMatchObject({ sdkObjectId: 456, current: f.input.current });
+  });
+  it.each(['request-hash', 'command-hash', 'actor', 'key', 'end', 'cable', 'logical-name', 'head', 'point', 'model', 'fingerprint', 'frame', 'aggregate', 'artifact', 'oversize', 'pair', 'closed'])(
     'omits invalid %s ledger evidence without fallback or attachment promotion', async field => {
       const f = await fixture();
       if (field === 'request-hash') f.row.request_sha256 = 'f'.repeat(64);
@@ -71,12 +76,10 @@ describe('fixed-world endpoint command display recovery', () => {
       if (field === 'head') f.input.head = { ...f.input.head, id: id(999) };
       if (field === 'point' && f.command.selection.mode === 'fixed-world') { f.command.selection.pointProjectMetres = [9, 8, 7]; f.rehash(); }
       if (field === 'model') f.input.current = { ...f.input.current, modelVersionId: id(999) };
-      if (field === 'selection') f.input.current = { ...f.input.current, selectionRevision: '999' };
       if (field === 'fingerprint') f.input.current = { ...f.input.current, contentFingerprint: 'f'.repeat(64) };
       if (field === 'frame') f.input.current = { ...f.input.current, captureFrameId: id(999) };
       if (field === 'aggregate') f.input.current = { ...f.input.current, aggregateId: id(999) };
       if (field === 'artifact') f.input.current = { ...f.input.current, artifactId: id(999) };
-      if (field === 'trace') f.input.current = { ...f.input.current, traceId: id(999) };
       if (field === 'oversize') Object.assign(f.row, { request: null });
       if (field === 'pair') Object.assign(f.row, { request: { schemaVersion: 'wfc.pf.cable-endpoint-pair-owner.v1' } });
       if (field === 'closed') Object.assign(f.row, { receipt: { schemaVersion: 'wfc.pf.cable-endpoint-stored.v1', status: 'closed' } });

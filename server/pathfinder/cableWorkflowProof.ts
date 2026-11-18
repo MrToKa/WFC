@@ -13,6 +13,7 @@ import { readProposalApplicability } from './proposalApplicability.js';
 import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.js';
 import { createAutomaticPairReceiptProofReader } from './automaticPairReceiptProof.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
+import { exactObstacleRemarksTransition } from './obstacleRemarks.js';
 import { verifyBarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import { verifyMixedBarrierEngineIdentity, MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE,
   MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE, MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE } from '../../shared/pathfinderBarrierMixed.js';
@@ -119,8 +120,69 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
     if (!proposals.has(key)) proposals.set(key, readWorkflowVerifiedProposal(client, projectId, cableId, proposalId));
     return proposals.get(key)!;
   };
+  async function writtenProposal(cable: CableWorkflowRow['cable'], expected?: { jobId: string; proposalId: string; proposalHash: string; receiptId?: string }) {
+    check(); const receipt = (await client.query<Data>(`/* cable-workflow:accepted-proof */ SELECT r.id,r.project_id,r.cable_id,r.proposal_id,r.actor_id,r.idempotency_key,r.payload_hash,
+      CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.before_snapshot ELSE NULL END AS before_snapshot,
+      CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.after_snapshot ELSE NULL END AS after_snapshot,
+      CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.provenance ELSE NULL END AS provenance,
+      v.id AS review_id,v.actor_id AS review_actor,v.proposal_id AS review_proposal,v.proposal_hash AS review_proposal_hash,
+      v.validation_method,v.revision_result_sha256,v.review_dependency_sha256,v.review_login_id
+      FROM pf_apply_receipts r LEFT JOIN pf_reviews v ON v.project_id=r.project_id AND v.id::text=r.provenance->>'reviewId'
+      WHERE r.project_id=$1 AND r.cable_id=$2 ORDER BY r.applied_at DESC,r.id DESC LIMIT 1`, [projectId, cable.id, WORKFLOW_PROOF_BYTES])).rows[0]; check();
+    try {
+      if (!receipt || receipt.project_id !== projectId || receipt.cable_id !== cable.id || !policyUuidSchema.safeParse(receipt.proposal_id).success) return null;
+      // A valid older own-write receipt cannot certify a newer displayed
+      // proposal, even when its route text and length happen to be identical.
+      if(expected&&(!policyUuidSchema.safeParse(expected.jobId).success||!policyUuidSchema.safeParse(expected.proposalId).success
+        ||!policyHashSchema.safeParse(expected.proposalHash).success||receipt.proposal_id!==expected.proposalId
+        ||expected.receiptId!==undefined&&(!policyUuidSchema.safeParse(expected.receiptId).success||receipt.id!==expected.receiptId)))return null;
+      const before = object(receipt.before_snapshot), after = object(receipt.after_snapshot), provenance = object(receipt.provenance);
+      if (!before || !after || !provenance || !['pathfinder.apply.v2', 'pathfinder.apply.v3', 'pathfinder.initial-fill.v1', 'pathfinder.initial-fill.v2', 'pathfinder.automatic-pair.v1'].includes(provenance.schemaVersion)
+        || before.id !== cable.id || after.id !== cable.id || before.project_id !== projectId || after.project_id !== projectId
+        || !policyRevisionSchema.safeParse(before.cable_write_revision).success || !policyRevisionSchema.safeParse(after.cable_write_revision).success
+        || BigInt(after.cable_write_revision) !== BigInt(before.cable_write_revision) + 1n || after.cable_write_revision !== cable.cableWriteRevision
+        || after.routing !== cable.routing || !decimalEqual(after.design_length, cable.designLength) || !decimalEqual(after.install_length, cable.installLength)) return null;
+      const changed = new Set(['routing', 'design_length', 'remarks', 'updated_at', 'cable_write_revision']);
+      if (!same(Object.keys(before).sort(), Object.keys(after).sort()) || Object.keys(before).some(key => !changed.has(key) && !same(before[key], after[key]))) return null;
+      const verified = await proposal(cable.id, receipt.proposal_id); check(); if (!verified) return null;
+      const { dependencies, result, seal, raw } = verified;
+      if (!exactObstacleRemarksTransition(before, after, result)) return null;
+      if(expected&&(raw.job_id!==expected.jobId||raw.id!==expected.proposalId||raw.proposal_hash!==expected.proposalHash))return null;
+      const automaticPair = provenance.schemaVersion === 'pathfinder.automatic-pair.v1';
+      const protectedReceipt = automaticPair || provenance.schemaVersion === 'pathfinder.apply.v3' || provenance.schemaVersion === 'pathfinder.initial-fill.v2';
+      if (protectedReceipt) {
+        const evidence = readBarrierWriteEvidence(dependencies, result);
+        if (!evidence || !same(evidence, provenance.barrierEvidence)
+          || provenance.revisionResult?.engineResultSha256 !== evidence.engineResultSha256
+          || provenance.revisionResult?.dependencyHash !== evidence.dependencySha256) return null;
+      } else if (dependencies.schemaVersion === 'pathfinder.dependencies.v8' || Object.hasOwn(provenance, 'barrierEvidence')) return null;
+      if (automaticPair) {
+        const fact = await automaticPairReceipt({projectId,cableId:cable.id,receiptId:receipt.id});
+        if (!fact || !same(fact.before,before) || !same(fact.after,after)) return null;
+        check();
+      } else if (provenance.schemaVersion === 'pathfinder.initial-fill.v1' || provenance.schemaVersion === 'pathfinder.initial-fill.v2') {
+        if (!await initialFillReceipt({ projectId, cableId: cable.id, receiptId: receipt.id, proposalId: receipt.proposal_id,
+          actorId: receipt.actor_id, idempotencyKey: receipt.idempotency_key, payloadHash: receipt.payload_hash,
+          before, after, provenance, dependencies, result, seal })) return null;
+        check();
+      } else if (dependencies.cableWriteRevision !== before.cable_write_revision || provenance.proposalId !== raw.id || provenance.proposalHash !== raw.proposal_hash
+        || provenance.reviewId !== receipt.review_id || provenance.review?.id !== receipt.review_id || provenance.review?.actorId !== receipt.actor_id
+        || receipt.review_actor !== receipt.actor_id || receipt.review_proposal !== raw.id || receipt.review_proposal_hash !== raw.proposal_hash
+        || !['manual-review', 'synthetic-fixture'].includes(receipt.validation_method) || provenance.validationMethod !== receipt.validation_method
+        || protectedReceipt && provenance.review?.validationMethod !== receipt.validation_method
+        || receipt.revision_result_sha256 !== seal.revisionResultSha256 || receipt.review_dependency_sha256 !== raw.dependency_hash
+        || provenance.review?.loginId !== receipt.review_login_id || provenance.review?.dependencyHash !== raw.dependency_hash
+        || provenance.review?.revisionResultSha256 !== seal.revisionResultSha256 || !same(provenance.dependencies, dependencies)
+        || provenance.revisionResult?.revisionResultSha256 !== seal.revisionResultSha256 || provenance.revisionResult?.dependencyHash !== raw.dependency_hash
+        || provenance.revisionResult?.baselineHash !== seal.baselineHash || provenance.revisionResult?.ledgerHash !== seal.ledgerHash
+        || after.routing !== result.route!.routeText || !decimalEqual(after.design_length, result.design!.designLengthMeters)
+        || receipt.payload_hash !== hash({ proposalId: raw.id, idempotencyKey: receipt.idempotency_key, reviewId: receipt.review_id, expectedCableWriteRevision: before.cable_write_revision })) return null;
+      return { verified, beforeRevision: before.cable_write_revision as string };
+    } catch { check(); return null; }
+  }
   return {
     verified: proposal,
+    writtenProposal,
     async reviewable(cableId: string, jobId: string, proposalId: string, current: DependencySnapshot | null) {
       check(); const verified = await proposal(cableId, proposalId); check();
       if (!verified || verified.raw.job_id !== jobId) return { currentness: 'unavailable' as const, reviewable: false, reasonCodes: ['PROPOSAL_PROOF_UNAVAILABLE'] };
@@ -137,64 +199,12 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
     /** Only a receipt-proven own write can explain the pre/post cable revision difference. */
     async accepted(cable: CableWorkflowRow['cable'], currentForOptions: (options: unknown,version:DependencySnapshot['schemaVersion']) => Promise<DependencySnapshot | null>,
       expected?:{jobId:string;proposalId:string;proposalHash:string;receiptId?:string}): Promise<boolean> {
-      check(); const receipt = (await client.query<Data>(`/* cable-workflow:accepted-proof */ SELECT r.id,r.project_id,r.cable_id,r.proposal_id,r.actor_id,r.idempotency_key,r.payload_hash,
-        CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.before_snapshot ELSE NULL END AS before_snapshot,
-        CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.after_snapshot ELSE NULL END AS after_snapshot,
-        CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.provenance ELSE NULL END AS provenance,
-        v.id AS review_id,v.actor_id AS review_actor,v.proposal_id AS review_proposal,v.proposal_hash AS review_proposal_hash,
-        v.validation_method,v.revision_result_sha256,v.review_dependency_sha256,v.review_login_id
-        FROM pf_apply_receipts r LEFT JOIN pf_reviews v ON v.project_id=r.project_id AND v.id::text=r.provenance->>'reviewId'
-        WHERE r.project_id=$1 AND r.cable_id=$2 ORDER BY r.applied_at DESC,r.id DESC LIMIT 1`, [projectId, cable.id, WORKFLOW_PROOF_BYTES])).rows[0]; check();
+      const written = await writtenProposal(cable, expected);
+      if (!written) return false;
       try {
-        if (!receipt || receipt.project_id !== projectId || receipt.cable_id !== cable.id || !policyUuidSchema.safeParse(receipt.proposal_id).success) return false;
-        // A valid older own-write receipt cannot certify a newer displayed
-        // proposal, even when its route text and length happen to be identical.
-        if(expected&&(!policyUuidSchema.safeParse(expected.jobId).success||!policyUuidSchema.safeParse(expected.proposalId).success
-          ||!policyHashSchema.safeParse(expected.proposalHash).success||receipt.proposal_id!==expected.proposalId
-          ||expected.receiptId!==undefined&&(!policyUuidSchema.safeParse(expected.receiptId).success||receipt.id!==expected.receiptId)))return false;
-        const before = object(receipt.before_snapshot), after = object(receipt.after_snapshot), provenance = object(receipt.provenance);
-        if (!before || !after || !provenance || !['pathfinder.apply.v2', 'pathfinder.apply.v3', 'pathfinder.initial-fill.v1', 'pathfinder.initial-fill.v2', 'pathfinder.automatic-pair.v1'].includes(provenance.schemaVersion)
-          || before.id !== cable.id || after.id !== cable.id || before.project_id !== projectId || after.project_id !== projectId
-          || !policyRevisionSchema.safeParse(before.cable_write_revision).success || !policyRevisionSchema.safeParse(after.cable_write_revision).success
-          || BigInt(after.cable_write_revision) !== BigInt(before.cable_write_revision) + 1n || after.cable_write_revision !== cable.cableWriteRevision
-          || after.routing !== cable.routing || !decimalEqual(after.design_length, cable.designLength) || !decimalEqual(after.install_length, cable.installLength)) return false;
-        const changed = new Set(['routing', 'design_length', 'updated_at', 'cable_write_revision']);
-        if (!same(Object.keys(before).sort(), Object.keys(after).sort()) || Object.keys(before).some(key => !changed.has(key) && !same(before[key], after[key]))) return false;
-        const verified = await proposal(cable.id, receipt.proposal_id); check(); if (!verified) return false;
-        const { dependencies, result, seal, raw } = verified;
-        if(expected&&(raw.job_id!==expected.jobId||raw.id!==expected.proposalId||raw.proposal_hash!==expected.proposalHash))return false;
-        const automaticPair = provenance.schemaVersion === 'pathfinder.automatic-pair.v1';
-        const protectedReceipt = automaticPair || provenance.schemaVersion === 'pathfinder.apply.v3' || provenance.schemaVersion === 'pathfinder.initial-fill.v2';
-        if (protectedReceipt) {
-          const evidence = readBarrierWriteEvidence(dependencies, result);
-          if (!evidence || !same(evidence, provenance.barrierEvidence)
-            || provenance.revisionResult?.engineResultSha256 !== evidence.engineResultSha256
-            || provenance.revisionResult?.dependencyHash !== evidence.dependencySha256) return false;
-        } else if (dependencies.schemaVersion === 'pathfinder.dependencies.v8' || Object.hasOwn(provenance, 'barrierEvidence')) return false;
-        if (automaticPair) {
-          const fact = await automaticPairReceipt({projectId,cableId:cable.id,receiptId:receipt.id});
-          if (!fact || !same(fact.before,before) || !same(fact.after,after)) return false;
-          check();
-        } else if (provenance.schemaVersion === 'pathfinder.initial-fill.v1' || provenance.schemaVersion === 'pathfinder.initial-fill.v2') {
-          if (!await initialFillReceipt({ projectId, cableId: cable.id, receiptId: receipt.id, proposalId: receipt.proposal_id,
-            actorId: receipt.actor_id, idempotencyKey: receipt.idempotency_key, payloadHash: receipt.payload_hash,
-            before, after, provenance, dependencies, result, seal })) return false;
-          check();
-        } else if (dependencies.cableWriteRevision !== before.cable_write_revision || provenance.proposalId !== raw.id || provenance.proposalHash !== raw.proposal_hash
-          || provenance.reviewId !== receipt.review_id || provenance.review?.id !== receipt.review_id || provenance.review?.actorId !== receipt.actor_id
-          || receipt.review_actor !== receipt.actor_id || receipt.review_proposal !== raw.id || receipt.review_proposal_hash !== raw.proposal_hash
-          || !['manual-review', 'synthetic-fixture'].includes(receipt.validation_method) || provenance.validationMethod !== receipt.validation_method
-          || protectedReceipt && provenance.review?.validationMethod !== receipt.validation_method
-          || receipt.revision_result_sha256 !== seal.revisionResultSha256 || receipt.review_dependency_sha256 !== raw.dependency_hash
-          || provenance.review?.loginId !== receipt.review_login_id || provenance.review?.dependencyHash !== raw.dependency_hash
-          || provenance.review?.revisionResultSha256 !== seal.revisionResultSha256 || !same(provenance.dependencies, dependencies)
-          || provenance.revisionResult?.revisionResultSha256 !== seal.revisionResultSha256 || provenance.revisionResult?.dependencyHash !== raw.dependency_hash
-          || provenance.revisionResult?.baselineHash !== seal.baselineHash || provenance.revisionResult?.ledgerHash !== seal.ledgerHash
-          || after.routing !== result.route!.routeText || !decimalEqual(after.design_length, result.design!.designLengthMeters)
-          || receipt.payload_hash !== hash({ proposalId: raw.id, idempotencyKey: receipt.idempotency_key, reviewId: receipt.review_id, expectedCableWriteRevision: before.cable_write_revision })) return false;
-        const current = await currentForOptions(dependencies.options,dependencies.schemaVersion); check();
-        // No mutation or general hash exception: restore exactly one proven own-write revision in this local comparison only.
-        return current !== null && hash({ ...current, cableWriteRevision: before.cable_write_revision }) === raw.dependency_hash;
+        const { dependencies, raw } = written.verified;
+        const current = await currentForOptions(dependencies.options, dependencies.schemaVersion); check();
+        return current !== null && hash({ ...current, cableWriteRevision: written.beforeRevision }) === raw.dependency_hash;
       } catch { check(); return false; }
     },
     /** Display the exact already-written path after supported implementation or

@@ -6,14 +6,18 @@ import type { CableWorkflowRepository } from './cableWorkflowRepository.js';
 
 /** Mounted behind requireAdmin; the repository rechecks the existing current login without DML. */
 export function createCableWorkflowReadHandlers(repository: CableWorkflowRepository) {
-  const read = (kind: 'page' | 'detail') => async (req: Request, res: Response) => {
+  const read = (kind: 'page' | 'detail' | 'savedPath') => async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'private, no-store');
     const abort = new AbortController(), disconnected = () => abort.abort(), closed = () => { if (!res.writableEnded) abort.abort(); };
     req.once('aborted', disconnected); res.once('close', closed);
     try {
       const who = requestPrincipal(req), projectId = req.params.projectId;
-      const result = kind === 'page' ? await repository.page(projectId, who, req.query, abort.signal, true)
-        : await repository.detail(projectId, who, req.params.cableId, req.query, abort.signal, true);
+      let result;
+      if (kind === 'savedPath') {
+        z.object({}).strict().parse(req.query);
+        result = await repository.savedPath(projectId, who, req.params.cableId, abort.signal);
+      } else if (kind === 'page') result = await repository.page(projectId, who, req.query, abort.signal, true);
+      else result = await repository.detail(projectId, who, req.params.cableId, req.query, abort.signal, true);
       if (!res.destroyed && !abort.signal.aborted) res.json(result);
     } catch (error) {
       if (!res.destroyed && !abort.signal.aborted) {
@@ -28,5 +32,5 @@ export function createCableWorkflowReadHandlers(repository: CableWorkflowReposit
       }
     } finally { req.removeListener('aborted', disconnected); res.removeListener('close', closed); }
   };
-  return { page: read('page'), detail: read('detail') };
+  return { page: read('page'), detail: read('detail'), savedPath: read('savedPath') };
 }

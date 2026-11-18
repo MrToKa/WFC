@@ -210,7 +210,7 @@ describe.runIf(Boolean(fixturePath))('PF-U2 real atomic cable endpoint commands 
     }
     expect(await state()).toEqual(beforeRead);
     await pool.query('UPDATE project_model_selections SET selection_revision=2 WHERE project_id=$1', [projectId]);
-    expect((await commands.context(projectId, who, cableIds[0], 'from')).confirmedDisplaySelection).toBe(null);
+    expect((await commands.context(projectId, who, cableIds[0], 'from')).confirmedDisplaySelection?.sdkObjectId).toBe(900);
   });
   it('retains an explicit label across another administrator no-op and lets a later explicit null clear display only', async () => {
     const projectId = sample.aggregate.projectId, { command } = await commandFor();

@@ -49,6 +49,8 @@ function locationObjects(state: Endpoint, model: PathFinderCableRoutingPanelProp
   const current = state.context?.current;
   if (!state.enabled || !model || !current || current.modelVersionId !== model.modelVersionId
     || current.selectionRevision !== model.selectionRevision || current.contentFingerprint !== model.contentFingerprint) return null;
+  const reopened = state.context?.reopenedObject;
+  if (!state.draft && reopened) return { sdkObjectId: reopened.sdkObjectId, sdkObjectIds: reopened.sdkObjectIds };
   const id = state.draft ? state.draft.mode === 'object-derived' ? state.draft.sdkObjectId : state.draft.displaySdkObjectId
     : state.context?.automaticSelection?.sdkObjectId ?? state.context?.confirmedSelection?.sdkObjectId ?? state.context?.confirmedDisplaySelection?.sdkObjectId;
   if (!Number.isSafeInteger(id) || Number(id) <= 0 || Number(id) > 2147483647) return null;
@@ -224,11 +226,12 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     const side = end === 'from' ? 'From' : 'To', name = end === 'from' ? cable.cable.fromLocation : cable.cable.toLocation;
     const displayContext = state.context ?? retained.current[end], lastRead = !state.context && Boolean(displayContext);
     const automatic = displayContext?.automaticSelection, confirmed = displayContext?.confirmedSelection,
-      savedDisplay = displayContext?.confirmedDisplaySelection;
+      savedDisplay = displayContext?.confirmedDisplaySelection, reopened = displayContext?.reopenedObject;
     const point = state.draft?.point ?? automatic?.pointProjectMetres ?? confirmed?.pointProjectMetres ?? savedDisplay?.pointProjectMetres ?? displayContext?.head?.pointProjectMetres;
     const selectedDraft = state.draftSource === 'selected';
     const objectName = selectedDraft ? state.displaySelection?.name || (state.draft?.mode === 'fixed-world' ? 'Fixed point' : 'Selected model object')
-      : automatic?.name ?? confirmed?.name ?? savedDisplay?.name ?? (savedDisplay ? `Saved model object (ID ${savedDisplay.sdkObjectId})`
+      : reopened?.name ?? (reopened ? `Saved model object (ID ${reopened.sdkObjectId})` : undefined)
+        ?? automatic?.name ?? confirmed?.name ?? savedDisplay?.name ?? (savedDisplay ? `Saved model object (ID ${savedDisplay.sdkObjectId})`
         : displayContext?.head ? `Saved point for ${name ?? 'this location'}` : state.error || assignment.error || assignment.retired
           ? 'Location could not be read. Refresh From/To.' : 'No model object assigned');
     const value = [objectName, point ? `X: ${point[0]} m; Y: ${point[1]} m; Z: ${point[2]} m` : ''].filter(Boolean).join('\n');
@@ -292,7 +295,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <textarea aria-label="Cable routing" className={styles.value} readOnly value={storedRouteSelected?storedRouting??'':hasCalculatedRouting ? calculatedRouting : storedRouting ?? ''} placeholder={calculationPending ? 'Calculating this cable’s new route…' : 'No routing saved in Cable list'} rows={3} />
         {showingStoredRouting ? <>
           <p className={styles.note}>{previousStoredRouting ? 'Previous Cable list' : 'Cable list'} design length: {cable.cable.designLength === null ? 'Not set' : cable.cable.designLength === '' ? 'Empty stored value' : `${cable.cable.designLength} m`}</p>
-          <Caption1>{storedRouteSelected?'Show inspects the saved cable route using current model trays. It does not validate barriers or recalculate its length.':previousStoredRouting ? calculationPending
+          <Caption1>{storedRouteSelected?'Show opens the recorded path when available. Otherwise it previews the saved route using current model trays.':previousStoredRouting ? calculationPending
             ? 'Previously saved route. The new calculated route will appear here when it is available.'
             : 'Previously saved route. Refresh cable status or calculate routing to check the current result.'
             : 'Saved Cable list route. Show requires a current calculated path for these locations, the active model and obstacles.'}</Caption1>

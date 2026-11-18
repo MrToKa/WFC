@@ -19,6 +19,37 @@ function fixture() {
 }
 afterEach(()=>vi.useRealTimers());
 describe('saved cable routing display without calculation or writes',()=>{
+  it('draws the recorded endpoint-to-endpoint geometry before considering tray names and clears it on Hide', async () => {
+    const f=fixture(), path={pathId:id(22),points:[[2,3,4],[5,6,7]] as [number,number,number][],objectIds:[]};
+    const draw=vi.fn(async()=>id(23));
+    expect(await f.display.showSaved('/BC001',id(6),async()=>path,draw)).toEqual({status:'historical'});
+    expect(draw).toHaveBeenCalledExactlyOnceWith(path); expect(f.fetchTrays).not.toHaveBeenCalled(); expect(f.viewer.showRoute).not.toHaveBeenCalled();
+    f.display.clear(); expect(f.viewer.clear).toHaveBeenCalledOnce();
+  });
+  it('falls back to current trays only after the historical read reports no verified polyline', async () => {
+    const f=fixture(), draw=vi.fn(), shown=f.display.showSaved('/BC001',id(6),async()=>null,draw);
+    await vi.waitFor(()=>expect(f.viewer.showRoute).toHaveBeenCalledOnce());
+    f.request.resolve(id(5));f.db.resolve([{id:id(7),projectId:id(2),name:'BC001'}]);f.display.onEvent(f.event());
+    expect((await shown)?.status).toBe('complete');expect(draw).not.toHaveBeenCalled();
+  });
+  it('a cancelled lookup or superseded model cannot paint a historical result or start a tray fallback',async()=>{
+    const f=fixture(), path=deferred<null>(), draw=vi.fn(), abort=new AbortController();
+    const shown=f.display.showSaved('/BC001',id(6),()=>path.promise,draw,abort.signal);
+    abort.abort();expect(await shown).toBeNull();path.resolve(null);await Promise.resolve();
+    expect(draw).not.toHaveBeenCalled();expect(f.viewer.showRoute).not.toHaveBeenCalled();
+    const next=deferred<null>(), nextShow=f.display.showSaved('/BC001',id(6),()=>next.promise,draw);
+    f.setLoad({...f.getLoad(),loadId:id(25)});next.resolve(null);expect(await nextShow).toBeNull();expect(f.viewer.showRoute).not.toHaveBeenCalled();
+  });
+  it('a replacement clears the in-flight drawing and a late completion cannot clear the new path',async()=>{
+    const f=fixture(), firstDraw=deferred<string|null>(), first=vi.fn(()=>firstDraw.promise);
+    const path={pathId:id(22),points:[[2,3,4],[5,6,7]] as [number,number,number][],objectIds:[]};
+    const a=f.display.showSaved('/A',id(6),async()=>path,first);
+    await vi.waitFor(()=>expect(first).toHaveBeenCalledOnce());
+    const b=f.display.showSaved('/B',id(7),async()=>({...path,pathId:id(24)}),async()=>id(25));
+    expect(await a).toBeNull();expect(await b).toEqual({status:'historical'});
+    expect(f.viewer.clear).toHaveBeenCalledOnce();firstDraw.resolve(id(23));await Promise.resolve();
+    expect(f.viewer.clear).toHaveBeenCalledOnce();f.display.clear();expect(f.viewer.clear).toHaveBeenCalledTimes(2);
+  });
   it('waits for current native geometry synchronization before submitting Show',async()=>{
     const f=fixture(),ready=deferred<boolean>(),prepare=vi.fn(()=>ready.promise);
     const display=createStoredRouteDisplay({viewer:f.viewer,projectId:id(2),token:'token',isCurrent:()=>true,fetchTrays:f.fetchTrays,prepare});

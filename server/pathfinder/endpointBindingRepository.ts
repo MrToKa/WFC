@@ -79,10 +79,11 @@ export async function readEndpointBindingScope(c: PoolClient, input: { projectId
   if (!location || location.revision !== value.locationRevision) return { status: 'stale', code: 'ENDPOINT_LOCATION_CHANGED' };
   if (value.status !== 'confirmed') return { status: value.status === 'unsupported-attachment' ? 'unsupported' : 'stale', code: 'ENDPOINT_BINDING_UNCONFIRMED' };
   if (value.modelVersionId !== input.modelVersionId || value.aggregateId !== input.aggregateId || value.projectionSha256 !== input.projectionSha256 || value.captureFrameId !== input.captureFrameId) return { status: 'stale', code: 'ENDPOINT_BINDING_STALE' };
-  if (value.sameModelReuse) {
+  if (value.sameModelReuse || value.mode === 'object-derived') {
     const current = await readCurrentEndpointBindingContext(c, input.projectId);
-    if (!current || value.sameModelReuse.targetTraceId !== current.traceId || value.sameModelReuse.contentFingerprint !== current.contentFingerprint
-      || current.aggregateId !== input.aggregateId || current.modelVersionId !== input.modelVersionId) return { status: 'stale', code: 'ENDPOINT_BINDING_STALE' };
+    if (!current || current.aggregateId !== input.aggregateId || current.modelVersionId !== input.modelVersionId
+      || value.mode === 'object-derived' && value.sourceObject?.traceId !== current.traceId
+      || value.sameModelReuse && (value.sameModelReuse.targetTraceId !== current.traceId || value.sameModelReuse.contentFingerprint !== current.contentFingerprint)) return { status: 'stale', code: 'ENDPOINT_BINDING_STALE' };
   }
   if (value.mode === 'object-attached') return { status: 'unsupported', code: 'ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE' };
   if (value.sourceDecisionId !== null) { const proof = await readConfirmedRevisionBindingValidity(c, value); if (!proof.valid) return { status: 'stale', code: proof.code }; }
@@ -151,6 +152,7 @@ function readiness(binding: EndpointBinding | null, current: EndpointBindingCont
   if (!binding) return { status: 'missing', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_REQUIRED'] };
   if (binding.locationRevision !== locationRevision) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_LOCATION_CHANGED'] };
   if (binding.modelVersionId !== current.modelVersionId || binding.aggregateId !== current.aggregateId || binding.artifactId !== current.artifactId || binding.projectionSha256 !== current.projectionSha256 || binding.captureFrameId !== current.captureFrameId) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_STALE'] };
+  if (binding.mode === 'object-derived' && binding.sourceObject?.traceId !== current.traceId) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_STALE'] };
   if (binding.sameModelReuse && (binding.sameModelReuse.targetTraceId !== current.traceId || binding.sameModelReuse.contentFingerprint !== current.contentFingerprint)) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_STALE'] };
   if (['matched-model-bottom-aabb.v1', 'matched-model-centre-fallback.v1'].includes(binding.derivation) && !binding.sameModelReuse && canonicalPurposeJson(binding.centreFallbackEvidence?.current ?? binding.autoMatchEvidence?.current) !== canonicalPurposeJson(current)) return { status: 'stale', calculationReady: false, reasonCodes: ['MODEL_LOCATION_MATCH_RECHECK_REQUIRED'] };
   if (binding.mode === 'object-attached') return { status: 'unsupported-attachment', calculationReady: false, reasonCodes: ['ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE'] };
@@ -164,7 +166,7 @@ async function liveReadiness(binding: EndpointBinding | null, current: EndpointB
   const proof = await validate(binding);
   return proof.valid ? initial : { status: 'stale', calculationReady: false, reasonCodes: [proof.code] };
 }
-async function objectEvidence(c: PoolClient, projectId: string, current: EndpointCurrentScope, ref: EndpointObjectRef): Promise<GeometryObjectRevision> {
+export async function objectEvidence(c: PoolClient, projectId: string, current: EndpointCurrentScope, ref: EndpointObjectRef): Promise<GeometryObjectRevision> {
   const row = (await c.query<{ record: unknown; record_sha256: string; manifest: unknown }>("SELECT o.record,o.summary->>'recordSha256' AS record_sha256,t.manifest FROM pf_geometry_object_revisions o JOIN pf_geometry_trace_sets t ON t.project_id=o.project_id AND t.id=o.trace_id WHERE o.project_id=$1 AND o.trace_id=$2 AND o.id=$3 FOR SHARE OF o,t", [projectId, ref.traceId, ref.objectRevisionId])).rows[0]; if (!row) return fail('ENDPOINT_OBJECT_NOT_FOUND', 404);
   const value = geometryObjectRevisionSchema.parse(row.record), trace = validHash(geometryTraceManifestSchema.parse(row.manifest));
   if (endpointBindingHash(value) !== ref.recordSha256 || row.record_sha256 !== ref.recordSha256 || value.id !== ref.objectRevisionId || value.traceId !== ref.traceId || trace.id !== ref.traceId || value.projectId !== projectId || trace.projectId !== projectId || value.modelVersionId !== current.modelVersionId || value.aggregateId !== current.aggregateId || trace.aggregateId !== current.aggregateId || value.coordinates.captureFrameId !== current.captureFrameId || value.provenance.projectionSha256 !== current.projectionSha256 || trace.projection.sha256 !== current.projectionSha256) return fail('ENDPOINT_OBJECT_SCOPE');

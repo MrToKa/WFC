@@ -5,20 +5,24 @@ import { modelLocationMatchFixture } from './modelLocationMatchFixtures.js';
 import { endpointFixtureId as id } from './endpointBindingFixtures.js';
 import { createEndpointBindingRepository, endpointBindingHash, readCurrentEndpointBindingContext, readEndpointBindingScope } from './endpointBindingRepository.js';
 import { endpointBindingSchema } from '../../shared/pathfinderEndpointBindings.js';
-import { requalifyCableEndpointBindings, requalifyAutomaticEndpointBindingsInTransaction } from './endpointBindingRequalification.js';
+import { readRequalifiedEndpointObject, requalifyCableEndpointBindings, requalifyAutomaticEndpointBindingsInTransaction } from './endpointBindingRequalification.js';
 import { readMatchedLocationDisplay } from './modelLocationMatchDisplay.js';
 
-async function fixture() {
+async function fixture(assignObject = false) {
   const f = await modelLocationMatchFixture(); await f.repo.assign(f.projectId, f.who, f.command());
   const fromId = f.resolved('EQUIPMENT'), toId = f.resolved('Alias'), from = f.state.locations.get(fromId)!;
   const sourceHead = f.state.bindings.get(f.state.heads.get(fromId)!)!;
   const endpointRepo = createEndpointBindingRepository(f.pool);
+  const equipment = f.built.records[2];
+  const selection = assignObject ? { mode: 'object-derived' as const, anchorRule: 'equipment-bottom-aabb.v1' as const,
+    object: { traceId: equipment.traceId, objectRevisionId: equipment.id, recordSha256: endpointBindingHash(equipment) } }
+    : { mode: 'fixed-world' as const, pointProjectMetres: [8, 9, 10] as [number, number, number], derivation: 'manual-world-point' as const, provenanceObject: null };
   await endpointRepo.confirm(f.projectId, f.who, fromId, { schemaVersion: 'wfc.pf.endpoint-binding-write.v1',
     expectedRegistryRevision: f.state.registry, expectedLocationRevision: from.revision, expectedHeadId: sourceHead.id,
     expectedSelectionRevision: f.state.selectedRevision, modelVersionId: f.context.current.modelVersionId,
     aggregateId: f.context.current.aggregateId, projectionSha256: f.context.current.projectionSha256, captureFrameId: f.context.current.captureFrameId,
     idempotencyKey: id(920), reason: 'Manual correction kept across unchanged model publication', location: { name: from.name, aliases: [] },
-    mode: 'fixed-world', pointProjectMetres: [8, 9, 10], derivation: 'manual-world-point', provenanceObject: null });
+    ...selection });
   const source = { aggregate: structuredClone(f.f.aggregate), trace: structuredClone(f.built.manifest), object: structuredClone(f.built.records[0]) };
   const target = structuredClone(source); target.aggregate.id = id(921); target.aggregate.artifactId = id(922); target.aggregate.geometryRevision = '2';
   target.trace.id = id(923); target.trace.aggregateId = target.aggregate.id; target.trace.geometryRevision = '2';
@@ -49,9 +53,6 @@ async function fixture() {
       return { rows: [{ frame: { coordinateFrame: 'canonical-world-metres', displayToWorldMetres: value.object.coordinates.displayToWorldMetres,
         globalOffsetMetres: value.object.coordinates.globalOffsetMetres }, record: value.object, record_sha256: endpointBindingHash(value.object) }] };
     }
-    if (sql.startsWith('INSERT INTO pf_endpoint_binding_revisions') && sql.includes('NULL,NULL')) {
-      f.state.bindings.set(p[0], args[7] as typeof sourceHead); return { rows: [] };
-    }
     if (sql.startsWith('UPDATE pf_endpoint_binding_heads')) { f.state.heads.set(p[1], p[2]); return { rows: [] }; }
     if (sql.startsWith('INSERT INTO pf_endpoint_binding_commands') && sql.includes("'confirm'")) {
       f.state.commands.set(p[1] + ':' + p[2], { kind: 'confirm', request_sha256: p[3], request: args[4], receipt: args[5] }); return { rows: [] };
@@ -63,7 +64,7 @@ async function fixture() {
   return { ...f, source, target, command, fromId, toId, endpointRepo, setActive: (value: boolean) => { active = value; } };
 }
 
-describe('same-model fixed endpoint requalification', () => {
+describe('same-model endpoint requalification', () => {
   it('automatic preflight carries a stale saved end when its other end is unbound, then performs no repeated writes',async()=>{
     const f=await fixture(),cable=f.state.cables[0],before=f.state.bindings.get(f.state.heads.get(f.fromId)!)!;
     cable.to_location='NO_BOUND_LOCATION';
@@ -82,6 +83,62 @@ describe('same-model fixed endpoint requalification', () => {
     const count=f.state.commands.size;expect(await requalifyAutomaticEndpointBindingsInTransaction(f.client as unknown as PoolClient,f.projectId,f.who,AbortSignal.timeout(30000))).toBe(0);expect(f.state.commands.size).toBe(count);
   });
 
+  it.each(['republished', 'new-trace', 'identity-changed', 'missing-original', 'ambiguous'] as const)('verifies saved object identity and its anchor: %s', async scenario => {
+    const f = await fixture(true), binding = f.state.bindings.get(f.state.heads.get(f.fromId)!)!;
+    const original = f.built.records[2], object = structuredClone(original);
+    if (scenario === 'new-trace') {
+      Object.assign(f.target.aggregate, f.source.aggregate);
+      Object.assign(f.target.trace, { ...f.source.trace, id: f.target.trace.id });
+      const { contentSha256: _sha, ...traceBody } = f.target.trace;
+      f.target.trace.contentSha256 = endpointBindingHash(traceBody);
+      f.target.object.aggregateId = f.source.aggregate.id;
+      Object.assign(f.command.expectedCurrent, { aggregateId: f.source.aggregate.id, artifactId: f.source.aggregate.artifactId,
+        geometryRevision: f.source.aggregate.geometryRevision });
+    }
+    Object.assign(object, { id: id(928), aggregateId: f.target.aggregate.id, traceId: f.target.trace.id });
+    if (scenario === 'identity-changed') {
+      object.identity.externalId = 'other-equipment';
+      object.signatures.identityEvidenceSha256 = endpointBindingHash(object.identity);
+    }
+    const current = f.command.expectedCurrent, scope = { active_model_version_id: current.modelVersionId, selection_revision: current.selectionRevision,
+    content_fingerprint: current.contentFingerprint, state: 'ready', health: 'healthy', current_aggregate_id: current.aggregateId,
+    current_artifact_id: current.artifactId, geometry_revision: current.geometryRevision, snapshot_sha256: current.projectionSha256, artifact_content_fingerprint: current.contentFingerprint,
+    session_id: f.target.aggregate.sessionId, aggregate_model_version_id: current.modelVersionId, aggregate_artifact_id: current.artifactId,
+    aggregate_geometry_revision: current.geometryRevision, aggregate_selection_revision: current.selectionRevision,
+    aggregate_content_fingerprint: current.contentFingerprint, aggregate_projection_sha256: current.projectionSha256,
+    aggregate_capture_frame_id: current.captureFrameId, trace_id: current.traceId, trace_aggregate_id: current.aggregateId,
+    trace_model_version_id: current.modelVersionId, manifest: f.target.trace };
+    const prior = f.query.getMockImplementation()!;
+    f.query.mockImplementation(async (sql, args = []) => {
+      if (sql.startsWith('/* endpoint-requalify:publication */') && args[2] === f.target.trace.id) return { rows: [{
+        aggregate: f.target.aggregate, trace: f.target.trace, artifact_id: f.target.aggregate.artifactId, snapshot_sha256: f.target.aggregate.projection.sha256 }] };
+      if (scenario === 'missing-original' && sql.startsWith('SELECT o.record') && args[1] === original.traceId) return { rows: [] };
+      if (sql.startsWith('SELECT o.record') && args[1] === object.traceId) return { rows: [{ record: object,
+        manifest: f.target.trace, record_sha256: endpointBindingHash(object) }] };
+      if (sql.includes('cable-endpoint-selection:scope')) return { rows: [scope] };
+      if (sql.includes('cable-endpoint-selection:objects')) {
+        const row = { object_id: object.identity.objectId, db_id: object.identity.dbId, geometry_role: 'object', visibility: 'visible' };
+        return { rows: scenario === 'ambiguous' ? [row, row] : [row] };
+      }
+      if (sql.includes('cable-endpoint-selection:record')) return { rows: [{ id: object.id, project_id: f.projectId, trace_id: object.traceId,
+        object_id: object.identity.objectId, record: object, record_sha256: endpointBindingHash(object) }] };
+      return prior(sql, args);
+    });
+    const display = await readRequalifiedEndpointObject(f.client as unknown as PoolClient, f.projectId, binding, current, () => {});
+    expect(f.state.heads.get(f.fromId)).toBe(binding.id);
+    if (scenario === 'identity-changed' || scenario === 'ambiguous' || scenario === 'missing-original') {
+      expect(display).toBeNull();
+      await expect(requalifyCableEndpointBindings(f.pool, f.projectId, f.who, f.command)).rejects.toMatchObject({ code: 'ENDPOINT_REQUALIFICATION_UNAVAILABLE' });
+      expect(f.state.heads.get(f.fromId)).toBe(binding.id);
+      return;
+    }
+    expect(display).toMatchObject({ sdkObjectId: original.identity.dbId, object: { objectRevisionId: object.id, traceId: current.traceId } });
+    const receipt = await requalifyCableEndpointBindings(f.pool, f.projectId, f.who, f.command);
+    expect(receipt.updatedLocationIds).toContain(f.fromId);
+    const saved = f.state.bindings.get(f.state.heads.get(f.fromId)!)!;
+    expect(saved).toMatchObject({ sourceObject: display!.object, pointProjectMetres: binding.pointProjectMetres,
+      sameModelReuse: { sourceBindingId: binding.id, sourceTraceId: original.traceId, targetTraceId: current.traceId } });
+  });
   it('carries only the cable shared manual/matched heads, preserves their points and human confirmation, and enables strict current scope', async () => {
     const f = await fixture(), before = structuredClone(f.state), oldFrom = f.state.bindings.get(f.state.heads.get(f.fromId)!)!, oldTo = f.state.bindings.get(f.state.heads.get(f.toId)!)!;
     const receipt = await requalifyCableEndpointBindings(f.pool, f.projectId, f.who, f.command);

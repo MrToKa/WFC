@@ -175,6 +175,7 @@ function LiveControllerFlow({ f, previousPath = false }: { f: Fixture; previousP
 }
 function wire(f: Fixture, persisted = false) {
   transport.row = persisted ? f.done : f.initial;
+  vi.mocked(fetchPathFinderProposal).mockResolvedValue(f.proposal);
   transport.impact = { id: id(20), jobId: id(7), status: 'running', total: 13, completed: 1, reasonCodes: [] };
   vi.mocked(fetchPathFinderJob).mockResolvedValue({ ...f.parent, items: [{ cableId: id(4), state: 'complete', status: 'calculated' }] } as never);
   vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementation(async () => ({ projectId: id(1), cableId: id(4), contextSha256: 'f'.repeat(64),
@@ -261,7 +262,7 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     // proposal is loading. Show alone no longer signals proposal readiness.
     expect(button('Show')).toBeEnabled();
     expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
-    expect(screen.getByText('Show inspects the saved cable route using current model trays. It does not validate barriers or recalculate its length.')).toBeVisible();
+    expect(screen.getByText('Show opens the recorded path when available. Otherwise it previews the saved route using current model trays.')).toBeVisible();
     expect(transport.displayChanged).not.toHaveBeenLastCalledWith(expect.objectContaining({ ready: true }));
     await act(async () => finishProposal(f.proposal));
     await waitForExactDisplay();

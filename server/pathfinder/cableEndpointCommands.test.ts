@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { Pool } from 'pg';
+import { endpointBindingSchema } from '../../shared/pathfinderEndpointBindings.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { endpointBindingFixture, endpointFixtureId as id } from './endpointBindingFixtures.js';
 import { createCableEndpointCommands } from './cableEndpointCommands.js';
@@ -35,6 +36,10 @@ function fixture() {
       if (sql.startsWith('/* cable-endpoint:location */')) { const l = f.state.locations.get(p[1]); return { rows: l ? [{ ...l, oversized: false }] : [] }; }
       if (sql.startsWith('/* cable-endpoint:aliases */')) return { rows: [...f.state.aliases.values()].filter(a => a.location_id === p[1]).map(a => ({ ...a, oversized: false })) };
       if (sql.startsWith('/* cable-endpoint:head */')) { const b = f.state.bindings.get(f.state.heads.get(p[1]) ?? ''); return { rows: b ? [{ binding_id: b.id, binding_revision: b.bindingRevision, record_sha256: b.contentSha256, record: b }] : [] }; }
+      if (sql.startsWith('/* cable-endpoint:display-source */')) {
+        const source = f.state.bindings.get(p[2]);
+        return { rows: source?.locationId === p[1] ? [{ record: source, record_sha256: source.contentSha256 }] : [] };
+      }
       if (sql.startsWith('/* cable-endpoint:display-command */')) return { rows: [...f.state.commands.entries()].reverse().flatMap(([key, value]) => {
         const stored = value.receipt as { status?: string; receipt?: { locationId?: string; binding?: { binding?: { id?: string; contentSha256?: string } } } };
         const request = value.request as { schemaVersion?: string };
@@ -486,7 +491,38 @@ describe('automatic endpoint context is a verified unconfirmed suggestion', () =
     expect(c.head?.sourceObject).toBe(null); expect(c.confirmedSelection).toBe(null);
     expect(c.confirmedDisplaySelection).toMatchObject({ sdkObjectId: 900, name: '/Selected parent', bindingId: c.head?.id, pointProjectMetres: [2, 3, 4] });
     expect(c.contextSha256).toBe(endpointBindingHash(cableEndpointContextHashInput(c))); expect(f.state.commands.size).toBe(before);
-    f.state.selectedRevision = '2'; expect((await f.read(id(11), 'to')).confirmedDisplaySelection).toBe(null);
+    f.state.selectedRevision = '2'; expect((await f.read(id(11), 'to')).confirmedDisplaySelection?.sdkObjectId).toBe(900);
+  });
+  it('recovers the selected parent through multiple same-model publications and rejects damaged lineage', async () => {
+    const f = fixture(), context = await f.read(), scope = context.current!, input = f.command(context);
+    input.selection = { mode: 'fixed-world', pointProjectMetres: [2, 3, 4], derivation: 'manual-world-point',
+      displaySdkObjectId: 900, displayObjectName: '/Selected parent' };
+    const original = (await f.save(input)).binding.binding;
+    let previous = original;
+    for (const n of [910, 911]) {
+      const { contentSha256, ...body } = previous;
+      const draft = { ...body, id: id(n), bindingRevision: String(BigInt(previous.bindingRevision) + 1n),
+        supersedesBindingId: previous.id, aggregateId: id(n + 10), artifactId: id(n + 20),
+        sameModelReuse: { schemaVersion: 'wfc.pf.endpoint-same-model-reuse.v1', modelVersionId: scope.modelVersionId,
+          contentFingerprint: scope.contentFingerprint, sourceBindingId: previous.id, sourceBindingSha256: contentSha256,
+          originalBindingId: original.id, originalBindingSha256: original.contentSha256, sourceAggregateId: previous.aggregateId,
+          sourceArtifactId: previous.artifactId, sourceProjectionSha256: previous.projectionSha256, sourceCaptureFrameId: previous.captureFrameId,
+          frameProjectionSha256: scope.projectionSha256, sourceTraceId: scope.traceId!, sourceTraceContentSha256: f.built.manifest.contentSha256,
+          targetTraceId: scope.traceId!, targetTraceContentSha256: f.built.manifest.contentSha256, requalifiedBy: f.who.userId,
+          requalifiedAt: new Date().toISOString() } };
+      previous = endpointBindingSchema.parse({ ...draft, contentSha256: endpointBindingHash(draft) });
+      f.state.bindings.set(previous.id, previous);
+    }
+    const { readCableEndpointDisplay } = await import('./cableEndpointDisplay.js');
+    const current = { ...scope, aggregateId: previous.aggregateId, artifactId: previous.artifactId };
+    const location = (await f.read()).location!;
+    const read = (fingerprint = current.contentFingerprint) => readCableEndpointDisplay(f.client as unknown as import('pg').PoolClient,
+      { projectId: f.projectId, current: { ...current, contentFingerprint: fingerprint }, head: previous, location }, () => {});
+    expect(await read()).toMatchObject({ sdkObjectId: 900, name: '/Selected parent', bindingId: previous.id,
+      bindingContentSha256: previous.contentSha256, pointProjectMetres: [2, 3, 4], current });
+    expect(await read('f'.repeat(64))).toBeNull();
+    f.state.bindings.set(original.id, { ...original, reason: 'damaged' });
+    expect(await read()).toBeNull();
   });
   it('a later explicit fixed point without an object clears a previous display hint', async () => {
     const f = fixture(), input = f.command(await f.read());
