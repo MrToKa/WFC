@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchPathFinderCableWorkflowPage, fetchPathFinderCableWorkflowDetail, PathFinderCableWorkflowApiError, type CableWorkflowPage } from '@/api/pathfinderCableWorkflow';
-import { cableWorkflowPageSchema } from '../../shared/pathfinderCableWorkflow';
+import { cableWorkflowPageSchema, classifyCableWorkflow } from '../../shared/pathfinderCableWorkflow';
 import { CABLE_WORKFLOW_SEARCH_MILLISECONDS, CABLE_WORKFLOW_SEARCH_PAGE_LIMIT, usePathFinderCableWorkflow, type PathFinderCableWorkflowAccess } from './usePathFinderCableWorkflow';
 
 vi.mock('@/api/pathfinderCableWorkflow', async original => ({ ...(await original<typeof import('@/api/pathfinderCableWorkflow')>()),
@@ -59,6 +59,30 @@ describe('direct text search across bounded workflow portions', () => {
     expect(view.result.current.hasPrevious).toBe(false); expect(view.result.current.error).toBeNull();
     expect(vi.mocked(fetchPathFinderCableWorkflowPage).mock.calls.map(call => call[2]?.cursor)).toEqual([undefined, 'a', 'b', 'c', 'a']);
   });
+  it('automatically restarts a stale cursor with the same applied filters after one endpoint is assigned', async () => {
+    const base = page(), row = base.rows[0], cable = { ...row.cable, fromLocation: 'VI_Prod16_01' };
+    const original = { ...base, nextCursor: 'before_save', rows: [{ ...row, cable, to: row.from }] };
+    const updated = { ...base, contextSha256: 'b'.repeat(64), rows: [{ ...row, cable, from: row.to, to: row.from }] };
+    const stale = new PathFinderCableWorkflowApiError('WORKFLOW_CURSOR_INVALID', 409, 'The project changed.');
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(original).mockRejectedValueOnce(stale).mockResolvedValueOnce(updated);
+    const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { filter: 'needs-routing', search: 'VI_Prod16_01' } }));
+    await waitFor(() => expect(view.result.current.page).toEqual(original));
+    act(() => view.result.current.nextPage());
+    await waitFor(() => expect(view.result.current.page).toEqual(updated));
+    expect(classifyCableWorkflow(updated.rows[0]).status).toBe('needs-routing');
+    expect(view.result.current.error).toBeNull();
+    expect(view.result.current.hasPrevious).toBe(false);
+    const queries = vi.mocked(fetchPathFinderCableWorkflowPage).mock.calls.map(call => call[2]);
+    expect(queries.map(query => query?.cursor)).toEqual([undefined, 'before_save', undefined]);
+    expect(queries.every(query => query?.filter === 'needs-routing' && query.search === 'VI_Prod16_01')).toBe(true);
+  });
+  it('stops after one restart when the list continues to change', async () => {
+    const changed = new PathFinderCableWorkflowApiError('WORKFLOW_CONTEXT_CHANGED', 409, 'The project changed.');
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockRejectedValueOnce(changed).mockRejectedValueOnce(changed);
+    const view = renderHook(() => usePathFinderCableWorkflow(access()));
+    await waitFor(() => expect(view.result.current.error).toBe('The project changed.'));
+    expect(fetchPathFinderCableWorkflowPage).toHaveBeenCalledTimes(2);
+  });
   it.each(['context', 'query', 'cursor', 'boundary'] as const)('refuses changed or nonadvancing automatic search evidence: %s', async kind => {
     const next = { ...empty(400, 'b'), ...(kind === 'context' ? { contextSha256: 'b'.repeat(64) }
       : kind === 'query' ? { querySha256: 'b'.repeat(64) } : kind === 'cursor' ? { nextCursor: 'a' } : { scannedThroughCableId: id(200) }) };
@@ -98,6 +122,25 @@ describe('direct text search across bounded workflow portions', () => {
 });
 
 describe('owned cable workflow reads', () => {
+  it('keeps the owned rows visible while a confirmed local update refreshes the list from the first page', async () => {
+    const before = { ...page(), nextCursor: 'before_save' };
+    const after = { ...page(), contextSha256: 'b'.repeat(64) };
+    let finish!: (value: CableWorkflowPage) => void;
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(before)
+      .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const props = { ...access(), query: { search: 'VI_Prod16_01' }, refreshKey: 0 };
+    const view = renderHook(value => usePathFinderCableWorkflow(value), { initialProps: props });
+    await waitFor(() => expect(view.result.current.page).toEqual(before));
+    view.rerender({ ...props, refreshKey: 1 });
+    expect(view.result.current.page).toEqual(before);
+    expect(view.result.current.loading).toBe(true);
+    expect(fetchPathFinderCableWorkflowPage).toHaveBeenLastCalledWith(project, 'token',
+      expect.objectContaining({ search: 'VI_Prod16_01' }), expect.any(AbortSignal));
+    expect(vi.mocked(fetchPathFinderCableWorkflowPage).mock.calls.at(-1)?.[2]?.cursor).toBeUndefined();
+    await act(async () => finish(after));
+    expect(view.result.current.page).toEqual(after);
+    expect(view.result.current.error).toBeNull();
+  });
   it.each([false, true])('keeps the exact barrier scope and drilling choice in cable detail reads: drilling %s', async drillThroughWalls => {
     const scope = { projectId: project, modelVersionId: id(3), contentFingerprint: 'b'.repeat(64), selectionRevision: '4',
       captureFrameId: id(4), captureFrameSha256: 'c'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };

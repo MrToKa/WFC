@@ -11,7 +11,7 @@ export const CABLE_WORKFLOW_SEARCH_MILLISECONDS = 30_000;
 
 export type PathFinderCableWorkflowAccess = {
   projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null;
-  isAdmin: boolean; active: boolean; modelScopeKey: string; query?: Partial<Omit<CableWorkflowQuery, 'cursor'>>;
+  isAdmin: boolean; active: boolean; modelScopeKey: string; refreshKey?: number; query?: Partial<Omit<CableWorkflowQuery, 'cursor'>>;
   onAuthorityLost?: () => void;
 };
 type State = { identity: string; page: CableWorkflowPage | null; detail: CableWorkflowDetail | null;
@@ -57,11 +57,24 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
     try {
       const query: CableWorkflowQuery = JSON.parse(queryKey);
       let next = cursor, previousPage = before.page, context = reset ? null : before.context, queryHash = reset ? null : before.queryHash;
+      let pageHistory = history, restarted = false;
       const visited = new Set(history);
       for (let portion = 0; portion < CABLE_WORKFLOW_SEARCH_PAGE_LIMIT; portion++) {
         visited.add(next);
-        const page = await deadline.wait(() => fetchPathFinderCableWorkflowPage(access.projectId!, access.token!,
-          { ...query, ...(next ? { cursor: next } : {}) }, deadline.signal));
+        let page: CableWorkflowPage;
+        try {
+          page = await deadline.wait(() => fetchPathFinderCableWorkflowPage(access.projectId!, access.token!,
+            { ...query, ...(next ? { cursor: next } : {}) }, deadline.signal));
+        } catch (error) {
+          // A shared-location save invalidates cursors without changing the
+          // user's filters. Restart once, within the same read budget.
+          if (restarted || latest.current !== identity || deadline.signal.aborted
+            || !(error instanceof PathFinderCableWorkflowApiError) || error.status !== 409
+            || !['WORKFLOW_CURSOR_INVALID', 'WORKFLOW_CONTEXT_CHANGED'].includes(error.code)) throw error;
+          restarted = true; next = null; previousPage = null; context = null; queryHash = null;
+          pageHistory = []; visited.clear();
+          continue;
+        }
         if (latest.current !== identity || abort.signal.aborted) return;
         if (context !== null && (context !== page.contextSha256 || queryHash !== page.querySha256)) throw changed();
         if (page.nextCursor !== null && visited.has(page.nextCursor)) throw changed();
@@ -73,8 +86,8 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
         if ((query.search !== '' || query.filter === 'ready-for-review') && page.rows.length === 0 && page.nextCursor !== null) {
           previousPage = page; next = page.nextCursor; continue;
         }
-        selection.current = { identity, cursor: next, history, context, queryHash, page };
-        setState({ ...initial(identity), page, hasPrevious: history.length > 0 }); return;
+        selection.current = { identity, cursor: next, history: pageHistory, context, queryHash, page };
+        setState({ ...initial(identity), page, hasPrevious: pageHistory.length > 0 }); return;
       }
       throw new PathFinderCableWorkflowApiError('WORKFLOW_SEARCH_LIMIT', null,
         'The cable search reached its scan limit. Use a more specific tag, From or To and try again.');
@@ -84,10 +97,13 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
   useEffect(() => {
     inFlight.current?.abort(); inFlight.current = null;
     if (previousAccount.current !== account) deniedAccount.current = null;
-    previousAccount.current = account; selection.current = selected(identity); setState(initial(identity));
+    previousAccount.current = account;
+    if (selection.current.identity !== identity) {
+      selection.current = selected(identity); setState(initial(identity));
+    }
     if (allowed && deniedAccount.current !== account) void load(null, [], true);
     return () => { inFlight.current?.abort(); inFlight.current = null; };
-  }, [identity, account, allowed, load]);
+  }, [identity, account, allowed, load, access.refreshKey]);
   const readDetail = useCallback(async (cableId: string): Promise<CableWorkflowDetail | null> => {
     if (!canRead() || inFlight.current || queryKey === null) return null;
     const page = selection.current.page, row = page?.rows.find(value => value.cable.id === cableId);

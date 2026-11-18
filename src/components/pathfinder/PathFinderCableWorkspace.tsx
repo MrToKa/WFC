@@ -513,7 +513,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     // The acknowledged impact already owns its exact GET watcher. A global
     // history refresh must not delay learning the selected cable's new job.
     if (watch && savedCalculationRef.current === watch) { const ready = { ...watch, reading: true }; savedCalculationRef.current = ready; setSavedCalculation(ready); }
-    refreshDiagnostics();
+    // The list must see the just-saved location even while the selected
+    // cable's recalculation watcher owns its independent detail reads.
+    if (watch) setRevision(value => value + 1);
+    else refreshDiagnostics();
   }, [refreshDiagnostics, rememberFeedback, backgroundStateRefresh]);
   const selectedStatus = selected ? classifyCableWorkflow(selected) : null;
   const selectedAutomaticUpdatePending = Boolean(selected && automaticUpdatePending(selected.calculation));
@@ -977,7 +980,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     && selected.calculation.reasonCodes.includes('ROUTING_PREPARATION_UPDATED');
   const popupFeedback = preparationUpdated && currentFeedback?.currentAttempt ? currentFeedback : displayCheckFeedback ?? currentFeedback;
   return <section aria-label="Cable routing workspace">
-    <PathFinderNeedsRoutingList {...props} active={enabled} modelScopeKey={JSON.stringify([props.owner, revision])}
+    <PathFinderNeedsRoutingList {...props} active={enabled} modelScopeKey={props.owner} refreshKey={revision}
       preferences={readPreferences ?? { secondaryDistanceMeters: 2, preferVerticalApproach: true }} selectedCableId={selected?.cable.id ?? null}
       onAuthorityLost={authorityLost} onSelect={openCable} onPreview={previewCable} onPreviewLeave={leavePreview} />
     {calculationBlockedReason ? <p role="status">{calculationBlockedReason} Choose Calculate routing to open the configuration. You can still search cables and open their windows.</p> : null}

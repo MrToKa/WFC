@@ -360,7 +360,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
               data?.activeModel.contentFingerprint, artifact?.id, artifact?.snapshotSha256,
               pf.preparationViewerGeneration, mode, displayGeneration.current])}
             pickPoint={pf.pickPoint} cancelPicking={pf.cancelPicking}
-            onSaved={receipt => { setDraft(previous => ({...previous, locationId: receipt.locationId})); pf.refresh(); }}
+            onSaved={receipt => { setDraft(previous => ({...previous, locationId: receipt.locationId})); cableValuesChanged(); pf.refresh(); }}
             onAuthorityLost={() => { pf.cancelPicking(); pf.refresh(); }}
             onRecoveryPendingChange={setEndpointPending}
           />

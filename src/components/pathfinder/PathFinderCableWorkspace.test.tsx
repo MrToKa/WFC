@@ -812,8 +812,10 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     render(<PathFinderCableWorkspace {...p} display={{ cableId: id(3), jobId: id(71), proposalId: id(81), proposalHash: 'f'.repeat(64),
       verifiedScope: pathFinderWorkflowDisplayScope(p.pf, p.accountId), ready: true, visible: false, routing: '/CURRENT', designLength: '58' }} />);
     await openListCable();
+    const beforeSave = listProps.refreshKey;
     await act(async () => { await panelProps.access.onSaved?.({ cableId: id(3), locationImpact: { id: id(8) } } as CableEndpointReceipt,
       endpointBindingFixture().context.current!, { preferences: p.preferences!, timeoutMilliseconds: 120000 }); });
+    expect(listProps.refreshKey).not.toBe(beforeSave);
     await act(async () => { await vi.advanceTimersByTimeAsync(elapsed - 1); });
     expect(panelProps.calculationPending).toBe(true); expect(panelProps.pathReady).toBe(false);
     expect(p.pf.refreshState).toHaveBeenCalledOnce(); // The Save acknowledgement refresh only.
@@ -991,9 +993,9 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(p.onSelect).toHaveBeenLastCalledWith(refreshed);
   });
   it('still refreshes the list from an external write when no cable is selected', async () => {
-    const p = props(), view = render(<PathFinderCableWorkspace {...p} />), original = listProps.modelScopeKey;
+    const p = props(), view = render(<PathFinderCableWorkspace {...p} />), original = listProps.refreshKey;
     view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
-    expect(listProps.modelScopeKey).not.toBe(original); expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();
+    expect(listProps.refreshKey).not.toBe(original); expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();
   });
   it.each([401, 403, 409])('fails closed after a nonretryable job read refusal %s', async status => {
     vi.useFakeTimers(); const p = props(); vi.mocked(p.pf.submitCalculation).mockResolvedValue({ kind: 'acknowledged', jobId: id(71), registryRevision: '5', duplicate: false });
@@ -1025,10 +1027,10 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
   });
   it('saves exact impact scope then refreshes only bounded diagnostics and the selected cable', async () => {
     const p = props(); render(<PathFinderCableWorkspace {...p} />); await openListCable();
-    const oldKey = listProps.modelScopeKey, scope = endpointBindingFixture().context.current!;
+    const oldKey = listProps.refreshKey, scope = endpointBindingFixture().context.current!;
     act(() => { void panelProps.access.onSaved?.({ cableId: id(3), locationImpact: { id: id(8) } } as CableEndpointReceipt, scope); });
     await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(id(1), 'fixture-token', id(3), p.preferences, expect.any(AbortSignal)));
-    expect(listProps.modelScopeKey).not.toBe(oldKey); expect(p.pf.refresh).not.toHaveBeenCalled();
+    expect(listProps.refreshKey).not.toBe(oldKey); expect(p.pf.refresh).not.toHaveBeenCalled();
     expect(vi.mocked(usePathfinderLocationImpactProgress).mock.calls.at(-1)?.[0]).toMatchObject({ current: scope, impactId: id(8), active: true });
   });
   it('observes a first terminal write read but never calls it Updated without receipt-backed cable evidence', async () => {
@@ -1116,8 +1118,8 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
   });
   it('refreshes the bounded list and live selected cable after an explicit confirmed Apply notification', async () => {
     const p = props(), view = render(<PathFinderCableWorkspace {...p} refreshKey={0} />); await openListCable();
-    const previous = listProps.modelScopeKey; view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
-    await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce()); expect(listProps.modelScopeKey).not.toBe(previous);
+    const previous = listProps.refreshKey; view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
+    await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce()); expect(listProps.refreshKey).not.toBe(previous);
     expect(p.pf.refresh).not.toHaveBeenCalled(); view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
   });
