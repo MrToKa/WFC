@@ -2,8 +2,20 @@ import {describe,it,expect,vi} from 'vitest';
 import type {PoolClient} from 'pg';
 import {createRecalculationRepository,recalculationTransaction,readRecalculationJobAuthority,requireEnrollmentAuthority} from './recalculationRepository.js';
 import {recalculationFixture,RECALCULATION_FIXTURE as f} from './recalculationFixtures.js';
+import {AUTOMATIC_PAIR_POLICY} from '../../shared/pathfinderAutomaticPair.js';
+import {assignAutomaticModelLocationsInTransaction} from './automaticModelLocationAssignment.js';
+
+vi.mock('./automaticModelLocationAssignment.js',()=>({assignAutomaticModelLocationsInTransaction:vi.fn()}));
 
 const enable={schemaVersion:'wfc.pf.recalculation-command.v1' as const,action:'enable' as const,expectedControlRevision:'1',idempotencyKey:f.key,reason:'Synthetic current-login authorization',preferences:{secondaryDistanceMeters:2,preferVerticalApproach:true},timeoutMilliseconds:60000};
+async function sessionClaim(x:ReturnType<typeof recalculationFixture>,repository:ReturnType<typeof createRecalculationRepository>){
+  const receipt=await repository.command(f.projectId,x.who,{...enable,schemaVersion:'wfc.pf.recalculation-command.v2',
+    automaticPairPolicy:AUTOMATIC_PAIR_POLICY,runUntil:'login-expiry'});
+  const claim={...x.claim,generation:receipt.context.desiredGeneration,controlRevision:receipt.context.controlRevision,
+    authorityEpoch:receipt.automaticPairAuthorization!.authorityEpoch,automaticPairAuthorization:receipt.automaticPairAuthorization};
+  Object.assign(x.db.claim!,{generation:claim.generation,control_revision:claim.controlRevision,authority_epoch:claim.authorityEpoch});
+  return claim;
+}
 describe('durable recalculation command and generation repository (synthetic SQL)',()=>{
   it('requires explicit grant disable before a finite-login producer can be enabled',async()=>{const x=recalculationFixture();x.db.grantEnabled=true;await expect(createRecalculationRepository(x.pool,x.adapter).command(f.projectId,x.who,enable)).rejects.toMatchObject({code:'CALCULATION_GRANT_DISABLE_REQUIRED'});expect(x.db.commands.size).toBe(0);expect(x.db.events).toEqual([]);});
   it('valid same-preferences enable is a semantic no-op and exact historical replay precedes CAS',async()=>{
@@ -55,6 +67,27 @@ describe('durable recalculation command and generation repository (synthetic SQL
     expect(x.db.queries.some(sql=>sql.startsWith('SELECT state,cancel_requested'))).toBe(false);
   });
   it('takes scheduler guard only after the root bulk collector and atomically links the generation',async()=>{const x=recalculationFixture(),sequence:string[]=[];const original=x.adapter.createInTransaction;x.adapter.createInTransaction=async(c,input)=>{sequence.push('bulk-locks');const value=await original(c,{...input,beforeInsert:async()=>{sequence.push('guard');await input.beforeInsert();}});sequence.push('insert');return value;};const result=await createRecalculationRepository(x.pool,x.adapter).enrollClaim(x.claim);expect(sequence).toEqual(['bulk-locks','guard','insert']);expect(result.status).toBe('enrolled');expect(x.db.enrollments.size).toBe(1);expect(x.db.state.enrolled_generation).toBe('2');});
+  it('commits newly found locations before starting a calculation generation',async()=>{
+    const x=recalculationFixture(),repository=createRecalculationRepository(x.pool,x.adapter);
+    const claim=await sessionClaim(x,repository);
+    vi.mocked(assignAutomaticModelLocationsInTransaction).mockImplementationOnce(async()=>{
+      x.db.state.desired_generation=(BigInt(claim.generation)+1n).toString();
+      return 1;
+    });
+    expect(await repository.enrollClaim(claim)).toMatchObject({status:'superseded',jobId:null});
+    expect(x.adapter.createInTransaction).not.toHaveBeenCalled();
+    expect(x.db.enrollments.size).toBe(0);
+    expect(x.db.state.desired_generation).not.toBe(claim.generation);
+  });
+  it('checks for From/To assignments before collecting the session-bound calculation scope',async()=>{
+    const x=recalculationFixture(),repository=createRecalculationRepository(x.pool,x.adapter);
+    const claim=await sessionClaim(x,repository);
+    const assignment=vi.mocked(assignAutomaticModelLocationsInTransaction);
+    assignment.mockClear().mockResolvedValueOnce(0);
+    expect(await repository.enrollClaim(claim)).toMatchObject({status:'enrolled',jobId:f.jobId});
+    expect(assignment).toHaveBeenCalledWith(x.client,f.projectId,x.who,expect.any(AbortSignal),expect.any(Function));
+    expect(assignment.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(x.adapter.createInTransaction).mock.invocationCallOrder[0]);
+  });
   it('lost acknowledgement retry sees the exact enrollment rather than calling the collector again',async()=>{const x=recalculationFixture(),r=createRecalculationRepository(x.pool,x.adapter);await r.enrollClaim(x.claim);const second=await r.enrollClaim(x.claim);expect(second).toMatchObject({status:'duplicate',jobId:f.jobId});expect(x.adapter.createInTransaction).toHaveBeenCalledTimes(1);});
   it('new generation during collection refuses the old job before insertion',async()=>{const x=recalculationFixture();x.adapter.createInTransaction=async(_c,input)=>{x.db.state.desired_generation='3';await input.beforeInsert();throw new Error('unreachable');};expect(await createRecalculationRepository(x.pool,x.adapter).enrollClaim(x.claim)).toMatchObject({status:'superseded'});expect(x.db.jobs.size).toBe(0);expect(x.db.enrollments.size).toBe(0);});
   it('foreign claim owner refuses even with the same generation',async()=>{const x=recalculationFixture();x.db.claim!.owner_token=f.actorId;await expect(createRecalculationRepository(x.pool,x.adapter).enrollClaim(x.claim)).rejects.toMatchObject({code:'RECALCULATION_CLAIM_FENCED'});expect(x.db.enrollments.size).toBe(0);});

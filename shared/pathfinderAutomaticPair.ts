@@ -7,15 +7,17 @@ const timestamp = z.string().datetime().refine(value => value.endsWith('Z'));
 export const automaticPairPolicySchema = z.object({ schemaVersion: z.literal('wfc.pf.automatic-pair-policy.v1'),
   mode: z.literal('when-both-empty-or-unchanged-automatic') }).strict();
 export type AutomaticPairPolicy = z.infer<typeof automaticPairPolicySchema>;
-/** Explicit output permission from one new finite current-login enable command. */
+/** Explicit output permission from one current-login enable command. */
 export const automaticGenerationAuthorizationSchema = z.object({
   schemaVersion: z.literal('wfc.pf.automatic-generation-output-authority.v1'), projectId: uuid,
   actorId: uuid, actorAdminRevision: revision, loginId: uuid, loginExpiresAt: timestamp, installationEpoch: uuid,
   commandKey: uuid, commandSha256: hash, controlRevision: revision, authorityEpoch: revision,
   createdAt: timestamp, authorityExpiresAt: timestamp, policy: automaticPairPolicySchema,
+  runUntil: z.literal('login-expiry').optional(),
 }).strict().refine(v => Date.parse(v.createdAt) < Date.parse(v.authorityExpiresAt)
   && Date.parse(v.authorityExpiresAt) <= Date.parse(v.loginExpiresAt)
-  && Date.parse(v.authorityExpiresAt) - Date.parse(v.createdAt) <= AUTOMATIC_PAIR_LIMITS.authorityMilliseconds);
+  && (v.runUntil === 'login-expiry' ? v.authorityExpiresAt === v.loginExpiresAt
+    : Date.parse(v.authorityExpiresAt) - Date.parse(v.createdAt) <= AUTOMATIC_PAIR_LIMITS.authorityMilliseconds));
 export type AutomaticGenerationAuthorization = z.infer<typeof automaticGenerationAuthorizationSchema>;
 export const AUTOMATIC_PAIR_POLICY: Readonly<AutomaticPairPolicy> = Object.freeze({ schemaVersion: 'wfc.pf.automatic-pair-policy.v1',
   mode: 'when-both-empty-or-unchanged-automatic' });
@@ -52,7 +54,9 @@ export const automaticPairMandateSchema = z.object({ schemaVersion: z.literal('w
   baselinePolicy: automaticPairBaselinePolicySchema.optional(),
 }).strict().superRefine((value, ctx) => {
   const created = Date.parse(value.createdAt), expiry = Date.parse(value.authorityExpiresAt);
-  if (expiry <= created || expiry > Date.parse(value.loginExpiresAt) || expiry - created > AUTOMATIC_PAIR_LIMITS.authorityMilliseconds
+  const sessionBound = value.source.kind === 'automatic-generation' && value.source.authorization.runUntil === 'login-expiry';
+  if (expiry <= created || expiry > Date.parse(value.loginExpiresAt)
+    || !sessionBound && expiry - created > AUTOMATIC_PAIR_LIMITS.authorityMilliseconds
     || value.source.kind === 'location-impact' && (expiry > Date.parse(value.source.authorityExpiresAt) || created < Date.parse(value.source.createdAt))
     || value.source.kind === 'automatic-generation' && (expiry > Date.parse(value.source.authorization.authorityExpiresAt)
       || created < Date.parse(value.source.authorization.createdAt) || value.source.authorization.projectId !== value.projectId

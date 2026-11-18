@@ -203,17 +203,22 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
     if ((await stored(projectId!, accountId!))?.commandSha256 !== pending.commandSha256) throw new Error('Pending assignment storage changed. Preserve it for recovery.');
     localStorage.removeItem(keyFor(projectId!, accountId!)); update({ pending: null });
   }, [projectId, accountId, update]);
-  const run = useCallback(async (retry: boolean) => {
-    if (!live() || !latest.current.active || operation.current || !data.current.storageReady || data.current.summaryLoading || !retry && data.current.pending) return;
+  const run = useCallback(async (mode: 'start' | 'retry' | 'calculation', ownerSignal?: AbortSignal): Promise<boolean> => {
+    const calculation = mode === 'calculation';
+    if (ownerSignal?.aborted || !live() || !latest.current.active || operation.current
+      || !calculation && (!data.current.storageReady || data.current.summaryLoading || mode === 'start' && data.current.pending)) return false;
     const abort = new AbortController(); operation.current = abort;
+    const signal = ownerSignal ? AbortSignal.any([abort.signal, ownerSignal]) : abort.signal;
+    let retry = mode === 'retry';
     let hadUnknownAttempt = false;
-    update({ busy: true, error: null, notice: null, complete: false, ...(retry ? {} : { results: [], totalNames: 0 }) });
-    const assertCurrent = () => { if (!live() || !latest.current.active || abort.signal.aborted || operation.current !== abort) throw interrupted(); };
+    update({ busy: true, summaryLoading: false, error: null, notice: null, complete: false,
+      ...(mode === 'start' ? { results: [], totalNames: 0 } : {}) });
+    const assertCurrent = () => { if (!live() || !latest.current.active || signal.aborted || operation.current !== abort) throw interrupted(); };
     const sendExact = async (pending: Pending): Promise<ModelLocationMatchReceipt> => {
       const delays = [750, 2000];
       for (let attempt = 0; ; attempt++) {
         assertCurrent();
-        try { const receipt = await assignModelLocations(projectId!, token!, pending.command, abort.signal); assertCurrent(); return receipt; }
+        try { const receipt = await assignModelLocations(projectId!, token!, pending.command, signal); assertCurrent(); return receipt; }
         catch (error) {
           assertCurrent();
           if (error instanceof ModelLocationMatchApiError && error.outcome === 'unknown') hadUnknownAttempt = true;
@@ -221,7 +226,7 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
           const saved = continuation.current;
           const progress = saved?.owner === owner ? `${saved.results.length} of ${saved.context.names.length} names confirmed. ` : '';
           update({ progress: `${progress}Project busy (${error.code}; HTTP ${error.status}). Retrying the same saved assignment ${attempt + 1} of ${delays.length}…` });
-          await pause(delays[attempt], abort.signal);
+          await pause(delays[attempt], signal);
         }
       }
     };
@@ -253,7 +258,7 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
       update({ phase: 'context', results: [], totalNames: 0, progress: 'Reading current project From/To names…' });
       // Read committed shared locations again before scanning. A reload, a new
       // cable or a manual change must not rescan every known model object.
-      const summary = await fetchModelLocationMatchSummary(projectId!, token!, abort.signal); assertCurrent();
+      const summary = await fetchModelLocationMatchSummary(projectId!, token!, signal); assertCurrent();
       const context = summary.context;
       if (!sameModel(context, latest.current.pf)) throw new Error('The active model changed. Load the current model before finding locations.');
       const crossModelNames=new Set((context.crossModelNames??[]).map(normalizeEndpointLocation));
@@ -268,14 +273,17 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
       }
       await latest.current.pf.runProjectPreparation(context.current, async viewer => {
         update({ phase: 'finding' });
-        const scan = await collectModelLocationMatch({ ...context, names }, viewer, progress => update({ progress }), abort.signal); assertCurrent();
+        const scan = await collectModelLocationMatch({ ...context, names }, viewer, progress => update({ progress }), signal); assertCurrent();
         const saved: Continuation = { owner, context, names, scan, offset: 0, revision: context.registryRevision, results: retained };
         continuation.current = saved; await finishPages(saved, viewer);
-      }, abort.signal);
+      }, signal);
     };
     try {
+      const retained = mode === 'start' ? null : await stored(projectId!, accountId!);
+      assertCurrent();
+      retry ||= retained !== null;
       if (retry) {
-        const pending = await stored(projectId!, accountId!); if (!pending) throw new Error('No saved location assignment remains. Find locations again.');
+        const pending = retained; if (!pending) throw new Error('No saved location assignment remains. Find locations again.');
         if (!sameModel(pending.command, latest.current.pf)) throw new Error('The saved assignment belongs to another model. Load its model before retrying; its exact saved command is retained.');
         update({ phase: 'assigning', pending, progress: 'Checking the same saved location assignment…' });
         const saved = continuation.current;
@@ -283,7 +291,7 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
           await latest.current.pf.runProjectPreparation(saved.context.current, async viewer => {
             viewer.assertCurrent(); const receipt = await sendExact(pending); viewer.assertCurrent();
             await accept(saved, pending, receipt); await finishPages(saved, viewer);
-          }, abort.signal);
+          }, signal);
         } else {
           const receipt = await sendExact(pending); await clear(pending); assertCurrent();
           update({ results: receipt.results, totalNames: receipt.results.length,
@@ -293,11 +301,12 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
       } else await fresh();
       assertCurrent(); latest.current.onChanged?.();
       await latest.current.pf.refreshState();
+      return !signal.aborted;
     } catch (error) {
-      if (!live()) return;
+      if (!live()) return false;
       let pending: Pending | null = null;
       try { pending = await stored(projectId!, accountId!); }
-      catch (storageError) { update({ storageReady: false, error: message(storageError) }); return; }
+      catch (storageError) { update({ storageReady: false, error: message(storageError) }); return false; }
       // A retry refusal cannot settle an earlier unknown write, except this
       // serialized context check: the server has already checked its ledger.
       const contextRetired = error instanceof ModelLocationMatchApiError && error.outcome === 'refused'
@@ -310,11 +319,14 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
           : error instanceof DOMException && error.name === 'AbortError' ? null : message(error),
         notice: !pending && error instanceof DOMException && error.name === 'AbortError' ? 'Location matching paused. Already saved assignments are retained.' : null });
       if (error instanceof ModelLocationMatchApiError && [401, 403].includes(error.status ?? 0)) latest.current.pf.refresh();
+      return false;
     } finally {
       if (operation.current === abort) operation.current = null;
       update({ busy: false, phase: 'idle' });
     }
   }, [live, update, projectId, token, accountId, clear, retain, owner]);
   return { ...current, allowed, canStart: allowed && active && current.storageReady && !current.summaryLoading && !current.busy && !current.pending && pf.viewerPhase === 'ready' && !pf.busy,
-    start: () => run(false), retry: () => run(true), cancel: () => operation.current?.abort() };
+    start: async () => { await run('start'); }, retry: async () => { await run('retry'); },
+    beforeCalculation: (signal: AbortSignal) => run('calculation', signal),
+    cancel: () => operation.current?.abort() };
 }

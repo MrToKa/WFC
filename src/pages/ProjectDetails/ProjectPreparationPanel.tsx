@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { Body1, Button, Field, Input, Spinner, tokens } from '@fluentui/react-components';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useProjectPreparation } from './hooks/useProjectPreparation';
@@ -8,13 +8,16 @@ import { trayDisplayTarget } from './trayDisplayTarget';
 import { formatPreparationDiagnostics } from './preparationDiagnostics';
 import { useToast } from '@/context/ToastContext';
 
-type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; onBusyChange?: (busy: boolean) => void; onNetworkReady?: (key: string) => void };
+export type EnsureCalculationNetwork = ReturnType<typeof useProjectPreparation>['ensureForCalculation'];
+type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; onBusyChange?: (busy: boolean) => void;
+  onNetworkReady?: (key: string) => void; calculationNetworkRef?: Ref<EnsureCalculationNetwork> };
 const searchText = (text: string) => text.normalize('NFC').trim().replace(/\s+/gu, ' ').toLowerCase().replace(/^\/+/, '');
 const sameModel = (left: { modelVersionId: string | null; contentFingerprint: string | null; selectionRevision: string | null }, right: PreparationScope) =>
   left.modelVersionId === right.modelVersionId && left.contentFingerprint === right.contentFingerprint && left.selectionRevision === right.selectionRevision;
 
-export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkReady }: Props) {
+export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkReady, calculationNetworkRef }: Props) {
   const state = useProjectPreparation(pf, active);
+  useImperativeHandle(calculationNetworkRef, () => state.ensureForCalculation, [state.ensureForCalculation]);
   const { showToast } = useToast();
   const lastErrorToast = useRef<string | null>(null);
   const [query, setQuery] = useState('');

@@ -78,6 +78,17 @@ describe('fresh barrier admission boundaries', () => {
     expect(await createAutomaticJobInTransaction(blocked.client,blocked.input)).toMatchObject({jobId:null,readyCables:0});expect(seams.mandates).not.toHaveBeenCalled();
     const legacy=automatic();await createAutomaticJobInTransaction(legacy.client,legacy.input);expect(seams.mandates).not.toHaveBeenCalled();
   });
+  it('uses the continuous cable scope and scheduler deadline only for the login-expiry mode', async () => {
+    const f = automatic();
+    seams.current.mockResolvedValue(intent());
+    const source = outputSource();
+    const deadline = Date.now() + 75_000;
+    await createAutomaticJobInTransaction(f.client, { ...f.input, deadline,
+      automaticPairSource: { ...source, authorization: { ...source.authorization, runUntil: 'login-expiry' } } });
+    expect(seams.collect.mock.calls[0][1]).toMatchObject({ continuous: true, deadline });
+    await createAutomaticJobInTransaction(f.client, { ...f.input, automaticPairSource: source });
+    expect(seams.collect.mock.calls[1][1]).not.toHaveProperty('continuous');
+  });
   it.each([undefined, { ...defaultOptions }])('manual calculation rejects absent intent before registry matching or pool access (%s)', async options => {
     const connect = vi.fn(), match = vi.fn().mockResolvedValue({ registryRevision: '8' });
     const jobs = createPathFinderJobs({ connect } as unknown as Pool, { match } as unknown as PathFinderRepository);

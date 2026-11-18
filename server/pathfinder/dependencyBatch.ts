@@ -11,6 +11,7 @@ import { endpointCalculationPoint, type CurrentEndpointCalculationPoint } from '
 import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';
 import { normalizeLocation } from './matching.js';
 import { PathFinderError } from './errors.js';
+import { readContinuousCableExclusions } from './continuousCableScope.js';
 
 export type DependencyBatch = { items: Array<CollectedDependencies & {id:string}>; registryRevision:string; options:EngineOptions; bytes:number };
 const refused = (code:string,status=413):never => {throw new PathFinderError(code,status,'The complete cable scope exceeds a bounded calculation admission limit. No partial scope was admitted.');};
@@ -20,6 +21,7 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
   projectId:string;options:EngineOptions;cableIds?:string[];signal?:AbortSignal;
   deadline?:number;engineIdentity?:CalculationEngineIdentity;
   dependencyVersion?:'pathfinder.dependencies.v7'|'pathfinder.dependencies.v8';
+  continuous?:boolean;
 }):Promise<DependencyBatch>{
   const projectId=policyUuidSchema.parse(input.projectId),options=optionsSchema.parse(input.options);
   const barrierVersion=input.dependencyVersion==='pathfinder.dependencies.v8';
@@ -35,11 +37,12 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
   if(requested&&requested.length!==identities.length)throw new PathFinderError('CABLE_NOT_FOUND',404);
   if(!identities.length)throw new PathFinderError('NO_CABLES',409,'There are no cables in this calculation scope.');
   if(new Set(identities.map(x=>x.id)).size!==identities.length)refused('RECALCULATION_CABLE_INTEGRITY',500);
-  const cables:Array<Record<string,any>>=[];let inputBytes=0;
+  type CableRow = Record<string, any> & { id: string; mto: string | null; routing: string | null; design_length: string | null };
+  const cables: CableRow[]=[];let inputBytes=0;
   for(let at=0;at<identities.length;at+=RECALCULATION_LIMITS.cableChunk){
     check();const ids=identities.slice(at,at+RECALCULATION_LIMITS.cableChunk).map(x=>x.id);
     // Oversized text is refused explicitly before materializing it in the API process.
-    const values=(await client.query<Record<string,any>>(`SELECT id,
+    const values=(await client.query<CableRow>(`SELECT id,
       CASE WHEN octet_length(from_location)>4096 THEN NULL ELSE from_location END AS from_location,
       CASE WHEN octet_length(to_location)>4096 THEN NULL ELSE to_location END AS to_location,
       CASE WHEN octet_length(tag)>4096 THEN NULL ELSE tag END AS tag,
@@ -52,6 +55,8 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
     for(const row of values){if(row.input_oversize)refused('RECALCULATION_INPUT_BYTES');inputBytes+=Buffer.byteLength(canonicalJson(row));if(inputBytes>RECALCULATION_LIMITS.dependencyBytes)refused('RECALCULATION_INPUT_BYTES');cables.push(row);}
   }
   check();
+  const excluded = input.continuous ? await readContinuousCableExclusions(client, projectId, cables, check) : null;
+  const candidates = excluded?.size ? cables.filter(cable => !excluded.has(cable.id)) : cables;
   // One actual implementation read per whole batch; no DLL hashing in its cable loop.
   const mixed = options.barrierRouting?.schemaVersion === 'wfc.pf.barrier-admission-intent.v2';
   const identity=input.engineIdentity??(barrierVersion
@@ -65,8 +70,8 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
   if(!registry)throw new PathFinderError('REGISTRY_CONFLICT',409);
   const items:DependencyBatch['items']=[];let bytes=0;
   const append=(item:CollectedDependencies)=>{bytes+=Buffer.byteLength(canonicalJson({id:item.cable.id,status:item.status,message:item.message,dependencies:item.dependencies}));if(bytes>RECALCULATION_LIMITS.dependencyBytes)refused('RECALCULATION_DEPENDENCY_BYTES');items.push({id:item.cable.id,...item});};
-  if(common.inputs===null){for(const cable of cables){check();append({cable,dependencies:null,status:common.status,message:common.message});}return{items,registryRevision:registry,options,bytes};}
-  const names=[...new Set(cables.flatMap(cable=>[cable.from_location,cable.to_location]).filter((name):name is string=>typeof name==='string'&&normalizeLocation(name)!=='').map(normalizeLocation))].sort();
+  if(common.inputs===null){for(const cable of cables){check();append({cable,dependencies:null,...(excluded?.get(cable.id) ?? {status:common.status,message:common.message})});}return{items,registryRevision:registry,options,bytes};}
+  const names=[...new Set(candidates.flatMap(cable=>[cable.from_location,cable.to_location]).filter((name):name is string=>typeof name==='string'&&normalizeLocation(name)!=='').map(normalizeLocation))].sort();
   if(names.length>RECALCULATION_LIMITS.neededLocations)refused('ENDPOINT_NEEDED_LOCATION_LIMIT');
   const aliases=new Map<string,string[]>();let locationBytes=0;
   for(let at=0;at<names.length;at+=RECALCULATION_LIMITS.headChunk){
@@ -85,9 +90,12 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
     const head=heads.get(ids[0]);return head ? head.ready?endpointCalculationPoint(head.binding):null : automatic.get(ids[0])?.point ?? null;
   };
   const purposeRouting = input.dependencyVersion ? await createCablePurposeRoutingReader(client,projectId) : null;
-  const purposes = purposeRouting ? await readLinkedCableTypePurposes(client,projectId,cables) : null;
+  const purposes = purposeRouting ? await readLinkedCableTypePurposes(client,projectId,candidates) : null;
   for(const cable of cables){
-    check(); const frozen=freezeCableDependenciesForVersion(common.inputs,cable,endpoint(cable.from_location),endpoint(cable.to_location),input.dependencyVersion??'pathfinder.dependencies.v5');
+    check();
+    const skipped = excluded?.get(cable.id);
+    if (skipped) { append({ cable, dependencies: null, ...skipped }); continue; }
+    const frozen=freezeCableDependenciesForVersion(common.inputs,cable,endpoint(cable.from_location),endpoint(cable.to_location),input.dependencyVersion??'pathfinder.dependencies.v5');
     if (!frozen.dependencies || !purposeRouting) { append(frozen); continue; }
     const cablePurposeRouting=purposeRouting(purposes!.get(cable.id));
     append(cablePurposeRouting ? {...frozen,dependencies:{...frozen.dependencies,cablePurposeRouting} as typeof frozen.dependencies}

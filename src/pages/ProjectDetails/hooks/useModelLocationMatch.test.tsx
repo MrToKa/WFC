@@ -325,6 +325,17 @@ describe('find and assign operation ownership', () => {
     expect(discover).toHaveBeenCalledTimes(1); expect(api.fetchModelLocationMatchContext).not.toHaveBeenCalled();
     expect(result.current.pending).toBeNull(); expect(localStorage.length).toBe(0); expect(pf.calculate).not.toHaveBeenCalled();
   });
+  it('reuses the exact persisted location assignment before automatic calculation', async () => {
+    const { pf, discover } = setup();
+    const signal = new AbortController().signal;
+    vi.mocked(api.assignModelLocations).mockRejectedValueOnce(new api.ModelLocationMatchApiError('LOST_ACK', null, 'unknown', 'Lost acknowledgement'));
+    const { result } = renderHook(() => useModelLocationMatch({ pf, accountId: ids.account, active: true }));
+    await act(async () => { await expect(result.current.beforeCalculation(signal)).resolves.toBe(false); });
+    const body = result.current.pending!.command;
+    await act(async () => { await expect(result.current.beforeCalculation(signal)).resolves.toBe(true); });
+    expect(vi.mocked(api.assignModelLocations).mock.calls.map(call => call[2])).toEqual([body, body]);
+    expect(discover).toHaveBeenCalledOnce(); expect(pf.calculate).not.toHaveBeenCalled(); expect(result.current.complete).toBe(true);
+  });
   it('restores a pending assignment after remount, reconciles it, then continues with a fresh complete scan', async () => {
     const { pf, discover } = setup();
     vi.mocked(api.assignModelLocations).mockRejectedValueOnce(new api.ModelLocationMatchApiError('LOST_ACK', null, 'unknown', 'Lost acknowledgement'));

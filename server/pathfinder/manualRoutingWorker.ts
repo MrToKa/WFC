@@ -80,7 +80,8 @@ export function createManualRoutingWorker(pool: Pool, adapters: ManualRoutingAda
   const controller = new AbortController(); let loop: Promise<void> | undefined, ticking: Promise<void> | undefined;
   async function activateAutomaticOwner() {
     const candidates = (await pool.query<Row>(`/* manual-routing:automatic-candidates */ SELECT s.* FROM pf_recalculation_state s
-      WHERE s.enabled AND NOT s.paused AND s.authority_expires_at>clock_timestamp() AND EXISTS(SELECT 1 FROM pf_manual_route_jobs m
+      WHERE s.enabled AND NOT s.paused AND s.authority_expires_at>clock_timestamp()
+      AND s.automatic_pair_authority->>'runUntil' IS DISTINCT FROM 'login-expiry' AND EXISTS(SELECT 1 FROM pf_manual_route_jobs m
       WHERE m.project_id=s.project_id AND (m.actor_id IS NULL OR m.login_expires_at<=clock_timestamp() OR m.automatic_authority IS NOT NULL AND
       (m.automatic_authority->>'generation' IS DISTINCT FROM s.desired_generation::text OR m.automatic_authority->>'controlRevision' IS DISTINCT FROM s.control_revision::text
       OR m.automatic_authority->>'authorityEpoch' IS DISTINCT FROM s.authority_epoch::text))) ORDER BY s.project_id LIMIT 1`)).rows;

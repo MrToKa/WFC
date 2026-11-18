@@ -2,8 +2,9 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ControlPanelOpenButton, ControlPanelPart, useControlPanelDetached } from '@/components/ControlPanelWindow';
 import { Body1, Button, Caption1, Checkbox, Field, Input, Spinner, Tab, TabList, makeStyles, tokens } from '@fluentui/react-components';
 import type { PathFinderCable, PathFinderLocation, PathFinderPreferences } from '@/api/pathfinder';
+import { getBarrierRegistry } from '@/api/pathfinderBarriers';
 import { usePathFinder } from './hooks/usePathFinder';
-import { ModelLocationMatchPanel } from './ModelLocationMatchPanel';
+import { ModelLocationMatchPanel, type MatchBeforeCalculation } from './ModelLocationMatchPanel';
 import { useRoutingsViewerHeight } from './hooks/useRoutingsViewerHeight';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import { PathFinderResults } from './PathFinderResults';
@@ -11,6 +12,7 @@ import { PathFinderRecalculateAll } from './PathFinderRecalculateAll';
 import { PathFinderRecalculationPanel } from './PathFinderRecalculationPanel';
 import { PathFinderLookup } from './PathFinderLookup';
 import { PathFinderRoutes } from './PathFinderRoutes';
+import type { EnsureCalculationNetwork } from './ProjectPreparationPanel';
 import { PathFinderPreview } from './PathFinderPreview';
 import { useProjectCablePurposes } from './hooks/useProjectCablePurposes';
 import { EndpointBindingPanel } from './EndpointBindingPanel';
@@ -77,6 +79,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const panelId = useId();
   const [mode, setMode] = useState<'routes' | 'path' | 'lookup'>('path');
   const [networkCheckBusy, setNetworkCheckBusy] = useState(false), [locationCheckBusy, setLocationCheckBusy] = useState(false);
+  const calculationNetwork = useRef<EnsureCalculationNetwork>(null);
+  const calculationMatch = useRef<MatchBeforeCalculation>(null);
   const [barrierRefreshKey, setBarrierRefreshKey] = useState<string | null>(null);
   const [barrierRefreshRevision, setBarrierRefreshRevision] = useState(0);
   const barrierReadKey = JSON.stringify([barrierRefreshKey, barrierRefreshRevision]);
@@ -85,6 +89,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const displayGeneration = useRef(0), [displayOwner, setDisplayOwner] = useState<'none' | 'proposal' | 'lookup' | 'standalone' | 'obstacle' | 'barrier'>('none');
   const [secondaryDistance, setSecondaryDistance] = useState('2'), [preferVertical, setPreferVertical] = useState(true), [transparency, setTransparency] = useState('75');
   const [barrierAuthoring, setBarrierAuthoring] = useState<{ registry: BarrierRegistry | null; dirty: boolean; pending: boolean }>({ registry: null, dirty: false, pending: false });
+  const latestBarrierAuthoring = useRef(barrierAuthoring);
+  latestBarrierAuthoring.current = barrierAuthoring;
   const barrierStateChanged = useCallback((value: typeof barrierAuthoring) => setBarrierAuthoring(previous => JSON.stringify(previous) === JSON.stringify(value) ? previous : value), []);
   const currentBarrierRegistry = barrierAuthoring.registry && barrierAuthoring.registry.scope.projectId === projectId
     && barrierAuthoring.registry.scope.modelVersionId === controller.data?.activeModel.modelVersionId
@@ -102,6 +108,31 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical, barrierRouting } : null;
   const backgroundBarrierRouting = createBarrierAdmissionIntent(currentBarrierRegistry, false);
   const backgroundPreferences = preferences && backgroundBarrierRouting ? { ...preferences, barrierRouting: backgroundBarrierRouting } : null;
+  const prepareAutomaticCalculation = useCallback(async (signal: AbortSignal): Promise<PathFinderPreferences> => {
+    if (!projectId || !token || !validSecondary || !calculationNetwork.current || !calculationMatch.current
+      || latestBarrierAuthoring.current.dirty || latestBarrierAuthoring.current.pending)
+      throw new Error('Finish the current Path Finder changes before enabling automatic recalculation.');
+    const network = await calculationNetwork.current(signal);
+    signal.throwIfAborted();
+    if (!network || network.projectId !== projectId)
+      throw new Error('The routing network could not be prepared. Check the tray status in Routes.');
+    const matched = await calculationMatch.current(signal);
+    signal.throwIfAborted();
+    setBarrierRefreshRevision(value => value + 1);
+    if (!matched)
+      throw new Error('From/To matching did not finish. Check its status before enabling automatic recalculation.');
+    const registry = await getBarrierRegistry(projectId, token, signal);
+    signal.throwIfAborted();
+    const barriers = createBarrierAdmissionIntent(registry, false);
+    const { scope } = registry;
+    if (!barriers || latestBarrierAuthoring.current.dirty || latestBarrierAuthoring.current.pending
+      || scope.projectId !== projectId || scope.captureFrameId !== network.captureFrameId
+      || scope.modelVersionId !== network.scope.modelVersionId || scope.selectionRevision !== network.scope.selectionRevision
+      || scope.contentFingerprint !== network.scope.contentFingerprint) {
+      throw new Error('Check and save the barrier selection for the current routing network before enabling automatic recalculation.');
+    }
+    return { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical, barrierRouting: barriers };
+  }, [projectId, token, validSecondary, secondaryValue, preferVertical]);
   const calculationBlocker = !validSecondary ? 'Enter a SECONDARY trigger distance from 0 to 1,000,000 metres in Path.'
     : barrierAuthoring.pending ? 'A barrier change is awaiting confirmation. In Barriers, choose Inspect saved outcome; if no terminal outcome is recorded, choose Close this exact command, then check and save the intended barrier set before calculating.'
       : barrierAuthoring.dirty ? 'Save the obstacle selection in Barriers before calculating.'
@@ -244,7 +275,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         /></details>
         </div>
         <div style={{ display: mode === 'lookup' ? 'none' : 'block' }}>
-          <ModelLocationMatchPanel pf={{ ...pf, busy: pf.busy || networkCheckBusy }} accountId={accountId ?? null} active={mode !== 'lookup'} refreshRevision={barrierRefreshRevision} onChanged={cableValuesChanged} onBusyChange={setLocationCheckBusy} />
+          <ModelLocationMatchPanel pf={{ ...pf, busy: pf.busy || networkCheckBusy }} accountId={accountId ?? null} active={mode !== 'lookup'} refreshRevision={barrierRefreshRevision}
+            onChanged={cableValuesChanged} onBusyChange={setLocationCheckBusy} calculationMatchRef={calculationMatch} />
         </div>
         <TabList aria-label="Path Finder tools" selectedValue={mode} onTabSelect={(_, value) => changeMode(value.value as 'routes' | 'path' | 'lookup')}>
           <Tab id={`${panelId}-routes-tab`} value="routes" aria-controls={`${panelId}-routes-panel`}>Routes</Tab>
@@ -259,7 +291,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           </div>
         </div>
         <div id={`${panelId}-routes-panel`} role="tabpanel" aria-labelledby={`${panelId}-routes-tab`} className={extra.panel} style={{ display: mode === 'routes' ? 'flex' : 'none' }}>
-        <PathFinderRoutes pf={{ ...pf, busy: pf.busy || locationCheckBusy }} active={mode === 'routes'} onBusyChange={setNetworkCheckBusy} onNetworkReady={setBarrierRefreshKey} />
+        <PathFinderRoutes pf={{ ...pf, busy: pf.busy || locationCheckBusy }} active={mode === 'routes'} onBusyChange={setNetworkCheckBusy} onNetworkReady={setBarrierRefreshKey}
+          calculationNetworkRef={calculationNetwork} />
         </div>
         <div id={`${panelId}-path-panel`} role="tabpanel" aria-labelledby={`${panelId}-path-tab`} className={extra.panel} style={{ display: mode === 'path' ? 'flex' : 'none' }}>
         <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { clearView(); setSecondaryDistance(value.value); }} /></Field>
@@ -274,6 +307,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <PathFinderRecalculationPanel projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           active={active} contextKey={JSON.stringify([data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, data?.activeModel.contentFingerprint])}
           preferences={backgroundPreferences} configurationMessage={calculationBlocker} onConfigureCalculation={validSecondary ? configureCalculation : undefined}
+          prepareEnable={validSecondary && !barrierAuthoring.dirty && !barrierAuthoring.pending ? prepareAutomaticCalculation : undefined}
+          preparationAvailable={mode !== 'lookup' && pf.viewerPhase === 'ready' && !pf.busy && !networkCheckBusy && !locationCheckBusy}
           onChanged={cableValuesChanged} onAuthorityLost={cableValuesChanged} />
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation} onResultRefresh={workflowResultRefreshed}

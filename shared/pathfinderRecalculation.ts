@@ -99,12 +99,14 @@ export const recalculationContextSchema = z.object({
   preferences: recalculationPreferencesSchema.nullable(),
   timeoutMilliseconds: recalculationTimeoutSchema.nullable(),
   automaticPairPolicy: automaticPairPolicySchema.optional(),
+  automaticRunUntil: z.literal('login-expiry').optional(),
   progress: recalculationProgressSchema.optional(),
 }).strict().superRefine((value, context) => {
   if (value.completed > value.total || value.readyCables + value.blockedCables > value.total) context.addIssue({ code: 'custom', message: 'Progress cannot exceed the complete bounded cable scope.' });
   if (value.enrolledGeneration !== null && BigInt(value.enrolledGeneration) > BigInt(value.desiredGeneration)) context.addIssue({ code: 'custom', message: 'An enrolled generation cannot be newer than the desired generation.' });
   if ((value.preferences === null) !== (value.timeoutMilliseconds === null)) context.addIssue({ code: 'custom', message: 'Saved preferences and timeout are present together.' });
   if (value.enabled && value.preferences === null) context.addIssue({ code: 'custom', message: 'Enabled recalculation requires saved preferences.' });
+  if (value.automaticRunUntil && !value.automaticPairPolicy) context.addIssue({ code: 'custom', message: 'Automatic run duration belongs to an enabled output policy.' });
   if (value.paused && !value.enabled || value.status === 'disabled' && value.enabled || value.status === 'paused' && !value.paused) context.addIssue({ code: 'custom', message: 'Durable enabled and paused state must agree with the status.' });
   if (value.progress && (value.progress.jobId !== value.jobId || value.progress.generation !== value.desiredGeneration
     || value.enrolledGeneration !== value.desiredGeneration || value.progress.total !== value.total
@@ -128,7 +130,7 @@ const historicalRecalculationCommandSchema = z.discriminatedUnion('action', [
 ]);
 export const automaticOutputEnableCommandSchema = z.object({ ...commandBase, schemaVersion: z.literal('wfc.pf.recalculation-command.v2'),
   action: z.literal('enable'), preferences: backgroundRecalculationPreferencesSchema, timeoutMilliseconds: recalculationTimeoutSchema,
-  automaticPairPolicy: automaticPairPolicySchema }).strict();
+  automaticPairPolicy: automaticPairPolicySchema, runUntil: z.literal('login-expiry').optional() }).strict();
 /** Continue a previously enabled output policy; this never creates or renews its authority. */
 export const automaticOutputContinuationCommandSchema = z.object({ ...commandBase, schemaVersion: z.literal('wfc.pf.recalculation-command.v2'),
   action: z.enum(['resume', 'retry']), automaticPairPolicy: automaticPairPolicySchema }).strict();

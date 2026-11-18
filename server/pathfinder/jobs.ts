@@ -130,14 +130,16 @@ export async function insertCalculationBatch(client:PoolClient,projectId:string,
 
 /** Called only inside the scheduler's current-principal transaction; scheduler state locks LAST. */
 export const createAutomaticJobInTransaction:RecalculationJobAdapter['createInTransaction']=async(client,input)=>{
-  const deadline=Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
+  const continuous = input.automaticPairSource?.authorization.runUntil === 'login-expiry';
+  const deadline = Math.min(input.deadline ?? Infinity, Date.now() + (continuous
+    ? BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds : RECALCULATION_LIMITS.collectionMilliseconds));
   const {barrierRouting:_previousIntent,...mathPreferences}=input.preferences;
   // Browser-closed work always derives the current publication with drilling off.
   // Historical or expired preferences cannot downgrade a fresh calculation.
   const options={...defaultOptions,...mathPreferences,
     barrierRouting:await readCurrentBarrierAdmissionIntent(client,input.projectId,false)};
   const batch=await collectDependencyBatchInTransaction(client,{projectId:input.projectId,options,signal:input.signal,deadline,
-    dependencyVersion:'pathfinder.dependencies.v8'});
+    dependencyVersion:'pathfinder.dependencies.v8', ...(continuous ? { continuous } : {}) });
   const inputSha256=batchHash(batch,input.timeoutMilliseconds),readyCables=batch.items.filter(item=>item.dependencies).length;
   const reasonCodes=[...new Set(batch.items.filter(item=>!item.dependencies).map(item=>item.status.toUpperCase()))].sort();
   input.signal.throwIfAborted();

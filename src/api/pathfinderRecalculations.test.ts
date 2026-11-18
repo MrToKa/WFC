@@ -40,6 +40,25 @@ describe('fixed recalculation transport', () => {
     await expect(sendRecalculationCommand(ids.project, 'token', command)).resolves.toEqual(receipt);
     expect(fetch).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('/recalculations/commands'), expect.objectContaining({ method: 'POST', body: JSON.stringify(command) }));
   });
+  it('preserves login-expiry mode on the wire and requires the same mode in its acknowledgement', async () => {
+    const f = recalculationFixture(), command = recalculationCommandSchema.parse({ ...f.command, schemaVersion: 'wfc.pf.recalculation-command.v2',
+      automaticPairPolicy: AUTOMATIC_PAIR_POLICY, runUntil: 'login-expiry' });
+    const context = { ...f.receipt.context, automaticPairPolicy: AUTOMATIC_PAIR_POLICY,
+      authority: { ...f.enabled.authority!, expiresAt: '2026-10-19T08:00:00.000Z' } };
+    const legacyAuthorization = { schemaVersion: 'wfc.pf.automatic-generation-output-authority.v1', projectId: ids.project, actorId: ids.actor,
+      actorAdminRevision: '1', loginId: ids.key, loginExpiresAt: context.authority.expiresAt, installationEpoch: ids.actor,
+      commandKey: ids.key, commandSha256: 'a'.repeat(64), controlRevision: '5', authorityEpoch: '1',
+      createdAt: '2026-10-19T00:00:00.000Z', authorityExpiresAt: '2026-10-19T00:30:00.000Z', policy: AUTOMATIC_PAIR_POLICY };
+    const receipt = { ...f.receipt, context, automaticPairAuthorization: { ...legacyAuthorization,
+      authorityExpiresAt: context.authority.expiresAt, runUntil: 'login-expiry' } };
+    vi.mocked(fetch).mockResolvedValueOnce(response(receipt))
+      .mockResolvedValueOnce(response({ ...receipt, automaticPairAuthorization: legacyAuthorization }))
+      .mockResolvedValueOnce(response({ ...f.receipt, context }));
+    await expect(sendRecalculationCommand(ids.project, 'token', command)).resolves.toEqual(receipt);
+    expect(fetch).toHaveBeenNthCalledWith(1, expect.stringContaining('/recalculations/commands'), expect.objectContaining({ method: 'POST', body: JSON.stringify(command) }));
+    await expect(sendRecalculationCommand(ids.project, 'token', command)).rejects.toMatchObject({ code: 'INVALID_RESPONSE', outcome: 'unknown' });
+    await expect(sendRecalculationCommand(ids.project, 'token', command)).rejects.toMatchObject({ code: 'INVALID_RESPONSE', outcome: 'unknown' });
+  });
   it('does not confirm automatic Cable list updates when an enable receipt omits the requested output policy', async () => {
     const f = recalculationFixture(), command = recalculationCommandSchema.parse({ ...f.command, schemaVersion: 'wfc.pf.recalculation-command.v2', automaticPairPolicy: { ...AUTOMATIC_PAIR_POLICY } });
     vi.mocked(fetch).mockResolvedValueOnce(response(f.receipt));

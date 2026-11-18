@@ -19,7 +19,7 @@ export function activeAutomaticGenerationAuthorization(state: Row): AutomaticGen
 /** A current source cannot be inferred from a calculated proposal or old enable.
  * Admission runs before its enrollment insert; writes additionally require that exact immutable enrollment. */
 export async function requireAutomaticGenerationOutput(client: PoolClient, raw: AutomaticPairSource,
-  input: { projectId: string; actorId: string; loginId: string; jobId: string; admission?: boolean }): Promise<AutomaticGenerationAuthorization> {
+  input: { projectId: string; actorId: string; loginId: string; jobId?: string; admission?: boolean }): Promise<AutomaticGenerationAuthorization> {
   const source = automaticPairSourceSchema.parse(raw); if (source.kind !== 'automatic-generation') return fail('AUTOMATIC_OUTPUT_SOURCE_REQUIRED');
   const a = source.authorization;
   if (a.projectId !== input.projectId || a.actorId !== input.actorId || a.loginId !== input.loginId || Date.now() >= Date.parse(a.authorityExpiresAt))
@@ -33,11 +33,14 @@ export async function requireAutomaticGenerationOutput(client: PoolClient, raw: 
   const command = automaticOutputEnableCommandSchema.safeParse(stored?.request), receipt = recalculationReceiptSchema.safeParse(stored?.receipt);
   if (!command.success || !receipt.success || stored?.request_sha256 !== a.commandSha256 || hash(command.data) !== a.commandSha256
     || command.data.idempotencyKey !== a.commandKey || BigInt(command.data.expectedControlRevision) + 1n !== BigInt(a.controlRevision)
+    || command.data.runUntil !== a.runUntil
     || !same(command.data.automaticPairPolicy, a.policy) || !same(receipt.data.automaticPairAuthorization, a)
     || receipt.data.context.projectId !== input.projectId || receipt.data.context.controlRevision !== a.controlRevision
     || receipt.data.context.authority?.actorId !== a.actorId || receipt.data.context.authority.expiresAt !== a.authorityExpiresAt
+    || receipt.data.context.automaticRunUntil !== a.runUntil
     || !same(receipt.data.context.automaticPairPolicy, a.policy)) return fail('AUTOMATIC_OUTPUT_ORIGINAL_ENABLE_REQUIRED');
   if (!input.admission) {
+    if (!input.jobId) return fail('AUTOMATIC_OUTPUT_ENROLLMENT_CHANGED');
     const enrolled = (await client.query<Row>('/* automatic-generation:enrollment */ SELECT generation::text,control_revision::text,authority_epoch::text,actor_id,login_id,automatic_pair_authority FROM pf_recalculation_enrollments WHERE project_id=$1 AND job_id=$2 FOR SHARE', [input.projectId, input.jobId])).rows[0];
     if (!enrolled || enrolled.generation !== source.generation || enrolled.control_revision !== source.controlRevision
       || enrolled.authority_epoch !== source.authorityEpoch || enrolled.actor_id !== a.actorId || enrolled.login_id !== a.loginId

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import type { PoolClient } from 'pg';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAutomaticNamedEndpointCandidateReader, readAutomaticEndpointCandidates, readAutomaticNamedEndpointCandidate } from './automaticEndpointCandidates.js';
+import { createAutomaticNamedEndpointCandidateReader, readAutomaticEndpointCandidates, readAutomaticNamedEndpointCandidate, readPreparedNamedEndpointMatches } from './automaticEndpointCandidates.js';
 import { geometryTraceFixture } from './geometryTraceFixtures.js';
 import { buildGeometryTrace, geometryTraceHash } from './geometryTraceBuilder.js';
 import { automaticEndpointContentHash } from './endpointCalculationProvenance.js';
@@ -32,7 +32,8 @@ function fixture() {
     evidence: input.plan.requestedScope.endpointEvidence, visibility: visibility as typeof visibility | null, trace: built.manifest,
     locations: [{ id: id(1), name: 'EQ01', revision: '1', aliases: ['EQ01'], has_head: false, has_legacy: false }],
     objects: [{ object_id: object.identity.objectId, record: object, record_sha256: geometryTraceHash(object), visibility: 'unknown' }],
-    namedObjectIds: null as string[] | null, omitTrace: false, duplicateObject: false, omittedPlan: false, onQuery: (_sql: string) => {} };
+    namedObjectIds: null as string[] | null, preparedNames: [{ name: 'EQ01', object_id: object.identity.objectId }],
+    omitTrace: false, duplicateObject: false, omittedPlan: false, onQuery: (_sql: string) => {} };
   const query = vi.fn(async (sql: string, args: unknown[] = []) => {
     state.onQuery(sql);
     if (sql.includes('automatic-endpoints:plan')) return { rows: state.omittedPlan ? [] : [{ manifest: state.aggregate, matching_policy: state.policy,
@@ -40,6 +41,7 @@ function fixture() {
     if (sql.includes('automatic-endpoints:trace')) return { rows: state.omitTrace ? [] : [{ manifest: state.trace }] };
     if (sql.includes('automatic-endpoints:locations')) return { rows: state.locations.filter(value => (args[1] as string[]).includes(value.id)) };
     if (sql.includes('automatic-endpoints:named')) return { rows: (state.namedObjectIds??state.objects.map(row=>row.object_id)).map(object_id=>({object_id})) };
+    if (sql.includes('automatic-endpoints:prepared-names')) return { rows: state.preparedNames };
     if (sql.includes('automatic-endpoints:objects')) {
       const rows = state.objects.filter(value => (args[3] as string[]).includes(value.object_id));
       return { rows: state.duplicateObject ? [...rows, ...rows] : rows };
@@ -252,5 +254,31 @@ describe('standalone named Path endpoint uses the same immutable eligibility rea
   it.each(['capacity','duplicate'] as const)('refuses a %s shortlist rather than truncating it to a unique candidate',async kind=>{
     const f=fixture();f.state.namedObjectIds=Array(kind==='capacity'?RECALCULATION_LIMITS.neededLocations+1:2).fill('dbid:5');
     await expect(readAutomaticNamedEndpointCandidate(f.client,{...f.request,name:'EQ01'})).rejects.toMatchObject({code:kind==='capacity'?'ENDPOINT_NEEDED_LOCATION_LIMIT':'AUTOMATIC_ENDPOINT_OBJECT_INTEGRITY'});
+  });
+});
+
+describe('prepared-model matching for automatic shared location assignment', () => {
+  it('returns verified object references for exact names, with no location record or extra publication read', async () => {
+    const f = fixture(), saved = f.state.objects[0];
+    const matches = await readPreparedNamedEndpointMatches(f.client, { ...f.request, names: [' eq01 ', 'MISSING'] });
+    expect(matches.get('EQ01')).toEqual({ status: 'automatic-ready',
+      object: { traceId: f.request.current.traceId, objectRevisionId: saved.record.id, recordSha256: saved.record_sha256 } });
+    expect(matches.get('MISSING')).toEqual({ status: 'missing', object: null });
+    expect(f.query.mock.calls.filter(([sql]) => sql.includes('automatic-endpoints:plan'))).toHaveLength(1);
+    expect(f.query.mock.calls.find(([sql]) => sql.includes('automatic-endpoints:prepared-names'))?.[1])
+      .toEqual([f.request.projectId, f.request.current.artifactId, ['EQ01', 'MISSING'], RECALCULATION_LIMITS.neededLocations + 1]);
+    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|automatic-endpoints:locations/.test(sql))).toBe(false);
+  });
+
+  it('does not give assignment authority when candidates are ambiguous, unverifiable, or truncated', async () => {
+    const f = fixture();
+    const run = () => readPreparedNamedEndpointMatches(f.client, { ...f.request, names: ['EQ01'] });
+    addCandidate(f);
+    f.state.preparedNames.push({ name: 'EQ01', object_id: 'dbid:6' });
+    expect((await run()).get('EQ01')).toEqual({ status: 'ambiguous', object: null });
+    f.state.objects.pop();
+    expect((await run()).get('EQ01')).toEqual({ status: 'object-unverified', object: null });
+    f.state.preparedNames = Array(RECALCULATION_LIMITS.neededLocations + 1).fill(f.state.preparedNames[0]);
+    await expect(run()).rejects.toMatchObject({ code: 'ENDPOINT_NEEDED_LOCATION_LIMIT' });
   });
 });

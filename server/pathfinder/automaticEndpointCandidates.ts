@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { canonicalPurposeJson, policyUuidSchema, policyHashSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { endpointVisibilitySchema, preparationAggregateSchema, preparationMatchingPolicySchema, preparationObjectIdSchema, preparationRequestedScopeSchema } from '../../shared/pathfinderPreparation.js';
 import { geometryObjectRevisionSchema, geometryTraceManifestSchema, GEOMETRY_TRACE_LIMITS } from '../../shared/pathfinderGeometryTrace.js';
-import { endpointCurrentScopeSchema, type EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
+import { endpointCurrentScopeSchema, type EndpointCurrentScope, type EndpointObjectRef } from '../../shared/pathfinderEndpointBindings.js';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 import { humanScalarPropertyValues, modelEquipmentMatchKeys } from '../../viewer-runtime/equipment-names.mjs';
 import { createHash } from 'node:crypto';
@@ -193,6 +193,54 @@ export type AutomaticNamedEndpointCandidate = {
   status: Exclude<AutomaticEndpointCandidateResult['status'], 'saved-binding-required'>;
   candidateObjectIds: string[]; point: [number,number,number] | null; objectId: string | null;
 };
+type PreparedNamedMatch = {
+  status: AutomaticNamedEndpointCandidate['status'];
+  object: EndpointObjectRef | null;
+};
+
+/** Resolve exact names against the current prepared model, including names
+ * without a location record. A partial candidate set cannot prove uniqueness. */
+export async function readPreparedNamedEndpointMatches(client: PoolClient, input: CandidateReadInput & { names: string[] }): Promise<Map<string, PreparedNamedMatch>> {
+  const projectId = policyUuidSchema.parse(input.projectId), current = endpointCurrentScopeSchema.parse(input.current);
+  const controls = candidateControls(input);
+  const names = [...new Set(input.names.map(normalizeLocation))].sort();
+  if (names.length > RECALCULATION_LIMITS.neededLocations) return fail('ENDPOINT_NEEDED_LOCATION_LIMIT', 413);
+  const matches = new Map<string, PreparedNamedMatch>();
+  if (!names.length || !current.traceId) return matches;
+  controls.check();
+  const source = await readCandidateSource(client, projectId, current, controls);
+  if (!source.currentVisibility) return matches;
+  const rows = (await client.query<{ name: string; object_id: string }>(`/* automatic-endpoints:prepared-names */
+    WITH matched AS MATERIALIZED (
+      SELECT object_id,match_names FROM pf_model_objects
+      WHERE project_id=$1 AND artifact_id=$2 AND geometry_role='object' AND visibility<>'hidden' AND match_names ?| $3::text[]
+      LIMIT $4
+    )
+    SELECT n.name,m.object_id FROM matched m
+    CROSS JOIN LATERAL jsonb_array_elements_text(m.match_names) n(name) WHERE n.name=ANY($3::text[]) LIMIT $4`,
+    [projectId, current.artifactId, names, RECALCULATION_LIMITS.neededLocations + 1])).rows;
+  controls.check();
+  if (rows.length > RECALCULATION_LIMITS.neededLocations) return fail('ENDPOINT_NEEDED_LOCATION_LIMIT', 413);
+  const byName = new Map(names.map(name => [name, new Set<string>()]));
+  for (const row of rows) {
+    controls.account(row);
+    const group = byName.get(row.name), objectId = preparationObjectIdSchema.parse(row.object_id);
+    if (!group || group.has(objectId)) return fail('AUTOMATIC_ENDPOINT_OBJECT_INTEGRITY');
+    group.add(objectId);
+  }
+  const objects = await readCandidateObjects(client, projectId, current, source.aggregate,
+    [...new Set(rows.map(row => row.object_id))].sort(), controls);
+  for (const [name, ids] of byName) {
+    const candidate = verifyCandidateObjects([...ids].sort(), () => [name], objects, source, controls);
+    const saved = candidate.anchor?.saved;
+    matches.set(name, {
+      status: candidate.status,
+      object: saved ? { traceId: current.traceId, objectRevisionId: saved.record.id, recordSha256: saved.sha } : null,
+    });
+  }
+  return matches;
+}
+
 /** The standalone Path tool uses the same retained v3 proof as cable jobs.
  * Its typed name may be outside the project's frozen cable endpoint names, so
  * shortlist only current prepared IDs, then corroborate every own value and

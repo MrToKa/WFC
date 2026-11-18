@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PathFinderRecalculationPanel, type RecalculationPanelProps } from './PathFinderRecalculationPanel';
 import { usePathfinderRecalculations } from './hooks/usePathfinderRecalculations';
@@ -25,27 +25,63 @@ describe('narrow automatic recalculation panel', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Save obstacles or choose Declare no barriers');
     expect(screen.queryByText(/timeout from 100/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Configure automatic calculation' })); expect(configure).toHaveBeenCalledOnce();
-    expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeDisabled(); expect(state.command).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Enable automatic recalculation' })).toBeDisabled(); expect(state.command).not.toHaveBeenCalled();
   });
-  it('requires explicit finite enrollment with current preferences and never submits on mount', () => {
+  it('requires explicit enablement until login expiry with current preferences and never submits on mount', () => {
     const state = setup(); render(<PathFinderRecalculationPanel {...props} />); expect(state.command).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Enable for 30 minutes' }));
-    expect(state.command).toHaveBeenCalledWith(expect.objectContaining({ schemaVersion: 'wfc.pf.recalculation-command.v2', action: 'enable', expectedControlRevision: '4', preferences: props.preferences, timeoutMilliseconds: 60000, idempotencyKey: expect.any(String), automaticPairPolicy: AUTOMATIC_PAIR_POLICY }));
-    expect(screen.getByText(/Protected routes remain unchanged/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Enable automatic recalculation' }));
+    expect(state.command).toHaveBeenCalledWith(expect.objectContaining({ schemaVersion: 'wfc.pf.recalculation-command.v2', action: 'enable', expectedControlRevision: '4', preferences: props.preferences, timeoutMilliseconds: 60000, idempotencyKey: expect.any(String), automaticPairPolicy: AUTOMATIC_PAIR_POLICY, runUntil: 'login-expiry' }));
+    expect(screen.getByText(/enabling administrator’s login is valid/)).toBeVisible();
+    expect(screen.getByText(/Cables with manual or execution protection keep their current routes/)).toBeVisible();
+    expect(screen.getByRole('spinbutton', { name: 'Calculation timeout per cable (ms)' })).toBeVisible();
     expect(screen.getByText(/separate Background model recalculation setting calculates proposals only/)).toBeVisible();
-    expect(screen.getByText(/Resume and Retry keep the original end time/)).toBeVisible();
+    expect(screen.getByText(/Resume and Retry keep the original authorization end time/)).toBeVisible();
+  });
+  it('waits for tray and location preparation and submits the fresh calculated preferences', async () => {
+    const state = setup(), fresh = { secondaryDistanceMeters: 3, preferVerticalApproach: false };
+    let complete!: (value: typeof fresh) => void;
+    const prepareEnable = vi.fn((_signal: AbortSignal) => new Promise<typeof fresh>(resolve => { complete = resolve; }));
+    render(<PathFinderRecalculationPanel {...props} prepareEnable={prepareEnable} preparationAvailable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Enable automatic recalculation' }));
+    expect(state.command).not.toHaveBeenCalled();
+    expect(screen.getByText('Checking trays and From/To locations…')).toBeVisible();
+    await act(async () => complete(fresh));
+    expect(state.command).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ action: 'enable', preferences: fresh }));
+  });
+  it('leaves automatic authority unchanged when prerequisites cannot be verified', async () => {
+    const state = setup(), prepareEnable = vi.fn().mockRejectedValue(new Error('Save barriers for the current routing network.'));
+    render(<PathFinderRecalculationPanel {...props} prepareEnable={prepareEnable} preparationAvailable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Enable automatic recalculation' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Save barriers for the current routing network.'));
+    expect(state.command).not.toHaveBeenCalled();
+  });
+  it('starts no preparation while a worker is enabled and prepares before explicitly resuming a paused login-expiry mode', async () => {
+    const state = setup(), prepareEnable = vi.fn().mockResolvedValue(props.preferences);
+    const current = progressContext({}, { status: 'blocked', reasonCodes: ['ROUTING_PREPARATION_REQUIRED'], automaticRunUntil: 'login-expiry' });
+    vi.mocked(usePathfinderRecalculations).mockReturnValue({ ...state, context: current });
+    const view = render(<PathFinderRecalculationPanel {...props} prepareEnable={prepareEnable} preparationAvailable />);
+    expect(screen.getByRole('button', { name: 'Enable automatic recalculation' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Pause automatic recalculation' })).toBeEnabled();
+    expect(prepareEnable).not.toHaveBeenCalled(); expect(state.command).not.toHaveBeenCalled();
+    vi.mocked(usePathfinderRecalculations).mockReturnValue({ ...state, context: { ...current, status: 'paused', paused: true } });
+    view.rerender(<PathFinderRecalculationPanel {...props} prepareEnable={prepareEnable} preparationAvailable />);
+    expect(screen.getByRole('button', { name: 'Enable automatic recalculation' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Resume automatic recalculation' }));
+    await waitFor(() => expect(state.command).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ action: 'resume' })));
+    expect(prepareEnable).toHaveBeenCalledOnce();
+    expect(state.command.mock.calls[0][0]).not.toHaveProperty('runUntil');
   });
   it('shows truthful server progress and reasons without enabling unsupported or uncertain changes', () => {
     const state = setup(), f = recalculationFixture();
     vi.mocked(usePathfinderRecalculations).mockReturnValue({ ...state, context: { ...f.enabled, status: 'blocked', reasonCodes: ['ENDPOINTS_REQUIRED'] }, pending: f.command, unknown: true });
     render(<PathFinderRecalculationPanel {...props} />);
     expect(screen.getByText('endpoints required')).toBeVisible(); expect(screen.getByText(/Detailed progress for the current calculation is not available/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeDisabled(); expect(screen.getByRole('spinbutton')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Enable automatic recalculation' })).toBeDisabled(); expect(screen.getByRole('spinbutton')).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Retry saved command' })); expect(state.retry).toHaveBeenCalledOnce(); expect(state.command).not.toHaveBeenCalled();
   });
   it('refuses invalid timeout and absent preferences, and hides administrator controls from denied access', () => {
     const state = setup(), view = render(<PathFinderRecalculationPanel {...props} />);
-    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '99' } }); expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '99' } }); expect(screen.getByRole('button', { name: 'Enable automatic recalculation' })).toBeDisabled();
     view.rerender(<PathFinderRecalculationPanel {...props} preferences={null} />); expect(state.command).not.toHaveBeenCalled();
     vi.mocked(usePathfinderRecalculations).mockReturnValue({ ...state, enabled: false }); view.rerender(<PathFinderRecalculationPanel {...props} isAdmin={false} />);
     expect(screen.queryByRole('region', { name: 'Automatic recalculation' })).toBeNull();
@@ -56,7 +92,7 @@ describe('narrow automatic recalculation panel', () => {
     const view = render(<PathFinderRecalculationPanel {...props} />);
     expect(screen.getByText(/Automatic Cable list updates are off/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Retry recalculation' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Enable automatic recalculation' })).toBeEnabled();
     vi.mocked(usePathfinderRecalculations).mockReturnValue({ ...state, context: { ...f.enabled, automaticPairPolicy: { ...AUTOMATIC_PAIR_POLICY } } });
     view.rerender(<PathFinderRecalculationPanel {...props} />);
     expect(screen.getByText(/Saved Cable list policy: update unprotected cables/)).toBeVisible();
@@ -78,6 +114,7 @@ describe('narrow automatic recalculation panel', () => {
       if (body.action === 'pause') expect(body).not.toHaveProperty('automaticPairPolicy');
       else expect(body.automaticPairPolicy).toEqual(AUTOMATIC_PAIR_POLICY);
       expect(body).not.toHaveProperty('preferences'); expect(body).not.toHaveProperty('timeoutMilliseconds');
+      expect(body).not.toHaveProperty('runUntil');
     }
   });
   it('shows an indeterminate indicator while collecting current inputs without claiming old totals', () => {
@@ -132,7 +169,7 @@ describe('narrow automatic recalculation panel', () => {
       { status: 'awaiting_authority', automaticPairPolicy: undefined, authority: { kind: 'current-login', actorId: ids.actor, currentLogin: true, expiresAt: '2020-01-01T00:00:00.000Z' } }) });
     render(<PathFinderRecalculationPanel {...props} />);
     expect(screen.getByText('All calculated routes have been saved in Cable list.')).toBeVisible();
-    expect(screen.getByText(/automatic recalculation period ended/)).toBeVisible(); expect(screen.getByText(/Previous enablement ended at/)).toBeVisible();
+    expect(screen.getByText(/Automatic recalculation authorization ended/)).toBeVisible(); expect(screen.getByText(/Previous enablement ended at/)).toBeVisible();
     expect(screen.queryByText('Saving or confirming calculated results…')).not.toBeInTheDocument();
   });
   it('does not wait for automatic writes when the current mode only calculates proposals', () => {

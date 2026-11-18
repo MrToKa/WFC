@@ -27,7 +27,8 @@ vi.mock('./endpointBindingRepository.js', async importOriginal => {
 const id = (n: number) => `eb000000-0000-4000-a000-${String(n).padStart(12, '0')}`;
 const projectId = id(1), modelId = id(2), artifactId = id(3), aggregateId = id(4), frameId = id(5), locationA = id(6), locationB = id(7), actorId = id(8);
 const NOW = 1_800_000_000_000;
-type Cable = { id: string; from_location: string | null; to_location: string | null; mto: string | null; cable_type_id: string; cable_type_purpose:string; cable_write_revision: string; input_oversize: boolean };
+type Cable = { id: string; from_location: string | null; to_location: string | null; mto: string | null; cable_type_id: string; cable_type_purpose:string; cable_write_revision: string; input_oversize: boolean;
+  routing: string | null; design_length: string | null };
 type Head = { location_id: string; location_revision: string; binding_id: string; binding_revision: string; record_sha256: string; record: EndpointBinding };
 
 function identity(): EngineIdentity {
@@ -57,14 +58,18 @@ function binding(locationId: string, n: number): EndpointBinding {
 }
 const context = () => ({ modelVersionId: modelId, selectionRevision: '1', contentFingerprint: 'c'.repeat(64), aggregateId, artifactId, projectionSha256: 'd'.repeat(64), captureFrameId: frameId, geometryRevision: '2', traceId: null });
 function fixture(count = 1) {
-  const cables: Cable[] = Array.from({ length: count }, (_, n) => ({ id: id(1000 + n), from_location: '  =a-01 ', to_location: '=B.02', mto: 'Instrumentation', cable_type_id: id(20), cable_type_purpose:'Control', cable_write_revision: '4', input_oversize: false }));
+  const cables: Cable[] = Array.from({ length: count }, (_, n) => ({ id: id(1000 + n), from_location: '  =a-01 ', to_location: '=B.02', mto: 'Instrumentation', cable_type_id: id(20), cable_type_purpose:'Control', cable_write_revision: '4', input_oversize: false, routing: null, design_length: null }));
   const aliasRows = [{ normalized_alias: '=A-01', location_id: locationA }, { normalized_alias: '=B.02', location_id: locationB }];
   const heads: Head[] = [binding(locationA, 16), binding(locationB, 17)].map(b => ({ location_id: b.locationId, location_revision: b.locationRevision, binding_id: b.id, binding_revision: b.bindingRevision, record_sha256: b.contentSha256, record: b }));
-  const state = { cables, aliasRows, heads, registry: '9', inputChunk: 0, omitChunk: 0, extraAlias: false, onQuery: (_sql: string) => undefined as void };
+  const state = { cables, aliasRows, heads, registry: '9', inputChunk: 0, omitChunk: 0, extraAlias: false, onQuery: (_sql: string) => undefined as void,
+    continuousScope: new Map<string, Record<string, unknown>>() };
   const query = vi.fn(async (sql: string, args: unknown[] = []): Promise<{ rows: Record<string, unknown>[] }> => {
     state.onQuery(sql);
     if (sql.startsWith('SELECT id FROM cables')) { const requested = args[1] as string[] | undefined; return { rows: state.cables.filter(c => !requested || requested.includes(c.id)).map(c => ({ id: c.id })).sort((a, b) => a.id.localeCompare(b.id)) }; }
     if (sql.includes('CASE WHEN octet_length(from_location)')) { state.inputChunk++; const selected = args[1] as string[]; const found = state.cables.filter(c => selected.includes(c.id)).sort((a, b) => a.id.localeCompare(b.id)); return { rows: state.omitChunk === state.inputChunk ? found.slice(0, -1) : found }; }
+    if (sql.includes('continuous-cable-scope')) return { rows: (args[1] as string[]).map(id => ({ id, has_control: true,
+      manual_protected: false, execution_locked: false, install_length: null, pull_date: null, tested: null, connected_from: null, connected_to: null,
+      receipt_kind: null, saved_design_length: null, calculated_design_length: null, ...state.continuousScope.get(id) })) };
     if (sql.includes('routing,design_length,install_length')) { const cable = state.cables.find(c => c.id === args[1]); return { rows: cable ? [{ ...cable, routing: '/OLD', design_length: 23, install_length: 24 }] : [] }; }
     if (sql.includes('cable-purpose:locked-scope-types')) { const ids=args[1] as string[]; return {rows:state.cables.filter(c=>ids.includes(c.id)).map(c=>({...c}))}; }
     if (sql.startsWith('SELECT active_model_version_id')) return { rows: [{ active_model_version_id: modelId, selection_revision: '1' }] };
@@ -100,6 +105,39 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('bulk dependency collection, mocked SQL protocol with real freeze/head/alias logic', () => {
+  it('runs continuous work only for unresolved-route or proven Path Finder cables with usable endpoints', async () => {
+    const db = fixture(9);
+    const [unrouted, previouslyCalculated, reviewed, protectedManual, execution, provisional, mismatchedLength, unresolved, mv] = db.state.cables;
+    unrouted.design_length = '25';
+    for (const cable of [previouslyCalculated, reviewed, protectedManual, execution, provisional, mismatchedLength]) {
+      cable.routing = '/B001';
+      cable.design_length = '25.00';
+    }
+    const receipt = { receipt_kind: 'pathfinder.automatic-pair.v1', saved_design_length: '25', calculated_design_length: '25.0' };
+    db.state.continuousScope.set(previouslyCalculated.id, receipt);
+    db.state.continuousScope.set(reviewed.id, { ...receipt, receipt_kind: 'pathfinder.apply.v3' });
+    db.state.continuousScope.set(protectedManual.id, { ...receipt, manual_protected: true });
+    db.state.continuousScope.set(execution.id, { ...receipt, pull_date: '2026-11-18' });
+    db.state.continuousScope.set(mismatchedLength.id, { ...receipt, saved_design_length: '26' });
+    protectedManual.from_location = 'ONLY MANUAL';
+    unresolved.to_location = 'MISSING';
+    mv.mto = 'MV';
+    const batch = await collectDependencyBatchInTransaction(db.client, {
+      projectId, options: barrierOptions(), dependencyVersion: 'pathfinder.dependencies.v8', continuous: true,
+    });
+    expect(batch.items.map(item => [item.id, item.status, Boolean(item.dependencies)])).toEqual([
+      [unrouted.id, 'ready', true], [previouslyCalculated.id, 'ready', true], [reviewed.id, 'ready', true],
+      [protectedManual.id, 'routing_protected', false], [execution.id, 'routing_protected', false],
+      [provisional.id, 'automatic_route_out_of_scope', false], [mismatchedLength.id, 'automatic_route_out_of_scope', false],
+      [unresolved.id, 'locations_required', false], [mv.id, 'category_required', false],
+    ]);
+    expect(db.query.mock.calls.filter(([sql]) => sql.includes('continuous-cable-scope'))).toHaveLength(1);
+    expect(db.query.mock.calls.find(([sql]) => sql.startsWith('SELECT a.normalized_alias'))?.[1]?.[1]).not.toContain('ONLY MANUAL');
+    const historic = await collectDependencyBatchInTransaction(db.client, {
+      projectId, options: barrierOptions(), dependencyVersion: 'pathfinder.dependencies.v8',
+    });
+    expect(historic.items.find(item => item.id === execution.id)?.status).toBe('ready');
+  });
   it('admits missing/custom MTO by cable Purpose and still rejects a Purpose with no permitted trays',async()=>{
     const db=fixture(3);db.state.cables[0].mto=null;db.state.cables[1].mto='Custom';db.state.cables[2].mto=null;db.state.cables[2].cable_type_purpose='Unknown';
     const batch=await collectDependencyBatchInTransaction(db.client,{projectId,options:barrierOptions(),dependencyVersion:'pathfinder.dependencies.v8'});
@@ -251,20 +289,20 @@ describe('bulk dependency collection, mocked SQL protocol with real freeze/head/
     vi.mocked(Date.now).mockReturnValue(NOW); const controller = new AbortController(), aborted = fixture(251); aborted.state.onQuery = sql => { if (sql.includes('CASE WHEN octet_length')) controller.abort(); };
     await expect(collectDependencyBatchInTransaction(aborted.client, { projectId, options: defaultOptions, signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' }); expect(aborted.query.mock.calls.every(call => call[0].startsWith('SELECT'))).toBe(true);
   });
-  it('collects automatic proposal anchors once for the needed unbound locations across the whole cable batch', async () => {
+  it.each([false, true])('collects verified model anchors once for unbound locations (continuous=%s)', async continuous => {
     const db = fixture(3); db.state.heads = []; mocked.context.mockResolvedValue({ ...context(), traceId: id(30) });
     const automatic = (locationId: string) => ({ kind: 'automatic-equipment-anchor', locationId, locationRevision: '1',
       point: [1, 2, 3], approximate: true, engineeringAccepted: false });
     mocked.automatic.mockResolvedValue(new Map([locationA, locationB].map(locationId => [locationId,
       { status: 'automatic-ready', candidateObjectIds: ['dbid:42'], point: automatic(locationId) }])));
-    const batch = await collectDependencyBatchInTransaction(db.client, { projectId, options: defaultOptions });
+    const batch = await collectDependencyBatchInTransaction(db.client, { projectId, options: defaultOptions, continuous });
     expect(mocked.automatic).toHaveBeenCalledTimes(1);
     expect(mocked.automatic).toHaveBeenCalledWith(db.client, expect.objectContaining({ projectId,
       locationIds: [locationA, locationB], current: expect.objectContaining({ traceId: id(30) }) }));
     expect(batch.items.every(item => item.dependencies?.schemaVersion === 'pathfinder.dependencies.v6' &&
       item.dependencies.from === batch.items[0].dependencies?.from)).toBe(true);
     expect(batch.items[0].dependencies?.settings.connectionGap).toBe('1');
-    expect(db.query.mock.calls.every(([sql]) => sql.startsWith('SELECT'))).toBe(true);
+    expect(db.query.mock.calls.every(([sql]) => /^(SELECT|\/\* continuous-cable-scope \*\/ SELECT)/.test(sql))).toBe(true);
   });
   it('keeps confirmed manual heads first without asking automatic model candidates to replace them', async () => {
     const db = fixture(); mocked.context.mockResolvedValue({ ...context(), traceId: id(30) });

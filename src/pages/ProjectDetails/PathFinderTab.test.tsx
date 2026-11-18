@@ -19,6 +19,8 @@ import { fetchPathFinderCableWorkflowDetail } from '@/api/pathfinderCableWorkflo
 import { cableWorkflowDetailSchema } from '../../../shared/pathfinderCableWorkflowQueries';
 import type { PathFinderCableWorkspaceProps } from '@/components/pathfinder/PathFinderCableWorkspace';
 import type { ModelLocationMatchPanel } from './ModelLocationMatchPanel';
+import * as barriers from '@/api/pathfinderBarriers';
+import { preparationFixture } from '@/test/preparationFixtures';
 vi.mock('@/api/pathfinderEndpointBindings', async original => ({ ...await original<typeof import('@/api/pathfinderEndpointBindings')>(), fetchEndpointBinding: vi.fn(), fetchEndpointBindingHistory: vi.fn(), saveEndpointBinding: vi.fn() }));
 vi.mock('@/api/pathfinder', async original => ({ ...await original<typeof import('@/api/pathfinder')>(), fetchPathFinderJob: vi.fn(), submitAllPathFinderCalculations: vi.fn() }));
 
@@ -71,7 +73,7 @@ vi.mock('./PathFinderBarriersPanel', async () => {
 });
 const automaticCapture = vi.hoisted(() => ({ render: vi.fn() }));
 vi.mock('./PathFinderRecalculationPanel', () => ({ PathFinderRecalculationPanel: (props: import('./PathFinderRecalculationPanel').RecalculationPanelProps) => {
-  automaticCapture.render(props); return <section aria-label="Automatic recalculation"><button>Enable for 30 minutes</button></section>;
+  automaticCapture.render(props); return <section aria-label="Automatic recalculation"><button>Enable automatic recalculation</button></section>;
 } }));
 const trayPreparationCapture = vi.hoisted(() => ({ render: vi.fn() }));
 vi.mock('./ProjectPreparationPanel', () => ({ ProjectPreparationPanel: (props: Parameters<typeof import('./ProjectPreparationPanel').ProjectPreparationPanel>[0]) => {
@@ -234,7 +236,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     const user = userEvent.setup(), current = { ...proposalModel(), data: { ...pf.data, artifacts: [artifact()] } };
     vi.mocked(usePathFinder).mockReturnValue(current);
     render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />);
-    expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Enable automatic recalculation' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Recalculate all the cables' })).toBeEnabled();
     const automatic = automaticCapture.render.mock.calls.at(-1)![0];
     expect(automatic).toMatchObject({ projectId, loadedProjectId: projectId, accountId, token: 'isolated-test-token', isAdmin: true, active: true,
@@ -245,8 +247,32 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     await user.click(screen.getByRole('tab', { name: 'Routes' }));
     expect(automaticCapture.render.mock.calls.at(-1)![0]).toMatchObject({ active: true, contextKey: automatic.contextKey });
     await user.click(screen.getByRole('tab', { name: 'Path' }));
-    expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Enable automatic recalculation' })).toBeEnabled();
     expect(submitAllPathFinderCalculations).not.toHaveBeenCalled(); expect(current.calculate).not.toHaveBeenCalled();
+  });
+  it('verifies the tray network, matches From/To, then reads registered barriers for automatic Enable', async () => {
+    const current = proposalModel(), order: string[] = [], { scope, expectedSnapshot } = protectedFixture().preferences.barrierRouting!;
+    vi.mocked(usePathFinder).mockReturnValue(current);
+    const readBarriers = vi.spyOn(barriers, 'getBarrierRegistry').mockImplementation(async () => {
+      order.push('barriers');
+      return { schemaVersion: 'wfc.pf.barrier-registry.v1', scope, registryRevision: '1', state: 'ready', selectedParents: [],
+        snapshot: expectedSnapshot, reasonCodes: [] };
+    });
+    onTestFinished(() => readBarriers.mockRestore());
+    mount();
+    trayPreparationCapture.render.mock.calls.at(-1)![0].calculationNetworkRef.current = async () => {
+      order.push('network');
+      return { projectId, scope: { ...preparationFixture().context.scope, ...scope }, captureFrameId: scope.captureFrameId };
+    };
+    modelMatchCapture.render.mock.calls.at(-1)![0].calculationMatchRef.current = async () => { order.push('locations'); return true; };
+    const automatic = automaticCapture.render.mock.calls.at(-1)![0];
+    await act(async () => {
+      await expect(automatic.prepareEnable(new AbortController().signal)).resolves.toMatchObject({
+        barrierRouting: { scope, drillThroughWalls: false },
+      });
+    });
+    expect(order).toEqual(['network', 'locations', 'barriers']);
+    expect(current.calculate).not.toHaveBeenCalled(); expect(submitAllPathFinderCalculations).not.toHaveBeenCalled();
   });
   it('keeps the camera and viewer host through Routes, Path and Path lookup changes', async () => {
     const user = userEvent.setup(); mount();

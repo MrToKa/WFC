@@ -10,9 +10,9 @@ const enable = { schemaVersion: 'wfc.pf.recalculation-command.v2' as const, acti
   idempotencyKey: f.key, reason: 'Automatically save empty and unchanged Path Finder values', preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true },
   timeoutMilliseconds: 60000, automaticPairPolicy: AUTOMATIC_PAIR_POLICY };
 const other = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-async function fixture() {
+async function fixture(command: typeof enable & { runUntil?: 'login-expiry' } = enable) {
   const x = recalculationFixture(), repo = createRecalculationRepository(x.pool, x.adapter);
-  const receipt = await repo.command(f.projectId, x.who, enable), authorization = receipt.automaticPairAuthorization!;
+  const receipt = await repo.command(f.projectId, x.who, command), authorization = receipt.automaticPairAuthorization!;
   const source: Extract<AutomaticPairSource, { kind: 'automatic-generation' }> = { kind: 'automatic-generation', generation: x.db.state.desired_generation,
     controlRevision: x.db.state.control_revision, authorityEpoch: x.db.state.authority_epoch, authorization };
   const dependencies = { schemaVersion: 'pathfinder.dependencies.v8', projectId: f.projectId, cableId: f.actorId, cableWriteRevision: '7' };
@@ -27,6 +27,7 @@ async function fixture() {
     const sql = typeof raw === 'string' ? raw : raw.text;
     if (sql.includes('automatic-generation:state')) return { rows: [currentSource()], rowCount: 1 };
     if (sql.includes('automatic-generation:enable-command')) { const c = x.db.commands.get(args[2]); return { rows: c ? [c] : [], rowCount: c ? 1 : 0 }; }
+    if (sql.includes('automatic-generation:continuation-enable-command')) { const c = x.db.commands.get(args[2]); return { rows: c ? [c] : [], rowCount: c ? 1 : 0 }; }
     if (sql.includes('automatic-generation:enrollment')) return { rows: [enrollment], rowCount: 1 };
     if (sql.includes('automatic-pair:principal')) return { rows: [{ is_admin: x.db.authority, admin_revision: '1', installation_epoch: f.owner }], rowCount: 1 };
     if (sql.includes('automatic-pair:admitted-job')) return { rows: [{ requested_by: x.who.userId, login_id: x.who.loginId, login_expires_at: new Date(x.who.loginExpiresAt),
@@ -35,6 +36,8 @@ async function fixture() {
     if (sql.includes('automatic-pair:cable-baseline')) return { rows: [{ value: cables.get(args[1]) }], rowCount: 1 };
     if (sql.includes('cable-routing:control')) { const cable=cables.get(args[1]); return {rows:cable?[{revision:'1',manual_revision:'1',manual_routing:cable.routing,manual_protected:Boolean(cable.routing),execution_locked:false,execution_routing:null}]:[],rowCount:cable?1:0}; }
     if (sql.includes('automatic-pair:latest-receipt')) return { rows: [], rowCount: 0 };
+    if (sql.includes('automatic-pair:admission-decision') || sql.startsWith('INSERT INTO pf_automatic_pair_admission_decisions'))
+      return { rows: [], rowCount: 0 };
     if (sql.includes('automatic-pair:mandate')) { const m = mandates.find(m => m.cableId === args[2]); return { rows: m ? [{ record: m, record_sha256: m.contentSha256,
       project_id: m.projectId, job_id: m.jobId, cable_id: m.cableId, id: m.id, actor_id: m.actorId, login_id: m.loginId }] : [], rowCount: m ? 1 : 0 }; }
     if (sql.startsWith('INSERT INTO pf_automatic_pair_mandates')) { mandates.push(args[7]); return { rows: [], rowCount: 0 }; }
@@ -60,6 +63,29 @@ async function fixture() {
   return { ...x, repo, receipt, source, authorization, mandates, enrollment, cables, admission, proof };
 }
 describe('explicit current-login automatic project output authority', () => {
+  it('keeps an admitted automatic save usable past 30 minutes until the original login expires', async () => {
+    const x = await fixture({ ...enable, runUntil: 'login-expiry' });
+    const expiry = new Date(x.who.loginExpiresAt).toISOString();
+    expect(x.authorization).toMatchObject({ runUntil: 'login-expiry', authorityExpiresAt: expiry });
+    expect(x.receipt.context.authority?.expiresAt).toBe(expiry);
+    expect(await x.admission()).toBe(1);
+    expect(x.mandates[0].authorityExpiresAt).toBe(expiry);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.parse(x.authorization.createdAt) + 31 * 60_000);
+      await expect(requireCurrentAutomaticPairMandate(x.client, x.mandates[0])).resolves.toEqual(x.mandates[0]);
+      vi.setSystemTime(x.who.loginExpiresAt + 1);
+      await expect(x.proof()).rejects.toMatchObject({ code: 'AUTOMATIC_OUTPUT_AUTHORITY_EXPIRED' });
+      await expect(requireCurrentAutomaticPairMandate(x.client,x.mandates[0])).rejects.toMatchObject({ code:'LOGIN_EXPIRED' });
+    } finally { vi.useRealTimers(); }
+  });
+  it('resumes with the original login-bound permission without shortening or renewing it', async () => {
+    const x = await fixture({ ...enable, runUntil: 'login-expiry' });
+    const receipt = await x.repo.command(f.projectId,x.who,{schemaVersion:'wfc.pf.recalculation-command.v2',action:'retry',
+      expectedControlRevision:x.source.controlRevision,idempotencyKey:other,reason:'Retry current automatic calculation',automaticPairPolicy:AUTOMATIC_PAIR_POLICY});
+    expect(receipt.automaticPairAuthorization).toEqual(x.authorization);
+    expect(receipt.context.authority?.expiresAt).toBe(x.authorization.authorityExpiresAt);
+  });
   it('passes the exact frozen output authority from a guarded current claim to its real admission boundary', async () => {
     const x=await fixture(),claim={...x.claim,generation:x.source.generation,controlRevision:x.source.controlRevision,
       authorityEpoch:x.source.authorityEpoch,automaticPairAuthorization:x.authorization};

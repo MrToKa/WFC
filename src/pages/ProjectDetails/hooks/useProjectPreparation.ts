@@ -203,6 +203,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     pending = useRef<Pending | null>(null);
   const protectedRun = useRef(false);
   const automaticRun = useRef(false), automaticModelKey = useRef<string | null>(null);
+  const calculationRun = useRef(false);
   const regeneratingRun = useRef(false), regenerationRequested = useRef(false), regenerationSession = useRef<string | null>(null);
   const initialReadIdentity = useRef<string | null>(null);
   const previousRoutesActive = useRef(active);
@@ -224,7 +225,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
   const assertCurrent = useCallback(
     (signal?: AbortSignal) => {
       if (!mounted.current || latest.current !== identity || !enabled || signal?.aborted ||
-        signal && automaticRun.current && (!latestActive.current || automaticModelKey.current !== latestModelKey.current))
+        signal && automaticRun.current && ((!latestActive.current && !calculationRun.current) || automaticModelKey.current !== latestModelKey.current))
         throw new DOMException('Project preparation paused.', 'AbortError');
     },
     [enabled, identity],
@@ -350,14 +351,14 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     [access?.projectId, access?.token, assertCurrent, identity, readNetworkTrace, update],
   );
   const operate = useCallback(
-    async (operation: (signal: AbortSignal) => Promise<void>) => {
+    async <T,>(operation: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> => {
       if (!enabled || busyRef.current || latest.current !== identity) return;
       const abort = new AbortController();
       currentAbort.current = abort;
       busyRef.current = true;
       update((value) => ({ ...value, busy: true, error: null, notice: null }));
       try {
-        await operation(abort.signal);
+        return await operation(abort.signal);
       } catch (error) {
         if (latest.current !== identity || !mounted.current) return;
         const trayIdentityMessage = error instanceof Error && 'code' in error ? trayIdentityErrorMessage(error.code) : null;
@@ -428,6 +429,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         if (currentAbort.current === abort) {
           protectedRun.current = false;
           automaticRun.current = false;
+          calculationRun.current = false;
           regeneratingRun.current = false;
           automaticModelKey.current = null;
           currentAbort.current = null;
@@ -707,7 +709,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     });
   }, [active, enabled, identity, modelKey, artifactKey, pf.viewerPhase, operate, readCurrent, state.busy, update]);
   useEffect(() => {
-    if (!active && protectedRun.current) currentAbort.current?.abort();
+    if (!active && protectedRun.current && !calculationRun.current) currentAbort.current?.abort();
   }, [active]);
   const refresh = useCallback(
     () =>
@@ -1113,7 +1115,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       fresh = await ensureNetworkTrace(fresh, signal);
       fresh = await finishAssignedCadNetwork(fresh, signal);
       update(value => ({ ...value, progress: null, notice: 'Tray network updated.', unknown: false }));
-      return;
+      return fresh;
     }
     // Older published preparations retained their exact assigned roots only in
     // the sealed plan. Recover those UUID-owned assignments for this same model,
@@ -1169,7 +1171,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     };
     // An earlier preparation may have skipped old manual assignments before
     // revision carryover was available. Recognise those before reusing it.
-    if (!fresh.context.trayAssignmentCarryover?.length && await reusePublished()) return;
+    if (!fresh.context.trayAssignmentCarryover?.length && await reusePublished()) return fresh;
 
     // Cross-revision dbIds are never reused. Recover the physical assignment by
     // its persisted GUID/external identity, then create a current audited write.
@@ -1244,7 +1246,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     if (carryover.length && await reusePublished()) {
       if (unresolvedAssignments.length) update(value => ({ ...value,
         notice: `Tray network is up to date. Could not uniquely recognise ${unresolvedAssignments.length} assigned trays: ${unresolvedAssignments.slice(0, 8).join(', ')}${unresolvedAssignments.length > 8 ? '…' : ''}. Review their model selections.` }));
-      return;
+      return fresh;
     }
 
     let session: PreparationSession | null = null;
@@ -1259,7 +1261,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       if (fresh.session?.schemaVersion === 'wfc.pf.preparation-session.v1' && fresh.session.state === 'validating' &&
         sameScope(fresh.session.plan, fresh.context.scope) && pending.current?.kind === 'publish') {
         fresh = (await reconcileAutomatic(signal, pending.current))!;
-        if (await reusePublished()) return;
+        if (await reusePublished()) return fresh;
       }
       if (fresh.session && resumableTraySession(fresh.session, fresh.context)) { session = fresh.session; break; }
     }
@@ -1315,7 +1317,28 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     const restorationNotice = restoredAssignments ? ` ${restoredAssignments} tray assignments were restored from the previous model revision; geometry was read from the current model.` : '';
     const unresolvedNotice = unresolvedAssignments.length ? ` Could not uniquely recognise ${unresolvedAssignments.length} assigned trays: ${unresolvedAssignments.slice(0, 8).join(', ')}${unresolvedAssignments.length > 8 ? '…' : ''}. Review their model selections.` : '';
     update(value => ({ ...value, progress: null, notice: `Tray network updated.${restorationNotice}${unresolvedNotice}`, unknown: false }));
+    return fresh;
   }, [assertCurrent, collectSession, discoverTrays, ensureNetworkTrace, execute, finishAssignedCadNetwork, readCurrent, reconcileAutomatic, update]);
+  const ensureForCalculation = useCallback(async (ownerSignal: AbortSignal) => {
+    if (ownerSignal.aborted || pending.current || cancelPending.current || busyRef.current
+      || latestPf.current.busy || latestPf.current.viewerPhase !== 'ready') return null;
+    const verified = await operate(async operationSignal => {
+      const signal = AbortSignal.any([operationSignal, ownerSignal]);
+      protectedRun.current = automaticRun.current = calculationRun.current = true;
+      automaticModelKey.current = latestModelKey.current;
+      update(value => ({ ...value, progress: 'Checking the routing network for automatic recalculation…', notice: null }));
+      const current = await readCurrent(signal, null);
+      const fresh = networkTraceMatches(current.context, current.networkTrace) && assignedCadNetworkMatches(current.context)
+        ? current : await finishAssignedCadNetwork(await prepareTrays(signal, current), signal);
+      assertCurrent(signal);
+      if (!networkTraceMatches(fresh.context, fresh.networkTrace) || !assignedCadNetworkMatches(fresh.context))
+        throw new Error('Automatic recalculation needs a current routing network. Check the preparation status in Routes.');
+      update(value => ({ ...value, progress: null }));
+      return fresh;
+    });
+    if (!verified?.networkTrace || ownerSignal.aborted) return null;
+    return { projectId: verified.context.projectId, scope: verified.context.scope, captureFrameId: verified.networkTrace.captureFrameId };
+  }, [assertCurrent, finishAssignedCadNetwork, operate, prepareTrays, readCurrent, update]);
   const checkTrays = useCallback(() => {
     if (!latestActive.current) return Promise.resolve();
     return operate(async signal => {
@@ -1438,6 +1461,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     canMutate,
     refresh,
     checkTrays,
+    ensureForCalculation,
     generateNetwork,
     finishNetwork,
     canFinishNetwork: Boolean(active && view.context && publishedNetworkMatches(view.context) && !networkReady && !view.unknown),

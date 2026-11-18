@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useImperativeHandle, useState, type Ref } from 'react';
 import { Button, Caption1, Spinner } from '@fluentui/react-components';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useModelLocationMatch } from './hooks/useModelLocationMatch';
 import { modelLocationMatchCounts } from '../../../shared/pathfinderModelLocationMatch';
 
-type Props = { pf: ReturnType<typeof usePathFinder>; accountId: string | null; active: boolean; refreshRevision?: number; onChanged?: () => void; onBusyChange?: (busy: boolean) => void };
+export type MatchBeforeCalculation = ReturnType<typeof useModelLocationMatch>['beforeCalculation'];
+type Props = { pf: ReturnType<typeof usePathFinder>; accountId: string | null; active: boolean; refreshRevision?: number; onChanged?: () => void;
+  onBusyChange?: (busy: boolean) => void; calculationMatchRef?: Ref<MatchBeforeCalculation> };
 export function ModelLocationMatchPanel(props: Props) {
   const match = useModelLocationMatch(props);
+  useImperativeHandle(props.calculationMatchRef, () => match.beforeCalculation, [match.beforeCalculation]);
   const [shown, setShown] = useState(128);
   useEffect(() => { props.onBusyChange?.(match.busy); return () => props.onBusyChange?.(false); }, [match.busy, props.onBusyChange]);
   useEffect(() => { setShown(128); }, [match.owner, match.complete]);

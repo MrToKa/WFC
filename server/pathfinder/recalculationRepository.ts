@@ -10,16 +10,18 @@ import { PathFinderError } from './errors.js';
 import { markRecalculationDirty } from './recalculationSchema.js';
 import { readLocationImpactJobAuthority } from './locationImpactRepository.js';
 import { automaticGenerationAuthorizationSchema, type AutomaticGenerationAuthorization, type AutomaticPairPolicy, type AutomaticPairSource } from '../../shared/pathfinderAutomaticPair.js';
-import { activeAutomaticGenerationAuthorization } from './automaticGenerationOutput.js';
+import { activeAutomaticGenerationAuthorization, requireAutomaticGenerationOutput } from './automaticGenerationOutput.js';
 import { authorizePathFinderPreflight } from './projectPreflightAuthorization.js';
 import { requalifyAutomaticEndpointBindingsInTransaction } from './endpointBindingRequalification.js';
 import {recoverCrossModelEndpointsInTransaction} from './crossModelEndpointRecovery.js';
+import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../shared/pathfinderCalculationSubmission.js';
+import { assignAutomaticModelLocationsInTransaction } from './automaticModelLocationAssignment.js';
 
 type Row = Record<string, any>;
 const hash = (value: unknown): string => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code,status,'The recalculation request is unavailable or changed. Retain an uncertain command and refresh its context.'); };
 const outputEnableRequired = (): never => { throw new PathFinderError('AUTOMATIC_OUTPUT_ENABLE_REQUIRED',409,
-  'Automatic Cable list updates have expired or changed. Choose Enable for 30 minutes again. Existing values are retained.'); };
+  'Automatic Cable list updates have expired or changed. Choose Enable automatic recalculation again.'); };
 async function requireContinuationOutput(c: PoolClient, s: Row, who: JobPrincipal, policy: AutomaticPairPolicy, principal: Row | undefined): Promise<AutomaticGenerationAuthorization> {
   const a = activeAutomaticGenerationAuthorization(s);
   if (!a || a.actorId !== who.userId || a.loginId !== who.loginId || Date.parse(a.loginExpiresAt) !== who.loginExpiresAt
@@ -32,9 +34,11 @@ async function requireContinuationOutput(c: PoolClient, s: Row, who: JobPrincipa
   const command = automaticOutputEnableCommandSchema.safeParse(stored?.request), receipt = recalculationReceiptSchema.safeParse(stored?.receipt);
   if (!command.success || !receipt.success || stored?.request_sha256 !== a.commandSha256 || hash(command.data) !== a.commandSha256
     || command.data.idempotencyKey !== a.commandKey || BigInt(command.data.expectedControlRevision)+1n !== BigInt(a.controlRevision)
+    || command.data.runUntil !== a.runUntil
     || hash(command.data.automaticPairPolicy) !== hash(policy) || hash(receipt.data.automaticPairAuthorization ?? null) !== hash(a)
     || receipt.data.context.projectId !== s.project_id || receipt.data.context.controlRevision !== a.controlRevision
     || receipt.data.context.authority?.actorId !== a.actorId || receipt.data.context.authority.expiresAt !== a.authorityExpiresAt
+    || receipt.data.context.automaticRunUntil !== a.runUntil
     || hash(receipt.data.context.automaticPairPolicy ?? null) !== hash(policy) || Date.now() >= Date.parse(a.authorityExpiresAt)) return outputEnableRequired();
   return a;
 }
@@ -156,6 +160,7 @@ async function context(c:PoolClient,projectId:string,who:JobPrincipal,s?:Row):Pr
   const value=recalculationContextSchema.parse({schemaVersion:'wfc.pf.recalculation-context.v1',projectId,controlRevision:revision(s.control_revision),desiredGeneration:revision(s.desired_generation),enrolledGeneration:s.enrolled_generation===null?null:revision(s.enrolled_generation),status,enabled:s.enabled,paused:s.paused,
     authority:s.actor_id?{kind:'current-login',actorId:s.actor_id,expiresAt:iso(s.authority_expires_at),currentLogin:s.actor_id===who.userId&&s.login_id===who.loginId}:null,
     ...(output ? {automaticPairPolicy:output.policy} : {}),
+    ...(output?.runUntil ? {automaticRunUntil:output.runUntil} : {}),
     ...(progress ? {progress} : {}),
     reasonCodes,jobId:s.current_job_id,completed,total,readyCables:currentGeneration?s.ready_cables:0,blockedCables:currentGeneration?s.blocked_cables:0,updatedAt:iso(s.updated_at),preferences:s.preferences===null?null:recalculationPreferencesSchema.parse(s.preferences),timeoutMilliseconds:s.timeout_ms});
   if(Buffer.byteLength(canonicalPurposeJson(value))>RECALCULATION_LIMITS.responseBytes)return fail('RECALCULATION_RESPONSE_LIMIT',413);return value;
@@ -163,7 +168,7 @@ async function context(c:PoolClient,projectId:string,who:JobPrincipal,s?:Row):Pr
 
 export type RecalculationClaim={projectId:string;generation:string;controlRevision:string;authorityEpoch:string;claimId:string;ownerToken:string;leaseExpiresAt:string;principal:JobPrincipal;preferences:RecalculationPreferences;timeoutMilliseconds:number;automaticPairAuthorization?:AutomaticGenerationAuthorization};
 export type RecalculationJobAdmission={jobId:string|null;inputSha256:string;duplicate:boolean;readyCables:number;blockedCables:number;total:number;reasonCodes:string[]};
-export type RecalculationJobAdapter={createInTransaction(client:PoolClient,input:{projectId:string;principal:OperationPrincipal;scope:'project';preferences:RecalculationPreferences;timeoutMilliseconds:number;signal:AbortSignal;beforeInsert():Promise<void>;automaticPairSource?:Extract<AutomaticPairSource,{kind:'automatic-generation'}>}):Promise<RecalculationJobAdmission>};
+export type RecalculationJobAdapter={createInTransaction(client:PoolClient,input:{projectId:string;principal:OperationPrincipal;scope:'project';preferences:RecalculationPreferences;timeoutMilliseconds:number;signal:AbortSignal;deadline?:number;beforeInsert():Promise<void>;automaticPairSource?:Extract<AutomaticPairSource,{kind:'automatic-generation'}>}):Promise<RecalculationJobAdmission>};
 export type RecalculationEnrollmentResult={status:'enrolled'|'blocked'|'duplicate'|'superseded';generation:string;jobId:string|null};
 
 export type RecalculationJobAuthority={enrolled:false}|{enrolled:true;valid:boolean;code:string;generation:string;authorityEpoch:string};
@@ -223,6 +228,7 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
         const count=(await c.query<{count:string}>('SELECT count(*)::text AS count FROM pf_recalculation_commands WHERE project_id=$1',[projectId])).rows[0];if(BigInt(count.count)>=4096n)return fail('RECALCULATION_COMMAND_RETENTION_LIMIT',413);
         const live=await storedAuthority(c,s);
         const requestedPolicy=command.action==='enable'&&command.schemaVersion==='wfc.pf.recalculation-command.v2'?command.automaticPairPolicy:null;
+        const runUntil=command.action==='enable'&&command.schemaVersion==='wfc.pf.recalculation-command.v2'?command.runUntil:undefined;
         const existingOutput=activeAutomaticGenerationAuthorization(s);
         const continuationPolicy=command.schemaVersion==='wfc.pf.recalculation-command.v2'&&command.action!=='enable'?command.automaticPairPolicy:null;
         if(continuationPolicy)await requireContinuationOutput(c,s,who,continuationPolicy,outputPrincipal);
@@ -232,7 +238,9 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
           if(command.action==='resume'||command.action==='retry'){if(!s.enabled||!s.preferences||!s.timeout_ms)return fail('RECALCULATION_ENABLE_REQUIRED');}
           const renew=['enable','resume','retry'].includes(command.action),enabled=command.action==='disable'?false:command.action==='enable'?true:s.enabled,paused=command.action==='disable'?false:command.action==='pause'?true:renew?false:s.paused;
           if(command.action==='pause'&&!s.enabled)return fail('RECALCULATION_ENABLE_REQUIRED');
-          const expiry=new Date(Math.min(who.loginExpiresAt,Date.now()+RECALCULATION_LIMITS.authorityMilliseconds));
+          const sessionBound=runUntil==='login-expiry'||(command.action==='resume'||command.action==='retry')
+            && existingOutput?.runUntil==='login-expiry'&&existingOutput.actorId===who.userId&&existingOutput.loginId===who.loginId;
+          const expiry=new Date(sessionBound?who.loginExpiresAt:Math.min(who.loginExpiresAt,Date.now()+RECALCULATION_LIMITS.authorityMilliseconds));
           let output:AutomaticGenerationAuthorization|null=null;
           if(requestedPolicy){
             const principal=outputPrincipal;
@@ -240,7 +248,8 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
             output=automaticGenerationAuthorizationSchema.parse({schemaVersion:'wfc.pf.automatic-generation-output-authority.v1',projectId,actorId:who.userId,
               actorAdminRevision:principal.admin_revision,loginId:who.loginId,loginExpiresAt:new Date(who.loginExpiresAt).toISOString(),installationEpoch:principal.installation_epoch,
               commandKey:command.idempotencyKey,commandSha256:requestSha256,controlRevision:(BigInt(s.control_revision)+1n).toString(),authorityEpoch:(BigInt(s.authority_epoch)+1n).toString(),
-              createdAt:new Date().toISOString(),authorityExpiresAt:expiry.toISOString(),policy:requestedPolicy});
+              createdAt:new Date().toISOString(),authorityExpiresAt:expiry.toISOString(),policy:requestedPolicy,
+              ...(runUntil?{runUntil}:{})});
           }else if(command.action!=='enable'&&command.action!=='disable'&&existingOutput&&existingOutput.actorId===who.userId&&existingOutput.loginId===who.loginId)output=existingOutput;
           await c.query(`UPDATE pf_recalculation_state SET control_revision=control_revision+1,authority_epoch=authority_epoch+1,enabled=$2,paused=$3,
             actor_id=CASE WHEN $4 THEN $5 ELSE actor_id END,login_id=CASE WHEN $4 THEN $6 ELSE login_id END,login_expires_at=CASE WHEN $4 THEN $7 ELSE login_expires_at END,authority_expires_at=CASE WHEN $4 THEN $8 ELSE authority_expires_at END,
@@ -277,16 +286,22 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
           AND NOT EXISTS(SELECT 1 FROM pf_recalculation_claims cl WHERE cl.project_id=s.project_id AND cl.generation=s.desired_generation AND cl.lease_until>clock_timestamp())
           ORDER BY s.due_at,s.project_id LIMIT 1 FOR UPDATE OF s SKIP LOCKED`)).rows[0];
         if(!s){committing=true;await c.query('COMMIT');return null;}
-        const claimId=randomUUID(),ownerToken=randomUUID(),lease=new Date(Date.now()+60000);
+        const authorization=activeAutomaticGenerationAuthorization(s);
+        const leaseMilliseconds=authorization?.runUntil==='login-expiry'
+          ? BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds+30_000 : RECALCULATION_SQL_BOUNDS.claimMilliseconds;
+        const claimId=randomUUID(),ownerToken=randomUUID(),lease=new Date(Date.now()+leaseMilliseconds);
         await c.query(`INSERT INTO pf_recalculation_claims(project_id,generation,control_revision,authority_epoch,claim_id,owner_token,lease_until) VALUES($1,$2,$3,$4,$5,$6,$7)
           ON CONFLICT(project_id) DO UPDATE SET generation=EXCLUDED.generation,control_revision=EXCLUDED.control_revision,authority_epoch=EXCLUDED.authority_epoch,claim_id=EXCLUDED.claim_id,owner_token=EXCLUDED.owner_token,lease_until=EXCLUDED.lease_until,created_at=now()`,[s.project_id,s.desired_generation,s.control_revision,s.authority_epoch,claimId,ownerToken,lease]);
         await c.query("UPDATE pf_recalculation_state SET status='collecting',attempts=CASE WHEN attempt_generation=desired_generation THEN attempts+1 ELSE 1 END,attempt_generation=desired_generation,updated_at=clock_timestamp() WHERE project_id=$1",[s.project_id]);
         signal?.throwIfAborted();committing=true;await c.query('COMMIT');return {projectId:s.project_id,generation:revision(s.desired_generation),controlRevision:revision(s.control_revision),authorityEpoch:revision(s.authority_epoch),claimId,ownerToken,leaseExpiresAt:lease.toISOString(),principal:{userId:s.actor_id,loginId:s.login_id,loginExpiresAt:new Date(s.login_expires_at).getTime()},preferences:recalculationPreferencesSchema.parse(s.preferences),timeoutMilliseconds:s.timeout_ms,
-          ...(activeAutomaticGenerationAuthorization(s)?{automaticPairAuthorization:activeAutomaticGenerationAuthorization(s)!}:{})};
+          ...(authorization?{automaticPairAuthorization:authorization}:{})};
       }catch(error){discard=committing;try{await c.query('ROLLBACK');}catch{discard=true;}throw error;}finally{c.release(discard?true:undefined);}
     },
     async enrollClaim(claim:RecalculationClaim,externalSignal?:AbortSignal):Promise<RecalculationEnrollmentResult>{
-      const deadline=new AbortController(),timer=setTimeout(()=>deadline.abort(new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503)),RECALCULATION_LIMITS.collectionMilliseconds);
+      const sessionBound=claim.automaticPairAuthorization?.runUntil==='login-expiry';
+      const waitMilliseconds=sessionBound ? BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds : RECALCULATION_LIMITS.collectionMilliseconds;
+      const admissionDeadline=Date.now()+waitMilliseconds;
+      const deadline=new AbortController(),timer=setTimeout(()=>deadline.abort(new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503)),waitMilliseconds);
       const signal=externalSignal?AbortSignal.any([externalSignal,deadline.signal]):deadline.signal;
       try{return await recalculationTransaction(pool,claim.projectId,claim.principal,async c=>{
         const prior=(await c.query<Row>('SELECT job_id FROM pf_recalculation_enrollments WHERE project_id=$1 AND generation=$2',[claim.projectId,claim.generation])).rows[0];
@@ -303,6 +318,15 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
         const recovered=await requalifyAutomaticEndpointBindingsInTransaction(c,claim.projectId,claim.principal,signal)+await recoverCrossModelEndpointsInTransaction(c,claim.projectId,claim.principal,signal);
         if(new Date(recoveryState.authority_expires_at).getTime()<=Date.now())return fail('AUTOMATIC_AUTHORITY_EXPIRED');
         if(recovered>0)return {status:'superseded' as const,generation:claim.generation,jobId:null};
+        const automaticPairSource=claim.automaticPairAuthorization?{kind:'automatic-generation' as const,generation:claim.generation,
+          controlRevision:claim.controlRevision,authorityEpoch:claim.authorityEpoch,authorization:claim.automaticPairAuthorization}:undefined;
+        if(sessionBound&&automaticPairSource){
+          const assigned=await assignAutomaticModelLocationsInTransaction(c,claim.projectId,claim.principal,signal,async()=>{
+            await requireAutomaticGenerationOutput(c,automaticPairSource,{projectId:claim.projectId,actorId:claim.principal.userId,
+              loginId:claim.principal.loginId,admission:true});
+          });
+          if(assigned>0)return {status:'superseded' as const,generation:claim.generation,jobId:null};
+        }
         let guarded=false,guardState:Row|undefined;
         const beforeInsert=async()=>{
           if(guarded)return fail('RECALCULATION_ADAPTER_GUARD_REUSED',500);signal.throwIfAborted();assertLoginNotExpired(claim.principal);
@@ -316,7 +340,8 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
           guarded=true;guardState=s;
         };
         const admission=await adapter.createInTransaction(c,{projectId:claim.projectId,principal:claim.principal,scope:'project',preferences:claim.preferences,timeoutMilliseconds:claim.timeoutMilliseconds,signal,beforeInsert,
-          ...(claim.automaticPairAuthorization?{automaticPairSource:{kind:'automatic-generation' as const,generation:claim.generation,controlRevision:claim.controlRevision,authorityEpoch:claim.authorityEpoch,authorization:claim.automaticPairAuthorization}}:{})});
+          ...(sessionBound?{deadline:admissionDeadline}:{}),
+          ...(automaticPairSource?{automaticPairSource}:{})});
         if(!guarded||!guardState)return fail('RECALCULATION_ADAPTER_GUARD_MISSING',500);signal.throwIfAborted();
         if(!/^[a-f0-9]{64}$(?![\s\S])/.test(admission.inputSha256)||!Number.isSafeInteger(admission.total)||admission.total<0||admission.total>10000||!Number.isSafeInteger(admission.readyCables)||!Number.isSafeInteger(admission.blockedCables)||admission.readyCables<0||admission.blockedCables<0||admission.readyCables+admission.blockedCables!==admission.total||(admission.jobId===null)!==(admission.readyCables===0))return fail('RECALCULATION_ADAPTER_RESULT_INVALID',500);
         if(admission.jobId)policyUuidSchema.parse(admission.jobId);const codes=reasons(admission.reasonCodes);

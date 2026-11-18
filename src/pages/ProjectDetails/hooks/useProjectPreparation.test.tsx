@@ -611,6 +611,20 @@ describe('project preparation lifecycle', () => {
 
 describe('automatic tray workflow', () => {
   afterEach(() => vi.restoreAllMocks());
+  it('checks trays and generates a missing network from Path, then reuses the verified network', async () => {
+    const f = automaticSetup(), { result } = renderHook(() => useProjectPreparation(f.pf, false));
+    const signal = new AbortController().signal;
+    await act(async () => {
+      await expect(result.current.ensureForCalculation(signal)).resolves.toMatchObject({ projectId: ids.project });
+    });
+    expect(f.discover).toHaveBeenCalledOnce(); expect(api.createPreparation).toHaveBeenCalledOnce();
+    expect(result.current.networkReady).toBe(true);
+    await act(async () => {
+      await expect(result.current.ensureForCalculation(signal)).resolves.toMatchObject({ projectId: ids.project });
+    });
+    expect(f.discover).toHaveBeenCalledOnce(); expect(api.createPreparation).toHaveBeenCalledOnce();
+    expect(synchronizeAssignedCadTrays).not.toHaveBeenCalled();
+  });
   it('generates and saves a network only after the explicit generation action', async () => {
     const f = automaticSetup(), { result } = renderHook(() => useProjectPreparation(f.pf, true));
     await waitFor(() => expect(result.current.context).not.toBeNull());
