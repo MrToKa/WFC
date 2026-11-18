@@ -104,7 +104,8 @@ beforeEach(() => { vi.clearAllMocks(); barrierComposition.mode = 'ready'; sessio
     createdAt: '2026-11-10T12:00:00Z', updatedAt: '2026-11-10T12:00:01Z', items: [
       { cableId: pf.data.cables[0].id, state: 'complete', status: 'calculated', message: null,
         automaticUpdate: { status: 'written', receiptId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', reasonCode: null } },
-      { cableId: pf.data.cables[1].id, state: 'complete', status: 'calculated', message: null },
+      { cableId: pf.data.cables[1].id, state: 'complete', status: 'calculated', message: null,
+        automaticUpdate: { status: 'review-required', receiptId: null, reasonCode: 'ROUTING_MANUAL_PROTECTED' } },
     ] });
   vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementation(async (_project, _token, cableId) => {
     const current = vi.mocked(usePathFinder).mock.results.at(-1)?.value as ReturnType<typeof usePathFinder>;
@@ -580,7 +581,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
       barrierRouting: { drillThroughWalls: false } } }); expect(submitted).not.toHaveProperty('cableIds');
     await waitFor(() => expect(fetchPathFinderJob).toHaveBeenCalledWith(projectId, 'isolated-test-token', bulkJobId, expect.any(AbortSignal)));
     await waitFor(() => expect(Number(popup().refreshKey)).toBeGreaterThan(before.refreshKey));
-    expect(popup()).toMatchObject({ active: true, selectedCableId: detail.row.cable.id, pf: { busy: false } });
+    expect(popup()).toMatchObject({ active: true, selectedCableId: detail.row.cable.id, reviewRunId: bulkJobId, pf: { busy: false } });
     expect(pf.clear).toHaveBeenCalledTimes(before.clear); expect(current.calculate).not.toHaveBeenCalled();
     expect(current.submitCalculation).not.toHaveBeenCalled(); expect(current.action).not.toHaveBeenCalled();
   });

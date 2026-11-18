@@ -19,6 +19,20 @@ function progressContext(change: Partial<RecalculationProgress> = {}, contextCha
 }
 beforeEach(() => vi.clearAllMocks());
 describe('narrow automatic recalculation panel', () => {
+  it('opens the review queue once the current generation and its saving are complete', () => {
+    const state = setup(), onReviewReady = vi.fn();
+    const context = progressContext({ waiting: 0, running: 0, processed: 360, calculated: 360, saved: 358, saving: 1, reviewRequired: 1 },
+      { status: 'complete' });
+    vi.mocked(usePathfinderRecalculations).mockReturnValue({ ...state, context });
+    const view = render(<PathFinderRecalculationPanel {...props} onReviewReady={onReviewReady} />);
+    expect(onReviewReady).not.toHaveBeenCalled();
+    vi.mocked(usePathfinderRecalculations).mockReturnValue({ ...state, context: {
+      ...context, progress: { ...context.progress!, saved: 359, saving: 0 },
+    } });
+    view.rerender(<PathFinderRecalculationPanel {...props} onReviewReady={onReviewReady} />);
+    view.rerender(<PathFinderRecalculationPanel {...props} onReviewReady={onReviewReady} />);
+    expect(onReviewReady).toHaveBeenCalledExactlyOnceWith(ids.key);
+  });
   it('explains missing barrier configuration separately from a valid timeout and links to the required action', () => {
     const state = setup(), configure = vi.fn();
     render(<PathFinderRecalculationPanel {...props} preferences={null} configurationMessage="Save obstacles or choose Declare no barriers in Barriers." onConfigureCalculation={configure} />);

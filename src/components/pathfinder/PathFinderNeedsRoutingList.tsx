@@ -8,6 +8,7 @@ import type { CalculationAvailability } from '../../../shared/pathfinderCalculat
 type Filter = CableWorkflowQuery['filter'];
 export type PathFinderNeedsRoutingListProps = Omit<PathFinderCableWorkflowAccess, 'query'> & {
   preferences: Pick<CableWorkflowQuery, 'secondaryDistanceMeters' | 'preferVerticalApproach'>;
+  reviewRunId?: string | null;
   onPreview?: (row: CableWorkflowRow, anchor: HTMLElement) => void; onPreviewLeave?: () => void;
   onSelect: (row: CableWorkflowRow) => void; selectedCableId?: string | null; className?: string;
 };
@@ -66,11 +67,12 @@ const useStyles = makeStyles({
 /** Read-only foundation. Clicking a tag reports an owned row; it never calculates or saves. */
 export function PathFinderNeedsRoutingList(props: PathFinderNeedsRoutingListProps) {
   if (!props.isAdmin || !props.accountId || !props.token || !props.projectId || props.projectId !== props.loadedProjectId || !props.active) return null;
-  const owner = JSON.stringify([props.projectId, props.loadedProjectId, props.accountId, props.token]);
+  const owner = JSON.stringify([props.projectId, props.loadedProjectId, props.accountId, props.token, props.reviewRunId]);
   return <OwnedCableWorkflowList key={owner} {...props} />;
 }
 function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
-  const styles = useStyles(), [filter, setFilter] = useState<Filter>('needs-routing'), [searchDraft, setSearchDraft] = useState(''), [search, setSearch] = useState('');
+  const styles = useStyles(), [filter, setFilter] = useState<Filter>(props.reviewRunId ? 'ready-for-review' : 'needs-routing'),
+    [searchDraft, setSearchDraft] = useState(''), [search, setSearch] = useState('');
   const filterId = useId();
   const workflow = usePathFinderCableWorkflow({ ...props, query: { ...props.preferences, filter, search, limit: 100 } });
   const page = workflow.page;

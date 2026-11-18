@@ -33,6 +33,14 @@ describe('direct text search across bounded workflow portions', () => {
     expect(vi.mocked(fetchPathFinderCableWorkflowPage).mock.calls.every(call => call[2]?.filter === 'needs-routing')).toBe(true);
     expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();
   });
+  it('automatically finds a later ready-for-review cable without a text search', async () => {
+    const late = { ...page(), rows: [{ ...page().rows[0], cable: { ...page().rows[0].cable, id: id(201) } }], scannedThroughCableId: id(201) };
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(empty(200, 'a')).mockResolvedValueOnce(late);
+    const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { filter: 'ready-for-review' } }));
+    await waitFor(() => expect(view.result.current.page?.rows[0].cable.id).toBe(id(201)));
+    expect(fetchPathFinderCableWorkflowPage).toHaveBeenLastCalledWith(project, 'token',
+      expect.objectContaining({ filter: 'ready-for-review', search: '', cursor: 'a' }), expect.any(AbortSignal));
+  });
   it('reports no matches only after exhaustion and does not offer earlier invisible portions', async () => {
     vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(empty(200, 'a')).mockResolvedValueOnce({ ...page(), rows: [], scannedCount: 0, scannedThroughCableId: null });
     const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { search: 'absent' } }));

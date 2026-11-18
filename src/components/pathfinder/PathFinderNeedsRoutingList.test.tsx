@@ -24,6 +24,20 @@ function mount(options = props()) { return render(<FluentProvider theme={webLigh
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(usePathFinderCableWorkflow).mockReturnValue(state()); });
 
 describe('read-only Needs routing list', () => {
+  it('opens the project-wide review filter after completion and lets the user change it afterwards', () => {
+    const options = props();
+    const view = render(<PathFinderNeedsRoutingList {...options} />);
+    fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: 'old tag' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    view.rerender(<PathFinderNeedsRoutingList {...options} reviewRunId={id(50)} />);
+    expect(screen.getByLabelText('Cable state')).toHaveValue('ready-for-review');
+    expect(screen.getByLabelText('Search tags, From or To')).toHaveValue('');
+    expect(vi.mocked(usePathFinderCableWorkflow).mock.calls.at(-1)?.[0].query).toMatchObject({ filter: 'ready-for-review', search: '' });
+    fireEvent.change(screen.getByLabelText('Cable state'), { target: { value: 'all' } });
+    view.rerender(<PathFinderNeedsRoutingList {...options} reviewRunId={id(50)} modelScopeKey="refreshed" />);
+    expect(screen.getByLabelText('Cable state')).toHaveValue('all');
+    expect(options.onSelect).not.toHaveBeenCalled();
+  });
   it('submits canonical pasted tags and can search again after correcting invalid text without reload', () => {
     const current = state(); vi.mocked(usePathFinderCableWorkflow).mockReturnValue(current); mount();
     const input = screen.getByLabelText('Search tags, From or To');

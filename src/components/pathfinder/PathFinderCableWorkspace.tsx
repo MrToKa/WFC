@@ -44,6 +44,7 @@ export type PathFinderCableWorkspaceProps = Access & { pf: ReturnType<typeof use
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
   onCalculationStart?: (cableId: string) => void; onConfigureCalculation?: () => void;
   onResultRefresh?: (cableId: string) => void;
+  reviewRunId?: string | null;
   getCalculationPreferences?: (drillThroughWalls: boolean) => PathFinderPreferences | null;
   onCalculationPreferences?: (value: PathFinderWorkflowCalculationPreferences) => void };
 type Impact = { id: string; current: EndpointCurrentScope; calculation: LocationImpactCalculation | null; originCableId: string | null };

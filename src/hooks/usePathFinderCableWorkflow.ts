@@ -69,9 +69,8 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
           && (page.scannedThroughCableId === null || page.scannedThroughCableId <= previousPage.scannedThroughCableId
             || page.rows.some(row => row.cable.id <= previousPage!.scannedThroughCableId!))) throw changed();
         context = page.contextSha256; queryHash = page.querySha256;
-        // Skip empty filtered portions only for an explicit text search. They
-        // are transport work, not visible pages that require a user's click.
-        if (query.search !== '' && page.rows.length === 0 && page.nextCursor !== null) {
+        // Searches and review queues should open on the first matching page.
+        if ((query.search !== '' || query.filter === 'ready-for-review') && page.rows.length === 0 && page.nextCursor !== null) {
           previousPage = page; next = page.nextCursor; continue;
         }
         selection.current = { identity, cursor: next, history, context, queryHash, page };

@@ -10,6 +10,7 @@ type Props = {
   projectId: string; accountId: string; token: string; modelKey: string;
   preferences: PathFinderPreferences | null; disabled: boolean; blocker: string | null;
   refreshState: () => Promise<PathFinderState | null>; onChanged: () => void;
+  onReviewReady?: (jobId: string) => void;
 };
 export function backgroundCalculationCounts(job: PathFinderJob) {
   const items = job.items ?? [];
@@ -43,7 +44,7 @@ function pendingRequest(value: string | null, projectId: string): BulkRequest | 
   } catch { return 'legacy'; }
 }
 
-function BackgroundPass({ projectId, accountId, token, preferences, disabled, blocker, refreshState, onChanged }: Props) {
+function BackgroundPass({ projectId, accountId, token, preferences, disabled, blocker, refreshState, onChanged, onReviewReady }: Props) {
   const storageKey = `wfc.recalculate-all:${projectId}:${accountId}`;
   const [stored] = useState(() => {
     try { return localStorage.getItem(storageKey); } catch { return null; }
@@ -55,6 +56,8 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
   const [error, setError] = useState<string | null>(null);
   const lifetime = useRef(new AbortController());
   const submittingRef = useRef(false), changed = useRef(onChanged), refresh = useRef(refreshState), lastSaved = useRef(0);
+  const reviewReady = useRef(onReviewReady);
+  reviewReady.current = onReviewReady;
   changed.current = onChanged; refresh.current = refreshState;
   useEffect(() => {
     const controller = new AbortController(); lifetime.current = controller;
@@ -77,7 +80,10 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
         const progress = backgroundCalculationCounts(next);
         if (progress.saved !== lastSaved.current) { lastSaved.current = progress.saved; changed.current(); }
         again = ['queued', 'running'].includes(next.status) || progress.pendingUpdates > 0;
-        if (!again) changed.current();
+        if (!again) {
+          changed.current();
+          if (next.status === 'complete' && progress.review > 0) reviewReady.current?.(next.id);
+        }
       } catch (cause) {
         if (controller.signal.aborted) return;
         setError(cause instanceof PathFinderApiError ? cause.message : 'Progress is temporarily unavailable. Checking again automatically; no new calculation was submitted.');

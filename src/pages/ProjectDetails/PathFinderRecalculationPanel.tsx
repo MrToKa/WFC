@@ -9,7 +9,8 @@ import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 
 export type RecalculationPanelProps = RecalculationAccess & { preferences: PathFinderPreferences | null | undefined;
   configurationMessage?: string | null; onConfigureCalculation?: () => void;
-  prepareEnable?: (signal: AbortSignal) => Promise<PathFinderPreferences>; preparationAvailable?: boolean };
+  prepareEnable?: (signal: AbortSignal) => Promise<PathFinderPreferences>; preparationAvailable?: boolean;
+  onReviewReady?: (jobId: string) => void };
 const labels: Record<string, string> = {
   disabled: 'Disabled', awaiting_authority: 'Automatic recalculation needs enabling again', paused: 'Paused', debouncing: 'Collecting recent changes',
   collecting: 'Checking project inputs', queued: 'Queued', calculating: 'Calculating', complete: 'Complete', blocked: 'Action required', superseded: 'Newer changes pending', failed: 'Calculation failed',
@@ -72,6 +73,15 @@ export function PathFinderRecalculationPanel(props: RecalculationPanelProps) {
   const differentPreferences = context?.preferences && props.preferences && (context.preferences.secondaryDistanceMeters !== props.preferences.secondaryDistanceMeters || context.preferences.preferVerticalApproach !== props.preferences.preferVerticalApproach);
   const progress = context?.progress && context.progress.jobId === context.jobId
     && context.progress.generation === context.desiredGeneration && context.enrolledGeneration === context.desiredGeneration ? context.progress : null;
+  const reviewJob = state.enabled && context?.status === 'complete' && progress && progress.reviewRequired > 0
+    && progress.waiting + progress.running + progress.saving === 0 ? progress.jobId : null;
+  const reportedReview = useRef<string | null>(null);
+  const { onReviewReady } = props;
+  useEffect(() => {
+    if (!reviewJob || reportedReview.current === reviewJob || !onReviewReady) return;
+    reportedReview.current = reviewJob;
+    onReviewReady(reviewJob);
+  }, [reviewJob, onReviewReady]);
   const stopped = !context?.enabled || context.paused || expired || ['disabled', 'awaiting_authority', 'paused', 'blocked', 'superseded', 'failed'].includes(context.status);
   const preparing = !progress && Boolean(context?.enabled && !stopped && ['debouncing', 'collecting', 'queued', 'calculating'].includes(context.status));
   const processing = Boolean(progress && progress.waiting + progress.running > 0), saving = Boolean(progress?.saving);

@@ -36,15 +36,17 @@ describe('whole-project background pass', () => {
     expect(screen.getByRole('button')).toBeDisabled(); expect(props.refreshState).toHaveBeenCalledOnce();
   });
   it('continues GET-only polling after calculation completion until automatic saves finish', async () => {
-    vi.useFakeTimers(); const props = setup();
-    vi.mocked(fetchPathFinderJob).mockResolvedValueOnce(makeJob('complete', [item('calculated', 'pending')]))
+    vi.useFakeTimers(); const props = setup(), onReviewReady = vi.fn();
+    vi.mocked(fetchPathFinderJob).mockResolvedValueOnce(makeJob('complete', [item('calculated', 'pending'), item('calculated', 'review-required')]))
       .mockResolvedValue(makeJob('complete', [item('calculated', 'written'), item('missing_from'), item('calculated', 'review-required')]));
-    render(<PathFinderRecalculateAll {...props} />);
+    render(<PathFinderRecalculateAll {...props} onReviewReady={onReviewReady} />);
     await act(async () => fireEvent.click(screen.getByRole('button')));
     expect(screen.getByText(/Saving calculated routes/)).toBeVisible(); expect(screen.getByRole('button')).toBeDisabled();
+    expect(onReviewReady).not.toHaveBeenCalled();
     await act(async () => vi.advanceTimersByTimeAsync(2000));
     expect(screen.getByText(/Background recalculation finished/)).toBeVisible(); expect(screen.getByRole('button')).toBeEnabled();
     expect(screen.getByText(/saved: 1; saving: 0; need review: 1; skipped or failed: 1/)).toBeVisible();
+    expect(onReviewReady).toHaveBeenCalledExactlyOnceWith(id(20));
     expect(props.onChanged).toHaveBeenCalled(); expect(submitAllPathFinderCalculations).toHaveBeenCalledOnce();
   });
   it('restores exact job progress after reopening without submitting or following another global job', async () => {

@@ -203,6 +203,11 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     && previous.checking === value.checking && previous.message === value.message ? previous : value), []);
   const [cableWriteRefresh, setCableWriteRefresh] = useState(0);
   const cableValuesChanged = useCallback(() => setCableWriteRefresh(value => value + 1), []);
+  const reviewOwner = JSON.stringify([projectId, accountId, token, pf.data?.activeModel.modelVersionId, pf.data?.activeModel.selectionRevision]);
+  const [reviewRun, setReviewRun] = useState<{ owner: string; jobId: string } | null>(null);
+  const showReviewQueue = useCallback((jobId: string) => {
+    setReviewRun(current => current?.owner === reviewOwner && current.jobId === jobId ? current : { owner: reviewOwner, jobId });
+  }, [reviewOwner]);
   const autoLengthRead = usePathfinderAutoLengthRead({ projectId, loadedProjectId, accountId: accountId ?? null, token, isAdmin,
     active: mode === 'path', selectedCableId, item: calculatedItem, writeRefreshKey: cableWriteRefresh });
   const popupReview = useMemo<PathFinderWorkflowReview | null>(() => workflowReview ? {
@@ -302,16 +307,18 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           modelKey={JSON.stringify(data?.activeModel)} preferences={backgroundPreferences}
           blocker={calculationBlocker ?? (!data?.artifacts.length ? 'Prepare the tray network in Routes before recalculating all cables.' : null)}
           disabled={pf.busy || locationCheckBusy || networkCheckBusy || !data?.artifacts.length}
-          refreshState={pf.refreshState} onChanged={cableValuesChanged} /> : null}
+          refreshState={pf.refreshState} onChanged={cableValuesChanged} onReviewReady={showReviewQueue} /> : null}
         {/* Keep command recovery active across viewer tool changes; its busy state stays local. */}
         <PathFinderRecalculationPanel projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           active={active} contextKey={JSON.stringify([data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, data?.activeModel.contentFingerprint])}
           preferences={backgroundPreferences} configurationMessage={calculationBlocker} onConfigureCalculation={validSecondary ? configureCalculation : undefined}
           prepareEnable={validSecondary && !barrierAuthoring.dirty && !barrierAuthoring.pending ? prepareAutomaticCalculation : undefined}
           preparationAvailable={mode !== 'lookup' && pf.viewerPhase === 'ready' && !pf.busy && !networkCheckBusy && !locationCheckBusy}
-          onChanged={cableValuesChanged} onAuthorityLost={cableValuesChanged} />
+          onChanged={cableValuesChanged} onAuthorityLost={cableValuesChanged} onReviewReady={showReviewQueue} />
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
-          pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation} onResultRefresh={workflowResultRefreshed}
+          pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh}
+          reviewRunId={reviewRun?.owner === reviewOwner ? reviewRun.jobId : null}
+          preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation} onResultRefresh={workflowResultRefreshed}
           calculationBlocker={calculationBlocker} getCalculationPreferences={getCableCalculationPreferences} onCalculationPreferences={setWorkflowCalculationPreferences}
           display={workflowDisplay} review={popupReview} onCalculationStart={workflowCalculationStarted} onTogglePath={cableId => setWorkflowDisplayRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1,
             action: workflowDisplay.cableId === cableId && workflowDisplay.visible ? 'hide' : 'show' }))}
