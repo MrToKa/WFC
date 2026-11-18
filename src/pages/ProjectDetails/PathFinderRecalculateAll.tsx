@@ -12,6 +12,10 @@ type Props = {
   refreshState: () => Promise<PathFinderState | null>; onChanged: () => void;
   onReviewReady?: (jobId: string) => void;
 };
+type JobItem = NonNullable<PathFinderJob['items']>[number];
+const isUnsavedCalculation = (item: JobItem) => item.status === 'calculated' && (!item.automaticUpdate
+  || ['refused', 'stale', 'authority-expired', 'unknown'].includes(item.automaticUpdate.status));
+
 export function backgroundCalculationCounts(job: PathFinderJob) {
   const items = job.items ?? [];
   const saved = items.filter(item => ['written', 'already-written'].includes(item.automaticUpdate?.status ?? '')).length;
@@ -20,9 +24,42 @@ export function backgroundCalculationCounts(job: PathFinderJob) {
   const calculated = items.filter(item => item.status === 'calculated').length;
   const review = items.filter(item => item.automaticUpdate?.status === 'review-required').length;
   const blocked = items.filter(item => ['complete', 'blocked', 'cancelled', 'failed'].includes(item.state) && item.status !== 'calculated').length;
-  const unsaved = items.filter(item => item.status === 'calculated' && (!item.automaticUpdate
-    || ['refused', 'stale', 'authority-expired', 'unknown'].includes(item.automaticUpdate.status))).length;
+  const unsaved = items.filter(isUnsavedCalculation).length;
   return { saved, saving, pendingUpdates, calculated, review, blocked, unsaved };
+}
+
+function savingReason(update: JobItem['automaticUpdate']) {
+  if (!update) return 'No automatic save was scheduled';
+  if (update.status === 'authority-expired' || update.reasonCode === 'AUTOMATIC_PAIR_AUTHORITY_EXPIRED')
+    return 'Permission to save automatically expired';
+  if (update.reasonCode === 'ROUTING_MANUAL_PROTECTED') return 'Protected manual route';
+  if (update.reasonCode === 'ROUTING_EXECUTION_PROTECTED') return 'Execution-protected route';
+  if (update.status === 'stale') return 'Calculation inputs changed before the save';
+  if (update.status === 'review-required') return 'Review required before saving';
+  if (update.status === 'unknown') return 'Save outcome is unconfirmed';
+  return update.reasonCode ? `Automatic save refused (${update.reasonCode})` : 'Automatic save refused';
+}
+
+const retainedRouteLabels = {
+  manual: 'with a retained manual route',
+  execution: 'with a retained execution-protected route',
+  saved: 'with an existing route in Cable list',
+  none: 'without a saved route',
+  unknown: 'with an unknown saved route status',
+};
+
+function savingBreakdown(items: PathFinderJob['items']) {
+  const groups = new Map<string, { total: number; routes: Map<keyof typeof retainedRouteLabels, number> }>();
+  for (const item of items ?? []) {
+    if (item.status !== 'calculated' || (!isUnsavedCalculation(item) && item.automaticUpdate?.status !== 'review-required')) continue;
+    const reason = savingReason(item.automaticUpdate);
+    const group = groups.get(reason) ?? { total: 0, routes: new Map() };
+    const route = item.retainedRoute ?? 'unknown';
+    group.total++;
+    group.routes.set(route, (group.routes.get(route) ?? 0) + 1);
+    groups.set(reason, group);
+  }
+  return [...groups.entries()].sort(([, first], [, second]) => second.total - first.total);
 }
 
 /** Owns only its submission and lightweight progress reads. Never owns the
@@ -64,6 +101,7 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     return () => controller.abort();
   }, []);
   const counts = job ? backgroundCalculationCounts(job) : null;
+  const saveReasons = savingBreakdown(job?.items);
   const networkBlocked = job?.status === 'complete' && job.total > 0 && job.items?.length === job.total
     && job.items.every(item => item.state === 'blocked' && item.status === 'routing_preparation_required');
   const running = Boolean(jobId && (!job || ['queued', 'running'].includes(job.status) || (counts?.pendingUpdates ?? 0) > 0));
@@ -199,7 +237,11 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       {!submitting && !pending && job && counts ? <>
         <ProgressBar value={job.total ? job.completed / job.total : 1} />
         <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}.</Caption1>
-        {counts.unsaved > 0 ? <Caption1 block>Not saved by this run does not mean the cable has no saved route. Existing routes remain in Cable list; inspect the update reason and protection for each cable before retrying.</Caption1> : null}
+        {saveReasons.length > 0 ? <ul aria-label="Calculated routes requiring attention">
+          {saveReasons.map(([reason, { total, routes }]) => <li key={reason}>
+            {reason} ({total} {total === 1 ? 'cable' : 'cables'}). {[...routes].map(([route, count]) => `${count} ${retainedRouteLabels[route]}`).join(', ')}.
+          </li>)}
+        </ul> : null}
         {job.failure ? <Caption1 block>{job.failure}</Caption1> : null}
         {networkBlocked ? <Caption1 block>Open Routes and choose Regenerate network, then recalculate the cables again.</Caption1> : null}
       </> : null}

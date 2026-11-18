@@ -108,5 +108,6 @@ export const automaticPairCapacityClearProvenanceSchema = z.object({
 });
 export const automaticPairStatuses = ['pending', 'running', 'written', 'already-written', 'review-required', 'stale', 'authority-expired', 'refused', 'unknown'] as const;
 export type AutomaticPairStatus = typeof automaticPairStatuses[number];
+export const retainedCableRouteSchema = z.enum(['manual', 'execution', 'saved', 'none']);
 export type AutomaticPairOutcome = { status: AutomaticPairStatus; receiptId: string | null; code?: string };
 export const sameAutomaticPairValue = (a: unknown, b: unknown) => canonicalPurposeJson(a) === canonicalPurposeJson(b);

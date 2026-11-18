@@ -28,6 +28,17 @@ describe('read-only job output disposition', () => {
     fx.query.mockResolvedValueOnce({ rows: [row(id(5))] }).mockResolvedValueOnce({ rows: [item({ automatic_update_status: null })] });
     expect((await repository().get(id(1), who, id(5))).items).toEqual([{ cableId: id(4), status: 'calculated', state: 'complete', message: 'Route found.' }]);
   });
+  it('reports the current retained route independently of why this job did not save', async () => {
+    fx.query.mockResolvedValueOnce({ rows: [row(id(5))] }).mockResolvedValueOnce({ rows: [
+      item({ retained_route: 'manual', automatic_update_status: 'review-required', automatic_update_reason: 'ROUTING_MANUAL_PROTECTED' }),
+      item({ retained_route: 'saved', automatic_update_status: 'authority-expired', automatic_update_reason: 'AUTOMATIC_PAIR_AUTHORITY_EXPIRED' }),
+      item({ retained_route: 'none', automatic_update_status: 'authority-expired', automatic_update_reason: 'AUTOMATIC_PAIR_AUTHORITY_EXPIRED' }),
+    ] });
+    const { items } = await repository().get(id(1), who, id(5));
+    expect(items.map(value => value.retainedRoute)).toEqual(['manual', 'saved', 'none']);
+    expect(fx.query.mock.calls[1][0]).toContain('rc.project_id=c.project_id AND rc.cable_id=c.id');
+    expect(fx.query.mock.calls[1][0]).toContain('rc.manual_protected AND rc.manual_routing=c.routing');
+  });
   it('retains the exact failed item proposal identity for lazy recorded obstacle details', async () => {
     fx.query.mockResolvedValueOnce({ rows: [row(id(5))] }).mockResolvedValueOnce({ rows: [item({ status: 'no_path', state: 'complete', proposal_id: id(9) })] });
     expect((await repository().get(id(1), who, id(5))).items[0]).toMatchObject({ status: 'no_path', proposalId: id(9) });
