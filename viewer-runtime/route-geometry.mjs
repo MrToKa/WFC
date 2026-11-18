@@ -473,7 +473,27 @@ function atStation(group, station) {
   return group.points.at(-1).slice();
 }
 
-function clipGroupsToJunctions(pieces) {
+function nearestStation(group, point, preferredStation) {
+  let bestStation = 0, bestDistance = Infinity;
+  for (const piece of group.pieces) {
+    let stationAtStart = piece.from;
+    for (let i = 1; i < piece.points.length; i++) {
+      const start = piece.points[i - 1], end = piece.points[i];
+      const port = nearestOnSegment(point, start, end);
+      const gap = distance(point, port);
+      const station = stationAtStart + distance(start, port);
+      if (gap < bestDistance - EPSILON || Math.abs(gap - bestDistance) <= EPSILON
+        && Math.abs(station - preferredStation) < Math.abs(bestStation - preferredStation)) {
+        bestStation = station;
+        bestDistance = gap;
+      }
+      stationAtStart += distance(start, end);
+    }
+  }
+  return bestStation;
+}
+
+function clipGroupsToJunctions(pieces, { from, to }) {
   const groups = [];
   for (const piece of pieces) {
     let group = groups.at(-1);
@@ -498,6 +518,9 @@ function clipGroupsToJunctions(pieces) {
     first.entry = first.exit >= first.length / 2 ? 0 : first.length;
     last.exit = last.entry <= last.length / 2 ? last.length : 0;
   }
+  const first = groups[0], last = groups.at(-1);
+  if (from) first.entry = nearestStation(first, from, first.exit);
+  if (to) last.exit = nearestStation(last, to, last.entry);
   for (const group of groups) {
     const low = Math.min(group.entry, group.exit), high = Math.max(group.entry, group.exit), clipped = [];
     appendDistinct(clipped, atStation(group, low));
@@ -510,7 +533,7 @@ function clipGroupsToJunctions(pieces) {
   return { groups, junctions };
 }
 
-export function buildRouteLines(groups) {
+export function buildRouteLines(groups, endpoints = {}) {
   const warnings = [], clean = groups.filter(group => Array.isArray(group.profiles) && group.profiles.length);
   const omittedTokens = groups.filter(group => !Array.isArray(group.profiles) || !group.profiles.length).map(group => group.token);
   if (!clean.length) return { polylines: [], warnings, diagnostics: { profileCount: 0, breaks: [], connectors: [], omittedTokens, bends: { interpolated: 0, meshFit: 0, fallback: 0 } } };
@@ -528,11 +551,11 @@ export function buildRouteLines(groups) {
     }
     return { ...step, points: points.map(p => p.slice()) };
   });
-  const clipped = clipGroupsToJunctions(pieces), polylines = [];
-  let line = [];
+  const clipped = clipGroupsToJunctions(pieces, endpoints), polylines = [];
+  const line = endpoints.from ? [endpoints.from.slice()] : [];
   for (let i = 0; i < clipped.groups.length; i++) {
     const group = clipped.groups[i];
-    if (line.length) {
+    if (i > 0) {
       const previous = clipped.groups[i - 1], gap = distance(line.at(-1), group.clipped[0]);
       const tolerance = Math.max(...previous.pieces.flatMap(a => group.pieces.map(b => connectionTolerance(a.profile, b.profile))));
       if (gap > tolerance) {
@@ -542,6 +565,10 @@ export function buildRouteLines(groups) {
       }
     }
     for (const point of group.clipped) appendDistinct(line, point);
+  }
+  if (endpoints.to) {
+    if (line.length > 1 && distance(line.at(-1), endpoints.to) <= EPSILON) line[line.length - 1] = endpoints.to.slice();
+    else appendDistinct(line, endpoints.to);
   }
   if (line.length >= 2) polylines.push(line);
   return {

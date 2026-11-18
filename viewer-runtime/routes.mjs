@@ -258,7 +258,7 @@ export function createRouteController(viewer, { signal } = {}) {
     }
   }
 
-  async function showRoute(text, { onProgress, routingBindings } = {}) {
+  async function showRoute(text, { onProgress, routingBindings, endpoints } = {}) {
     const tokens = parseRoute(text);
     const ticket = ++generation;
     const index = await indexNames(onProgress);
@@ -269,7 +269,7 @@ export function createRouteController(viewer, { signal } = {}) {
     if (routingBindings !== undefined && !bindings) throw invalidBindings();
     const mapped = new Map((bindings?.bindings ?? []).map(binding => [normalizeIdentifier(binding.routeName), binding.rootObjectIds.map(id => Number(id.slice(5)))]));
     const cad = new Map((bindings?.cadBindings ?? []).map(binding => [normalizeIdentifier(binding.routeName), binding.paths]));
-    const coordinates = cad.size ? modelCoordinates(model) : null;
+    const coordinates = cad.size || endpoints ? modelCoordinates(model) : null;
     const nativeProfile = (path, token, index) => {
       const centerline = path.pointsMetres.map(point => coordinates.toDisplay(point));
       const start = centerline[0], end = centerline.at(-1), axis = end.map((value, i) => value - start[i]);
@@ -303,7 +303,10 @@ export function createRouteController(viewer, { signal } = {}) {
       groups.push({ token: segment.token, profiles });
       await nextFrame();
     }
-    const line = buildRouteLines(groups);
+    const line = buildRouteLines(groups, {
+      from: endpoints?.from && coordinates.toDisplay(endpoints.from),
+      to: endpoints?.to && coordinates.toDisplay(endpoints.to),
+    });
     active(ticket);
     const ids = [...new Set(found.flatMap(segment => segment.ids))];
     if (!ids.length && cad.size && (typeof model.visibilityManager?.setAllVisibility !== 'function' || !captureVisibility())) throw visibilityUnavailable();
@@ -315,7 +318,7 @@ export function createRouteController(viewer, { signal } = {}) {
     drawLines(line.polylines, groups.flatMap(group => group.profiles));
     routeIds = ids;
     routeBounds = null;
-    if (cad.size && THREE.Box3 && typeof viewer.navigation?.fitBounds === 'function') {
+    if ((cad.size || endpoints) && line.polylines.length && THREE.Box3 && typeof viewer.navigation?.fitBounds === 'function') {
       routeBounds = new THREE.Box3();
       for (const polyline of line.polylines) for (const point of polyline) routeBounds.expandByPoint(new THREE.Vector3(...point));
     }

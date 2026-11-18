@@ -205,7 +205,13 @@ function payload(type, value) {
     case 'INIT': return exact(value, ['locale', 'expectedSdkVersion']) && oneOf(value.locale, ['en', 'bg']) && value.expectedSdkVersion === SDK_VERSION;
     case 'RUNTIME_READY': return (exact(value, ['sdkVersion']) || exact(value, ['sdkVersion', 'modelCaptureBatch']) && value.modelCaptureBatch === true) && value.sdkVersion === SDK_VERSION;
     case 'LOAD_MODEL': return exact(value, ['sessionId']) && isUuid(value.sessionId);
-    case 'SHOW_ROUTE': return exact(value, ['rawRouting', 'source', 'cableId']) && typeof value.rawRouting === 'string' && value.rawRouting.length <= 8000 && source(value);
+    case 'SHOW_ROUTE': {
+      const keys = ['rawRouting', 'source', 'cableId'];
+      if (!exact(value, keys) && !(exact(value, [...keys, 'endpoints']) && value.source === 'cable'
+        && (exact(value.endpoints, ['from']) || exact(value.endpoints, ['to']) || exact(value.endpoints, ['from', 'to']))
+        && Object.values(value.endpoints).every(isCanonicalPoint))) return false;
+      return typeof value.rawRouting === 'string' && value.rawRouting.length <= 8000 && source(value);
+    }
     case 'CLEAR_ROUTE': return (exact(value, ['reason']) || exact(value, ['reason', 'preserveCamera']) || exact(value, ['reason', 'preserveSelection']) || exact(value, ['reason', 'preserveCamera', 'preserveSelection']))
       && (!Object.hasOwn(value, 'preserveCamera') || typeof value.preserveCamera === 'boolean')
       && (!Object.hasOwn(value, 'preserveSelection') || typeof value.preserveSelection === 'boolean') && oneOf(value.reason, ['user', 'empty', 'selection', 'model-change', 'logout']);

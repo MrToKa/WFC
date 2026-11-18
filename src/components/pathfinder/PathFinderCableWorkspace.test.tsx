@@ -135,6 +135,8 @@ describe('explicit cable status recovery', () => {
     await act(async()=>{await panelProps.onTogglePath?.({from,to});});
     await waitFor(()=>expect(show).toHaveBeenCalledWith(listRow.cable.routing, listRow.cable.id, expect.objectContaining({
       endpointObjectIds: scenario === 'both' ? ['dbid:651','dbid:652','dbid:701'] : ['dbid:651','dbid:652'],
+      endpoints: scenario === 'both' ? { from: from.head!.pointProjectMetres, to: to.head!.pointProjectMetres }
+        : { from: from.head!.pointProjectMetres },
     })));
   });
   it('labels recorded geometry as historical and submits no calculation',async()=>{

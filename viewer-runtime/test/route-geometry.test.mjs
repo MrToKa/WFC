@@ -57,6 +57,40 @@ test('pieces within each identifier are reordered and oriented while preserving 
   near(route.polylines[0][0][0], 0); near(route.polylines[0].at(-1)[0], 9);
 });
 
+test('saved endpoints clip both terminal trays at interior projections and keep the listed junctions', () => {
+  const groups = [
+    { token: 'FIRST', profiles: [tube([10, 0, 0], [-3, 0, 0], .3, 'FTUBE', 1)] },
+    { token: 'MIDDLE', profiles: [tube([4, 0, 0], [4, 6, 0], .3, 'FTUBE', 2)] },
+    { token: 'LAST', profiles: [tube([0, 6, 0], [10, 6, 0], .3, 'FTUBE', 3)] },
+  ];
+  const from = [3, -1, 1], to = [2, 8, -1];
+  const route = buildRouteLines(groups, { from, to });
+  assert.equal(route.polylines.length, 1);
+  const [line] = route.polylines;
+  assert.deepEqual(line[0], from);
+  assert.deepEqual(line.at(-1), to);
+  const expected = [[3, 0, 0], [4, 0, 0], [4, 6, 0], [2, 6, 0]];
+  assert.equal(line.length, expected.length + 2);
+  expected.forEach((point, index) => point.forEach((value, axis) => near(line[index + 1][axis], value)));
+  assert.deepEqual(route.diagnostics.groupClips.map(group => group.token), ['FIRST', 'MIDDLE', 'LAST']);
+  const [legacy] = buildRouteLines(groups).polylines;
+  near(legacy[0][0], -3);
+  near(legacy.at(-1)[0], 10);
+  const [fromOnly] = buildRouteLines(groups, { from }).polylines;
+  assert.deepEqual(fromOnly[0], from);
+  near(fromOnly.at(-1)[0], 10);
+  const [toOnly] = buildRouteLines(groups, { to }).polylines;
+  near(toOnly[0][0], -3);
+  assert.deepEqual(toOnly.at(-1), to);
+});
+
+test('saved endpoints select opposite interior stations of one tray', () => {
+  const groups = [{ token: 'TRAY', profiles: [tube([0, 0, 0], [10, 0, 0])] }];
+  const from = [7, -1, 0], to = [3, 1, 0];
+  const [line] = buildRouteLines(groups, { from, to }).polylines;
+  assert.deepEqual(line, [from, [7, 0, 0], [3, 0, 0], to]);
+});
+
 test('a 90-degree bend joins adjacent straight ports tangentially', () => {
   const a = tube([-3, 0, 0], [0, 0, 0], 0.2, 'FTUBE', 1);
   const arc = bend(2);

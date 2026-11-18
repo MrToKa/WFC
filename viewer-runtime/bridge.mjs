@@ -428,9 +428,10 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     const controller = new AbortController(); routeController = controller;
     const signal = AbortSignal.any([lifetime.signal, loadController.signal, controller.signal]);
     try {
-      const parsed = parseRouting(command.payload.rawRouting);
+      const { endpoints, ...route } = command.payload;
+      const parsed = parseRouting(route.rawRouting);
       if (!parsed.segments.length) {
-        const result = { ...command.payload, segments: [], ignored: parsed.ignored, drawableCount: 0, lineCount: 0, warnings: [] };
+        const result = { ...route, segments: [], ignored: parsed.ignored, drawableCount: 0, lineCount: 0, warnings: [] };
         if (!emit(command, 'ROUTE_RESULT', result)) throw failure('ROUTE_INVALID');
         finish(command); return;
       }
@@ -459,7 +460,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       if (!bindings) throw failure('ROUTING_BINDINGS_INVALID');
       if (disposed || signal.aborted || routeRequest !== ticket || !identityMatches(command)) return;
       routingSelectionRevision = bindings.selectionRevision;
-      const result = parsed.segments.length ? await handle.showRoute(command.payload.rawRouting, { routingBindings: bindings }) : { segments: [], drawableCount: 0, lineCount: 0, warnings: [], diagnostics: { connectors: [] } };
+      const result = await handle.showRoute(route.rawRouting, { routingBindings: bindings, ...(endpoints ? { endpoints } : {}) });
       if (disposed || routeRequest !== ticket || !identityMatches(command)) return;
       const warnings = [];
       const segments = parsed.segments.map((entry, index) => {
@@ -475,7 +476,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       const drawableCount = segments.filter(entry => entry.model.drawable).length;
       if (!drawableCount) handle.clearRoute();
       routeHasLine = drawableCount > 0 && result.lineCount > 0;
-      const sent = emit(command, 'ROUTE_RESULT', { ...command.payload, segments, ignored: parsed.ignored, drawableCount, lineCount: result.lineCount, warnings: warnings.slice(0, 100) });
+      const sent = emit(command, 'ROUTE_RESULT', { ...route, segments, ignored: parsed.ignored, drawableCount, lineCount: result.lineCount, warnings: warnings.slice(0, 100) });
       if (!sent) { handle.clearRoute(); routeHasLine = false; throw failure('ROUTE_INVALID'); }
       finish(command);
       onState({ phase: 'route', drawableCount, lineCount: result.lineCount });

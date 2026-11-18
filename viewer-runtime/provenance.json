@@ -26,5 +26,5 @@
       "sha256": "8368d5a9602d45205aead5fdabd2ff9b4d3d41ad5f8f370a7506c7bb6c4cc67d"
     }
   ],
-  "policy": "Original sources are read-only. Geometry bytes are unchanged; controller and transport are adapted for protocol and cancellation."
+  "policy": "Original sources are read-only. Runtime geometry is derived from the original algorithm and supports confirmed endpoint approaches for saved cable previews. The build pins the current runtime geometry separately from the original source hash."
 }

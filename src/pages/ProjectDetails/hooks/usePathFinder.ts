@@ -7,7 +7,7 @@ import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 import { trayIdentityErrorMessage } from '@/viewer/trayIdentityErrors';
-import type { CanonicalPoint, ComputedPath, PickedPoint, ViewerModelObjectsPage, ViewerTrayRootSelection, ModelCaptureRequest } from '../../../../viewer-runtime/protocol.mjs';
+import type { CanonicalPoint, ComputedPath, PickedPoint, ViewerModelObjectsPage, ViewerTrayRootSelection, ModelCaptureRequest, SavedRouteEndpoints } from '../../../../viewer-runtime/protocol.mjs';
 import type { PreparationDiscoveryRequest, PreparationDiscoveryPage, PreparationDiscoveryProgress } from '../../../../viewer-runtime/preparation-input.mjs';
 import type { PreparationContext, PreparationScope } from '../../../../shared/pathfinderPreparation';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
@@ -540,6 +540,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   }, []);
   const showStoredRoute = useCallback((rawRouting: string, cableId: string, options: {
     signal?: AbortSignal; cableWriteRevision?: string; designLength?: string | null; endpointObjectIds?: readonly string[];
+    endpoints?: SavedRouteEndpoints;
   } = {}) => {
     const run = runRef.current;
     if (!run || !live(run) || !isAdmin || latestView.current.busy || projectPreparationCapture.current || planningCapture.current || lookupCapture.current)
@@ -565,7 +566,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       const objectIds = computedPathObjectIds([], options.endpointObjectIds ?? []);
       if (!objectIds) throw new Error('The assigned locations exceed the viewer object limit.');
       return { pathId: saved.proposalId, points: saved.points, objectIds };
-    }, path => viewer.showComputedPath(path), options.signal);
+    }, path => viewer.showComputedPath(path), options);
   }, [accessFailure, isAdmin, live, projectId, token]);
   const clearStoredRoute = useCallback(() => { runRef.current?.storedRoute?.clear(); }, []);
   return { ...visible, setTrayAssignmentContext, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,

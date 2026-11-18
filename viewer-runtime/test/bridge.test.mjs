@@ -984,6 +984,26 @@ test('partial/missing/ambiguous/non-drawable matches remain occurrence-preservin
   assert.ok(result.warnings.some(warning => warning.code === 'UNMODELLED_CONNECTOR')); f.bridge.dispose();
 });
 
+test('saved route endpoints reach the renderer while the route result keeps its existing shape', async () => {
+  let received;
+  const f = fixture({ showRoute: async (raw, options) => {
+    received = options.endpoints;
+    return { segments: parseRouting(raw).segments.map(() => ({ status: 'found', count: 1, drawable: true })), lineCount: 1 };
+  } });
+  await f.loaded();
+  const endpoints = { from: [15.166498219775821, 70.48999990102271, 13.079999998941831],
+    to: [7.669998219775822, 69.52053115102271, 13.452350005045348] };
+  const rawRouting = '/BC907/BC022/BC021/BC023/SECONDARY';
+  f.send('SHOW_ROUTE', { rawRouting, source: 'cable', cableId: uuid(12), endpoints });
+  await turn();
+  assert.deepEqual(received, endpoints);
+  const result = f.messages('ROUTE_RESULT')[0].payload;
+  assert.equal(result.rawRouting, rawRouting);
+  assert.equal(result.lineCount, 1);
+  assert.equal(Object.hasOwn(result, 'endpoints'), false);
+  f.bridge.dispose();
+});
+
 test('each route reads current cookie-bound published mappings without extending the parent command', async () => {
   let reads = 0;
   const f = fixture({ routingBindings: () => routingBindings({ aggregateId: uuid(7), bindings: [{ routeName: '/A105', rootObjectIds: [`dbid:${++reads + 1}`] }] }) });

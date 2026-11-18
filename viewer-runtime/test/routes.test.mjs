@@ -111,6 +111,55 @@ test('native saved centerlines retain every bend vertex and convert world metres
   assert.deepEqual(visibility.at(-1),{visible:true,states:[]});
 });
 
+test('saved -WG-7308 preview displays its endpoints and written order in an offset, millimetre-scale viewer', async t => {
+  const f = fixture(t);
+  nativeVisibility(f);
+  const unitScale = .001, offset = [5000, 60000, 10000];
+  Object.assign(f.viewer.model, {
+    getUnitScale: () => unitScale, getUpVector: () => [0, 0, 1], getGlobalOffset: () => offset,
+  });
+  let fitted;
+  window.THREE.Box3 = class {
+    points = [];
+    expandByPoint(point) { this.points.push([point.x, point.y, point.z]); return this; }
+  };
+  f.viewer.navigation = { fitBounds(_instant, bounds) { fitted = bounds; } };
+
+  // Saved text and endpoints are from the reported cable. The archived project
+  // trace contains BC022, BC021 and BC023. BC907 is illustrative.
+  const from = [15.166498219775821, 70.48999990102271, 13.079999998941831];
+  const to = [7.669998219775822, 69.52053115102271, 13.452350005045348];
+  const routing = '/BC907/BC022/BC021/BC023/SECONDARY';
+  const trayPaths = {
+    BC907: [[12.199998219775821, 70.9, 14.887499968424255], [17.5, 70.9, 14.887499968424255]],
+    BC022: [[12.199998219775821, 66.90999990102274, 14.887499968424255], [12.199998219775821, 80.49999990102275, 14.887499968424255]],
+    BC021: [[5.249998219775828, 66.3099999010227, 15.337499968424254], [12.009998219775827, 66.3099999010227, 15.337499968424254]],
+    BC023: [[6.999998219775819, 66.91001357289775, 14.887499968424255], [6.999998219775819, 78.75117372914775, 14.887499968424255]],
+  };
+  const published = {
+    ...bindings(), schemaVersion: 'wfc.viewer.routing-bindings.v2', bindings: [],
+    cadBindings: Object.entries(trayPaths).map(([token, pointsMetres]) => ({
+      routeName: '/' + token, paths: [{ pointsMetres, widthMetres: .3 }],
+    })),
+  };
+  const result = await f.controller.showRoute(routing, { routingBindings: published, endpoints: { from, to } });
+  assert.equal(result.lineCount, 1);
+  assert.equal(result.drawableCount, 4);
+  assert.deepEqual(result.diagnostics.groupClips.map(group => group.token), Object.keys(trayPaths));
+  assert.ok(f.facts.meshes.length > 0);
+  assert.ok(f.facts.meshes.every(mesh => mesh.material.options.color === 0xffe600));
+
+  const toDisplay = point => point.map((value, axis) => value / unitScale - offset[axis]);
+  const points = fitted.points;
+  assert.deepEqual(points[0], toDisplay(from));
+  assert.deepEqual(points.at(-1), toDisplay(to));
+  const firstTrayPort = [from[0], trayPaths.BC907[0][1], trayPaths.BC907[0][2]];
+  const lastTrayPort = [trayPaths.BC023[0][0], to[1], trayPaths.BC023[0][2]];
+  for (const [actual, expected] of [[points[1], firstTrayPort], [points.at(-2), lastTrayPort]]) {
+    toDisplay(expected).forEach((value, axis) => assert.ok(Math.abs(actual[axis] - value) < 1e-6));
+  }
+});
+
 test('withdrawn native names cannot reuse a preceding CAD response and unknown names remain missing', async t => {
   const f = fixture(t); Object.assign(f.viewer.model,{getUnitScale:()=>1,getUpVector:()=>[0,0,1],getGlobalOffset:()=>[0,0,0]});
   nativeVisibility(f);

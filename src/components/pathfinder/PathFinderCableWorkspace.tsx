@@ -25,6 +25,7 @@ import { canonicalDecimalString } from '../../../shared/pathfinderLengthLedger';
 import { cableWorkflowReason, PathFinderNeedsRoutingList } from './PathFinderNeedsRoutingList';
 import { PathFinderCableRoutingPanel, type PathFinderCalculationDiagnostics, type StoredEndpointContexts } from './PathFinderCableRoutingPanel';
 import type { PathFinderEndpointForegroundContexts } from '@/pages/ProjectDetails/pathFinderEndpointVisibility';
+import { isCanonicalPoint, type SavedRouteEndpoints } from '../../../viewer-runtime/protocol.mjs';
 
 type Access = { projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null; isAdmin: boolean };
 const automaticUpdatePending = (calculation: CableWorkflowRow['calculation']) => !calculation.acceptedMatchesCurrent
@@ -911,6 +912,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       if(!latest||latest.projectId!==projectId||latest.routing!==routing||String(latest.cableWriteRevision??'')!==String(revision??''))throw Error('The saved route changed. Refresh cable status before showing it.');
       const state = props.pf.data, artifact = state?.artifacts[0];
       const endpointObjectIds = new Set<string>();
+      const points: SavedRouteEndpoints = {};
       for (const end of ['from', 'to'] as const) {
         const context = endpoints[end], scope = context?.current, head = context?.head;
         const logicalName = end === 'from' ? selected.cable.fromLocation : selected.cable.toLocation;
@@ -921,12 +923,17 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
           || scope.modelVersionId !== state.activeModel.modelVersionId || scope.selectionRevision !== state.activeModel.selectionRevision
           || scope.contentFingerprint !== state.activeModel.contentFingerprint || scope.artifactId !== artifact.id
           || scope.modelVersionId !== artifact.modelVersionId || scope.projectionSha256 !== artifact.snapshotSha256) continue;
+        if (head.modelVersionId === scope.modelVersionId && head.artifactId === scope.artifactId
+          && head.aggregateId === scope.aggregateId && head.captureFrameId === scope.captureFrameId
+          && head.projectionSha256 === scope.projectionSha256 && isCanonicalPoint(head.pointProjectMetres))
+          points[end] = [...head.pointProjectMetres];
         const display = context.reopenedObject ?? context.confirmedDisplaySelection;
         const ids = display?.sdkObjectIds ?? (display ? [display.sdkObjectId] : context.confirmedSelection ? [context.confirmedSelection.sdkObjectId] : []);
         for (const id of ids) endpointObjectIds.add(`dbid:${id}`);
       }
       const result=await props.pf.showStoredRoute(routing,cableId,{signal:ticket.signal,cableWriteRevision:revision,
-        designLength:selected.cable.designLength == null ? null : String(selected.cable.designLength), endpointObjectIds:[...endpointObjectIds]});
+        designLength:selected.cable.designLength == null ? null : String(selected.cable.designLength), endpointObjectIds:[...endpointObjectIds],
+        endpoints: points.from || points.to ? points : undefined });
       if(!live())return;
       if(!result){setStoredDisplay({owner,working:false,visible:false,message:'The model display changed. Try Show again when the current model is ready.'});return;}
       if(result.status==='historical'){
@@ -937,7 +944,11 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       const missingModel=result.segments.filter(segment=>segment.model.state==='missing').map(segment=>segment.token);
       const ambiguous=result.segments.filter(segment=>segment.project.state==='ambiguous'||segment.model.state==='ambiguous').map(segment=>segment.token);
       const visible=result.drawableCount>0;
-      const details=[missingProject.length?`Not in Trays: ${missingProject.join(', ')}.`:'',missingModel.length?`Not in the current model: ${missingModel.join(', ')}.`:'',ambiguous.length?`Multiple matches: ${ambiguous.join(', ')}.`:'',result.databaseCheck==='unavailable'?'The project Trays list could not be checked.':''].filter(Boolean).join(' ');
+      const missingEndpoints = [!points.from && 'From', !points.to && 'To'].filter(Boolean);
+      const noGeometry = result.segments.filter(segment => segment.model.state === 'found' && !segment.model.drawable).map(segment => segment.token);
+      const details=[missingProject.length?`Not in Trays: ${missingProject.join(', ')}.`:'',missingModel.length?`Not in the current model: ${missingModel.join(', ')}.`:'',ambiguous.length?`Multiple matches: ${ambiguous.join(', ')}.`:'',result.databaseCheck==='unavailable'?'The project Trays list could not be checked.':'',
+        noGeometry.length ? `No drawable geometry: ${noGeometry.join(', ')}.` : '',
+        visible && missingEndpoints.length ? `No confirmed location in the current model for ${missingEndpoints.join(' and ')}.` : ''].filter(Boolean).join(' ');
       setStoredDisplay({owner,working:false,visible,message:`${visible?'Saved cable route shown using current model trays.':'No drawable trays were found for the saved cable route.'} ${details} This view is approximate; it does not validate barriers or recalculate the saved length.`});
     }catch(error){if(live())setStoredDisplay({owner,working:false,visible:false,message:error instanceof Error?error.message:'The saved cable route could not be shown.'});}
     finally{if(storedDisplayAbort.current===ticket)storedDisplayAbort.current=null;}

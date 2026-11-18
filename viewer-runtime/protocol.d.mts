@@ -39,6 +39,7 @@ export interface ViewerDescriptor {
   entrypoint: 'resources/output/0/0.svf'; resourceCount: number; totalBytes: number;
 }
 export type CanonicalPoint = [number, number, number];
+export interface SavedRouteEndpoints { from?: CanonicalPoint; to?: CanonicalPoint }
 export interface ComputedPath { pathId: string; points: CanonicalPoint[]; objectIds: number[]; routeNames?: string[] }
 export function validateComputedRouteNames(value: unknown): value is string[];
 /** Display-only target in the current protected model load. */

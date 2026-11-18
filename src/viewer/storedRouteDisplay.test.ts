@@ -3,6 +3,7 @@ import { createStoredRouteDisplay } from './storedRouteDisplay';
 import { parseRouteInput } from './routeValidation';
 import { RoutingTrayApiError } from '@/api/routingTrays';
 import type { ViewerEvent, ViewerLoadSnapshot } from './ViewerController';
+import type { SavedRouteEndpoints } from '../../viewer-runtime/protocol.mjs';
 const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 function deferred<T>() { let resolve!:(value:T)=>void; const promise=new Promise<T>(r=>{resolve=r;});return {promise,resolve}; }
 function fixture() {
@@ -26,15 +27,16 @@ describe('saved cable routing display without calculation or writes',()=>{
     expect(draw).toHaveBeenCalledExactlyOnceWith(path); expect(f.fetchTrays).not.toHaveBeenCalled(); expect(f.viewer.showRoute).not.toHaveBeenCalled();
     f.display.clear(); expect(f.viewer.clear).toHaveBeenCalledOnce();
   });
-  it('falls back to current trays only after the historical read reports no verified polyline', async () => {
-    const f=fixture(), draw=vi.fn(), shown=f.display.showSaved('/BC001',id(6),async()=>null,draw);
-    await vi.waitFor(()=>expect(f.viewer.showRoute).toHaveBeenCalledOnce());
+  it('falls back to current trays with the confirmed points when there is no recorded polyline', async () => {
+    const f=fixture(), draw=vi.fn(), endpoints: SavedRouteEndpoints = { from: [2, 3, 4], to: [5, 6, 7] };
+    const shown=f.display.showSaved('/BC001',id(6),async()=>null,draw,{ endpoints });
+    await vi.waitFor(()=>expect(f.viewer.showRoute).toHaveBeenCalledExactlyOnceWith('/BC001','cable',id(6),endpoints));
     f.request.resolve(id(5));f.db.resolve([{id:id(7),projectId:id(2),name:'BC001'}]);f.display.onEvent(f.event());
     expect((await shown)?.status).toBe('complete');expect(draw).not.toHaveBeenCalled();
   });
   it('a cancelled lookup or superseded model cannot paint a historical result or start a tray fallback',async()=>{
     const f=fixture(), path=deferred<null>(), draw=vi.fn(), abort=new AbortController();
-    const shown=f.display.showSaved('/BC001',id(6),()=>path.promise,draw,abort.signal);
+    const shown=f.display.showSaved('/BC001',id(6),()=>path.promise,draw,{ signal: abort.signal });
     abort.abort();expect(await shown).toBeNull();path.resolve(null);await Promise.resolve();
     expect(draw).not.toHaveBeenCalled();expect(f.viewer.showRoute).not.toHaveBeenCalled();
     const next=deferred<null>(), nextShow=f.display.showSaved('/BC001',id(6),()=>next.promise,draw);

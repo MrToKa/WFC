@@ -1,7 +1,7 @@
 import { validateCadProperties, type CadSectionMetadata, type CadSectionRoute } from '../../viewer-runtime/cad-properties.mjs';
 import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
-import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isUuid, isCanonicalPoint, validateComputedRouteNames, validateEnvelope, validateTrayAssignments, type ViewerTrayAssignment, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type PlacementPickOptions, type PlacementPickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
+import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isUuid, isCanonicalPoint, validateComputedRouteNames, validateEnvelope, validateTrayAssignments, type ViewerTrayAssignment, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type SavedRouteEndpoints, type PickedPoint, type PlacementPickOptions, type PlacementPickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateBarrierFrameObservation, barrierFrameObservationHashInput, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
 import { validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl,
@@ -637,7 +637,8 @@ export class ViewerController {
   }
   private onFocus = (): void => { if (!document.hidden) void this.checkSelection(); };
 
-  async showRoute(rawRouting: string, source: 'manual' | 'cable' = 'manual', cableId: string | null = null): Promise<string | null> {
+  async showRoute(rawRouting: string, source: 'manual' | 'cable' = 'manual', cableId: string | null = null,
+    endpoints?: SavedRouteEndpoints): Promise<string | null> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
     this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'PICK_PLACEMENT_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
     this.routeRequestId = null;
@@ -645,7 +646,7 @@ export class ViewerController {
     // Clear immediately, even for malformed input or a superseded access check.
     this.send('CLEAR_ROUTE', { reason: 'selection' }, 'ROUTE_CLEARED');
     if (!await this.checkSelection() || this.disposed || generation !== this.routeGeneration) return null;
-    return this.send('SHOW_ROUTE', { rawRouting, source, cableId }, 'ROUTE_RESULT');
+    return this.send('SHOW_ROUTE', { rawRouting, source, cableId, ...(endpoints ? { endpoints } : {}) }, 'ROUTE_RESULT');
   }
   private routeGeneration = 0;
   /** Render the engine's exact ordered metre points; no browser route fitting. */
