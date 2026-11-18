@@ -86,13 +86,13 @@ namespace AddinRibbon.Routing
                     if (!RoutePoint.IsFinite(length))
                         return RouteResult.Failure("The selected tray geometry contains a length outside the supported coordinate range.");
                     if (length > 0) pieces.Add(new Piece(segmentIndex, start, end, along, length,
-                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent, tray.AllowsSideConnections));
+                        pieces.Count == pieceOffset, tray));
                     vertices.Add(new Vertex(along, start));
                     along += length;
                 }
                 if (pieces.Count == pieceOffset)
                     pieces.Add(new Piece(segmentIndex, tray.Points[0], tray.Points[0], 0, 0,
-                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent, tray.AllowsSideConnections));
+                        true, tray));
                 var lastPiece = pieces[pieces.Count - 1];
                 lastPiece.SetEndPort();
                 pieces[pieces.Count - 1] = lastPiece;
@@ -427,6 +427,26 @@ namespace AddinRibbon.Routing
                 (target.Y - piece.Start.Y) * y + (target.Z - piece.Start.Z) * z) / lengthSquared);
         }
 
+        private static bool IsCadSectionJunction(Piece first, Piece last, double firstFraction,
+            double lastFraction, double distance)
+        {
+            // Gaps between sections of one CAD route join their facing ends.
+            // A diagonal from the opposite end would erase the section from
+            // the cable geometry while still reporting the same route code.
+            if (!IsEndPort(first, firstFraction) || !IsEndPort(last, lastFraction)) return false;
+
+            var firstPoint = firstFraction == 0 ? first.Start : first.End;
+            var lastPoint = lastFraction == 0 ? last.Start : last.End;
+            var firstEnds = first.CadSection.Points;
+            var lastEnds = last.CadSection.Points;
+            double nearestFirst = Math.Min(lastPoint.DistanceTo(firstEnds[0]), lastPoint.DistanceTo(firstEnds[firstEnds.Count - 1]));
+            double nearestLast = Math.Min(firstPoint.DistanceTo(lastEnds[0]), firstPoint.DistanceTo(lastEnds[lastEnds.Count - 1]));
+            return distance <= Math.Min(nearestFirst, nearestLast) + ConnectionGapEpsilonMeters;
+        }
+
+        private static bool IsEndPort(Piece piece, double fraction) =>
+            (fraction == 0 && piece.HasStartPort) || (fraction == 1 && piece.HasEndPort);
+
         private static bool ParallelContactRange(Piece first, Piece last,
             out double lowFirst, out double lowLast, out double highFirst, out double highLast)
         {
@@ -602,20 +622,21 @@ namespace AddinRibbon.Routing
             internal readonly bool EndsOnly, HasStartPort, Independent, AllowsSideConnections;
             internal readonly IReadOnlyList<RouteConnectionPort> VerifiedPorts;
             internal readonly IReadOnlyList<TrayMeshClearance> Surfaces;
+            internal readonly TraySegment CadSection;
             internal bool HasEndPort;
             internal Piece(int segment, RoutePoint start, RoutePoint end, double along, double length,
-                bool endsOnly, bool hasStartPort, IReadOnlyList<RouteConnectionPort> verifiedPorts,
-                IReadOnlyList<TrayMeshClearance> surfaces, bool independent, bool allowsSideConnections)
+                bool hasStartPort, TraySegment tray)
             {
                 Segment = segment; Start = start; End = end; Along = along; Length = length;
                 Bounds = new Bounds(start, end);
-                EndsOnly = endsOnly; HasStartPort = hasStartPort; HasEndPort = false;
-                Independent = independent;
-                AllowsSideConnections = allowsSideConnections;
-                VerifiedPorts = verifiedPorts;
-                Surfaces = surfaces;
-                if (surfaces.Count != 0 && (!endsOnly || hasStartPort))
-                    Bounds = Bounds.Union(Bounds, new Bounds(surfaces[0].Minimum, surfaces[0].Maximum));
+                EndsOnly = tray.ConnectionsAtEndsOnly; HasStartPort = hasStartPort; HasEndPort = false;
+                Independent = tray.Independent;
+                AllowsSideConnections = tray.AllowsSideConnections;
+                CadSection = tray.Id.StartsWith("cad:", StringComparison.Ordinal) ? tray : null;
+                VerifiedPorts = tray.VerifiedPorts;
+                Surfaces = tray.ConnectionSurfaces;
+                if (Surfaces.Count != 0 && (!EndsOnly || hasStartPort))
+                    Bounds = Bounds.Union(Bounds, new Bounds(Surfaces[0].Minimum, Surfaces[0].Maximum));
             }
             internal void SetEndPort()
             {
@@ -674,6 +695,9 @@ namespace AddinRibbon.Routing
                 double distance = firstPoint.DistanceTo(lastPoint);
                 bool provenContact = ProvenPortContact(first, last, firstPoint, lastPoint);
                 if (provenContact) return Link(first, last, firstFraction, lastFraction, 0, tolerance);
+                if (distance > ConnectionGapEpsilonMeters && first.CadSection != null && last.CadSection != null &&
+                    StringComparer.OrdinalIgnoreCase.Equals(first.CadSection.RouteCode, last.CadSection.RouteCode) &&
+                    !IsCadSectionJunction(first, last, firstFraction, lastFraction, distance)) return true;
                 var firstSurface = Surface(first, firstFraction);
                 var lastSurface = Surface(last, lastFraction);
                 if (firstSurface != null && lastSurface != null)

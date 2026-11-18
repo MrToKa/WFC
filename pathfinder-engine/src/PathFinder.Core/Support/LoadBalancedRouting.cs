@@ -113,13 +113,13 @@ namespace AddinRibbon.Routing
                     if (!RoutePoint.IsFinite(length))
                         return RouteResult.Failure("The selected tray geometry contains a length outside the supported coordinate range.");
                     if (length > 0) pieces.Add(new Piece(segmentIndex, start, end, along, length,
-                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent, tray.AllowsSideConnections));
+                        pieces.Count == pieceOffset, tray));
                     vertices.Add(new Vertex(along, start));
                     along += length;
                 }
                 if (pieces.Count == pieceOffset)
                     pieces.Add(new Piece(segmentIndex, tray.Points[0], tray.Points[0], 0, 0,
-                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent, tray.AllowsSideConnections));
+                        true, tray));
                 var lastPiece = pieces[pieces.Count - 1];
                 lastPiece.SetEndPort();
                 pieces[pieces.Count - 1] = lastPiece;

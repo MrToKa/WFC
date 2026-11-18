@@ -28,6 +28,7 @@ internal static class Program
             Run("Physical bend ports retain all curve vertices and interior object attachment", PhysicalBendPorts);
             Run("Port-only segments retain port projections, gaps and paired curves", PortContacts);
             Run("BC903 reaches the interior of the current BC027-2 straight", CadSideJunction);
+            Run("BC904 traverses the vertical section before joining the horizontal section", CadSectionJunction);
             Run("Shorter physical cable wins over a longer one-gap corridor", ConnectionGapCountPreference);
             Run("Shorter physical cable wins over a smaller summed gap distance", ConnectionGapDistancePreference);
             Run("Tied gap count and gap distance choose the shortest cable", ConnectionGapLengthTiebreaker);
@@ -342,6 +343,36 @@ internal static class Program
         Assert(TraySegment.IsStraightCenterline(new[] { P(0), P(1), P(1), P(2) }), "Repeated collinear stations lost their straight CAD classification.");
         Throws<ArgumentException>(() => new TraySegment("curve", "C", CableCategory.Control, QuarterCurve(), true, null, null, false, true));
         Throws<ArgumentException>(() => new TraySegment("isolated", "I", CableCategory.Control, new[] { P(0), P(1) }, true, null, null, true, true));
+    }
+
+    private static void CadSectionJunction()
+    {
+        var from = new RoutePoint(10.633498219775824, 80.5099999010227, 17.079999968424254);
+        var bottom = new RoutePoint(10.4, 80.32, 17.53);
+        var top = new RoutePoint(10.4, 80.32, 18.83);
+        var start = new RoutePoint(10.55, 80.13, 18.63);
+        var end = new RoutePoint(12.6, 80.13, 18.63);
+        var vertical = new TraySegment("cad:vertical", "/BC904", CableCategory.Control,
+            new[] { bottom, top }, true, null, null, false, true);
+        var horizontal = new TraySegment("cad:horizontal", "/BC904", CableCategory.Control,
+            new[] { start, end }, true, null, null, false, true);
+        var options = new RoutingOptions { ConnectionToleranceMeters = 1.2, SecondaryDistanceMeters = 7 };
+        Assert(bottom.DistanceTo(start) < options.ConnectionToleranceMeters, "Fixture must admit an unrestricted diagonal.");
+        foreach (var trays in new[] { new[] { vertical, horizontal }, new[] { horizontal, vertical } })
+        {
+            var route = Calculator.Calculate(trays, from, end, CableCategory.Control, options);
+            Assert(route.Success && route.RouteText == "/BC904", route.Message);
+            var points = route.PathPoints;
+            Assert(points.Any(point => point.DistanceTo(top) < 1e-8),
+                "The cable must reach the top of the vertical section. Actual stations: " +
+                string.Join(", ", points.Select(point => $"({point.X}, {point.Y}, {point.Z})")));
+            var reverse = Calculator.Calculate(trays, end, from, CableCategory.Control, options);
+            Assert(reverse.Success && reverse.PathPoints.SequenceEqual(points.Reverse()), "BC904 must use the same junction in reverse.");
+            var checkedRoute = Calculator.CalculateConstrained(trays, from, end, CableCategory.Control,
+                (a, b, token) => new RouteCollisionObservation(RouteCollisionStatus.Clear, null, "", 0), options);
+            Assert(checkedRoute.Status == ConstrainedRouteStatus.Clear && checkedRoute.Route.PathPoints.SequenceEqual(points),
+                "Obstacle checking must retain the full BC904 section.");
+        }
     }
 
     private static TraySegment Port(string id, string code, params RoutePoint[] points)
