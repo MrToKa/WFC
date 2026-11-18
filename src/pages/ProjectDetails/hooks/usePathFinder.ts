@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, parsePathFinderProposal, pathFinderRequest, submitPathFinderCalculation, PathFinderApiError, type PathFinderCalculationSubmission, type PathFinderState, type PathFinderProposal, type PathFinderPreferences, type PathFinderPreviewInput } from '@/api/pathfinder';
 import { fetchPreparationContext } from '@/api/pathfinderPreparation';
+import { computedPathObjectIds } from '../pathFinderEndpointVisibility';
 import { trayAssignmentSnapshot } from '@/viewer/trayAssignmentSnapshot';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
@@ -537,7 +538,9 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     try { runRef.current?.viewer?.clear('user', { preserveCamera: options.preserveCamera !== false }); }
     catch { /* A terminal viewer is already closed. */ }
   }, []);
-  const showStoredRoute = useCallback((rawRouting: string, cableId: string, options: {signal?:AbortSignal; cableWriteRevision?:string; designLength?:string | null} = {}) => {
+  const showStoredRoute = useCallback((rawRouting: string, cableId: string, options: {
+    signal?: AbortSignal; cableWriteRevision?: string; designLength?: string | null; endpointObjectIds?: readonly string[];
+  } = {}) => {
     const run = runRef.current;
     if (!run || !live(run) || !isAdmin || latestView.current.busy || projectPreparationCapture.current || planningCapture.current || lookupCapture.current)
       return Promise.resolve(null);
@@ -559,7 +562,9 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         || active.contentFingerprint !== scope.contentFingerprint || artifact.modelVersionId !== scope.modelVersionId
         || artifact.id !== scope.artifactId || artifact.snapshotSha256 !== scope.projectionSha256)
         throw new Error('The saved route or model changed. Refresh the cable before showing its path.');
-      return {pathId: saved.proposalId, points: saved.points, objectIds: []};
+      const objectIds = computedPathObjectIds([], options.endpointObjectIds ?? []);
+      if (!objectIds) throw new Error('The assigned locations exceed the viewer object limit.');
+      return { pathId: saved.proposalId, points: saved.points, objectIds };
     }, path => viewer.showComputedPath(path), options.signal);
   }, [accessFailure, isAdmin, live, projectId, token]);
   const clearStoredRoute = useCallback(() => { runRef.current?.storedRoute?.clear(); }, []);

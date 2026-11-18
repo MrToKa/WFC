@@ -188,6 +188,17 @@ describe('exact selected-cable calculation failure diagnostics', () => {
 });
 
 describe('showing the popup From/To locations without changing them', () => {
+  it('waits for endpoint reads before showing a recorded route and keeps the independently verified end', async () => {
+    assignment.from.context = context('from','confirmed'); assignment.to.context = context('to','confirmed'); assignment.to.busy = true;
+    const p = props(); p.cable!.cable.routing = '/BC903/BC027-2/SECONDARY';
+    const view = render(<PathFinderCableRoutingPanel {...p} storedRouteSelected pathReady />);
+    const show = screen.getByRole('button',{name:'Show'});
+    expect(show).toBeDisabled();
+    assignment.to.busy = false; assignment.to.context = null; assignment.to.error = 'Endpoint unavailable';
+    view.rerender(<PathFinderCableRoutingPanel {...p} storedRouteSelected pathReady />);
+    await act(async () => { fireEvent.click(show); });
+    expect(p.onTogglePath).toHaveBeenCalledWith({from: assignment.from.context});
+  });
   it('places Show location beside each Assign button and shows each saved object independently', async () => {
     assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
     const show = vi.fn(async () => true), p = props(); render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);

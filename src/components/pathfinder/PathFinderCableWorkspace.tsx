@@ -23,7 +23,7 @@ import { pathFinderWorkflowDisplayScope } from '@/pages/ProjectDetails/PathFinde
 import { policyUuidSchema } from '../../../shared/pathfinderPurposePolicy';
 import { canonicalDecimalString } from '../../../shared/pathfinderLengthLedger';
 import { cableWorkflowReason, PathFinderNeedsRoutingList } from './PathFinderNeedsRoutingList';
-import { PathFinderCableRoutingPanel, type PathFinderCalculationDiagnostics } from './PathFinderCableRoutingPanel';
+import { PathFinderCableRoutingPanel, type PathFinderCalculationDiagnostics, type StoredEndpointContexts } from './PathFinderCableRoutingPanel';
 import type { PathFinderEndpointForegroundContexts } from '@/pages/ProjectDetails/pathFinderEndpointVisibility';
 
 type Access = { projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null; isAdmin: boolean };
@@ -885,7 +885,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const preferStoredRoute=Boolean(typeof props.pf.showStoredRoute==='function'&&currentStoredRouting&&(!displayMatches||props.display?.routing!==currentStoredRouting));
   const storedDisplayReady=Boolean(props.active&&open&&currentStoredRouting&&props.pf.viewerPhase==='ready'&&!refreshingSelected&&!selectedReadError&&!props.pf.busy);
   const ownedStoredDisplay=storedDisplay?.owner===storedDisplayOwner?storedDisplay:null;
-  const toggleStoredRoute=async()=>{
+  const toggleStoredRoute=async(endpoints: StoredEndpointContexts = {})=>{
     const projectId=props.projectId;
     if(!projectId||!selected||!currentStoredRouting||!storedDisplayReady)return;
     if(ownedStoredDisplay?.visible){storedDisplayAbort.current?.abort();props.pf.clearStoredRoute();setStoredDisplay(null);return;}
@@ -897,7 +897,24 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       const latest=(await fetchCableRows(projectId,[cableId])).cables.find(cable=>cable.id===cableId);
       if(!live())return;
       if(!latest||latest.projectId!==projectId||latest.routing!==routing||String(latest.cableWriteRevision??'')!==String(revision??''))throw Error('The saved route changed. Refresh cable status before showing it.');
-      const result=await props.pf.showStoredRoute(routing,cableId,{signal:ticket.signal,cableWriteRevision:revision,designLength:selected.cable.designLength == null ? null : String(selected.cable.designLength)});
+      const state = props.pf.data, artifact = state?.artifacts[0];
+      const endpointObjectIds = new Set<string>();
+      for (const end of ['from', 'to'] as const) {
+        const context = endpoints[end], scope = context?.current, head = context?.head;
+        const logicalName = end === 'from' ? selected.cable.fromLocation : selected.cable.toLocation;
+        if (!context?.canBind || !scope || !head || !context.location || !artifact || !state
+          || context.end !== end || context.projectId !== projectId || context.cableId !== cableId
+          || context.cableWriteRevision !== revision || context.logicalKey !== logicalName?.normalize('NFC').trim().toUpperCase()
+          || head.status !== 'confirmed' || head.locationRevision !== context.location.revision
+          || scope.modelVersionId !== state.activeModel.modelVersionId || scope.selectionRevision !== state.activeModel.selectionRevision
+          || scope.contentFingerprint !== state.activeModel.contentFingerprint || scope.artifactId !== artifact.id
+          || scope.modelVersionId !== artifact.modelVersionId || scope.projectionSha256 !== artifact.snapshotSha256) continue;
+        const display = context.reopenedObject ?? context.confirmedDisplaySelection;
+        const ids = display?.sdkObjectIds ?? (display ? [display.sdkObjectId] : context.confirmedSelection ? [context.confirmedSelection.sdkObjectId] : []);
+        for (const id of ids) endpointObjectIds.add(`dbid:${id}`);
+      }
+      const result=await props.pf.showStoredRoute(routing,cableId,{signal:ticket.signal,cableWriteRevision:revision,
+        designLength:selected.cable.designLength == null ? null : String(selected.cable.designLength), endpointObjectIds:[...endpointObjectIds]});
       if(!live())return;
       if(!result){setStoredDisplay({owner,working:false,visible:false,message:'The model display changed. Try Show again when the current model is ready.'});return;}
       if(result.status==='historical'){
@@ -980,7 +997,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
         && calculationDiagnostics.model === modelScope(props) && calculationDiagnostics.value.cableId === selected?.cable.id
         && calculationDiagnostics.value.jobId === selected?.calculation.jobId ? calculationDiagnostics.value : null}
       onRefresh={() => { void progress.refresh(); return refreshCableStatus(); }} refreshing={refreshingSelected || refreshingState} refreshError={selectedReadError}
-      onTogglePath={preferStoredRoute?()=>void toggleStoredRoute():selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
+      onTogglePath={preferStoredRoute?toggleStoredRoute:selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
       onShowLocation={props.pf.viewerPhase === 'ready' ? props.pf.showLocation : undefined}
       onShowLocationPoint={props.pf.viewerPhase === 'ready' ? props.pf.showLocationPoint : undefined}
       onEndpointForegroundContexts={props.onEndpointForegroundContexts}

@@ -74,10 +74,11 @@ describe('published Routings builder geometry in Path Finder', () => {
     const view=mount();await waitFor(()=>expect(facts.instances).toBe(1));
     act(()=>facts.events[0]({type:'MODEL_LOADED',payload:{}}));
     facts.showComputedPath.mockResolvedValue(locationId);
-    const show=()=>view.result.current.showStoredRoute('/RECORDED',locationId,{cableWriteRevision:'7',designLength:'18'});
+    const show=()=>view.result.current.showStoredRoute('/RECORDED',locationId,{cableWriteRevision:'7',designLength:'18',
+      endpointObjectIds:['dbid:27','dbid:53','dbid:27']});
     if(scenario==='verified'){
       await expect(show()).resolves.toEqual({status:'historical'});
-      expect(facts.showComputedPath).toHaveBeenCalledExactlyOnceWith({pathId:locationId,objectIds:[],points:[[1,2,3],[4,5,6],[7,8,9]]});
+      expect(facts.showComputedPath).toHaveBeenCalledExactlyOnceWith({pathId:locationId,objectIds:[27,53],points:[[1,2,3],[4,5,6],[7,8,9]]});
     }else{
       await expect(show()).rejects.toThrow('saved route or model changed');
       expect(facts.showComputedPath).not.toHaveBeenCalled();

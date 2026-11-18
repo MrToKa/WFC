@@ -12,7 +12,7 @@ import { usePathfinderLocationImpactProgress } from '@/hooks/usePathfinderLocati
 import { usePathfinderInitialFillProgress } from '@/hooks/usePathfinderInitialFillProgress';
 import { cableWorkflowRowSchema, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import { endpointBindingFixture } from '@/test/endpointBindingFixtures';
-import type { CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
+import type { CableEndpointContext, CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
 import { emptyInitialFillCounters, type InitialFillProgress } from '../../../shared/pathfinderInitialFillProgress';
 import type { BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
 import { pathFinderWorkflowDisplayScope, type PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
@@ -83,6 +83,32 @@ describe('explicit cable status recovery', () => {
     await waitFor(()=>expect(show).toHaveBeenCalledWith('/MANUAL',id(3),expect.objectContaining({signal:expect.any(AbortSignal)})));
     expect(panelProps.pathVisible).toBe(true);expect(panelProps.storedRouteMessage).toContain('does not validate barriers');
     expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
+  it.each(['both', 'different cable', 'different revision', 'different preparation'] as const)('shows verified equipment groups for each matching saved end (%s)', async scenario => {
+    listRow.cable.routing='/BC903/BC027-2/SECONDARY';listRow.cable.designLength='21';
+    const p=props(), show=vi.fn(async()=>({status:'historical' as const}));
+    p.pf.showStoredRoute=show; p.pf.clearStoredRoute=vi.fn();
+    const fixture = endpointBindingFixture(), current = fixture.context.current!;
+    p.pf.data!.artifacts = [{ id: current.artifactId, modelVersionId: current.modelVersionId, snapshotSha256: current.projectionSha256 }] as NonNullable<typeof p.pf.data>['artifacts'];
+    const savedEnd = (end: 'from' | 'to', sdkObjectIds: number[]): CableEndpointContext => {
+      const head = { ...fixture.binding, projectId:p.projectId! };
+      const logicalName = end === 'from' ? listRow.cable.fromLocation! : listRow.cable.toLocation!;
+      return { schemaVersion:'wfc.pf.cable-endpoint-context.v1', projectId:p.projectId!, cableId:listRow.cable.id,
+        logicalName, logicalKey:logicalName.toUpperCase(), end, cableWriteRevision:listRow.cable.cableWriteRevision,
+        canBind:true, reasonCodes:[], mto:listRow.mto, registryRevision:'2', contextSha256:'c'.repeat(64), head,
+        location:fixture.context.location!, current, reopenedObject: { sdkObjectId:sdkObjectIds[0], sdkObjectIds,
+          bindingId:head.id, bindingContentSha256:head.contentSha256, current } };
+    };
+    const from = savedEnd('from',[651,652]), to = savedEnd('to',[652,701]);
+    if (scenario === 'different cable') to.cableId = id(99);
+    if (scenario === 'different revision') to.cableWriteRevision = '99';
+    if (scenario === 'different preparation') to.current = {...current, artifactId:id(99)};
+    vi.mocked(fetchCableRows).mockResolvedValue({cables:[{id:listRow.cable.id,projectId:p.projectId,routing:listRow.cable.routing,cableWriteRevision:listRow.cable.cableWriteRevision}]}as never);
+    render(<PathFinderCableWorkspace {...p}/>);await openListCable();
+    await act(async()=>{await panelProps.onTogglePath?.({from,to});});
+    await waitFor(()=>expect(show).toHaveBeenCalledWith(listRow.cable.routing, listRow.cable.id, expect.objectContaining({
+      endpointObjectIds: scenario === 'both' ? ['dbid:651','dbid:652','dbid:701'] : ['dbid:651','dbid:652'],
+    })));
   });
   it('labels recorded geometry as historical and submits no calculation',async()=>{
     listRow.cable.routing='/RECORDED';listRow.cable.designLength='18';

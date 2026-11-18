@@ -24,11 +24,12 @@ export type PathFinderCalculationDiagnostics = {
   jobFailure: string | null; readError: string | null;
   proposalId?: string | null;
 };
+export type StoredEndpointContexts = Partial<Pick<PathFinderEndpointForegroundContexts, 'from' | 'to'>>;
 export type PathFinderCableRoutingPanelProps = {
   access: Omit<CableEndpointPairSelectionAccess, 'cableId'>;
   requestedPopup?: FloatingCableWindowRequest | null;
   cable: CableWorkflowRow | null; open: boolean; onClose: () => void; anchor?: HTMLElement | null;
-  onCalculate?: () => void | Promise<void>; onTogglePath?: () => void;
+  onCalculate?: () => void | Promise<void>; onTogglePath?: (endpoints?: StoredEndpointContexts) => void;
   onShowLocation?: (sdkObjectId: number, sdkObjectIds?: number[]) => Promise<boolean>;
   onShowLocationPoint?: (point: CanonicalPoint, current: EndpointCurrentScope) => Promise<boolean>;
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
@@ -144,6 +145,18 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     && start.current && end.current && JSON.stringify(start.current) === JSON.stringify(end.current)
     && model && start.current.modelVersionId === model.modelVersionId && start.current.selectionRevision === model.selectionRevision
     && start.current.contentFingerprint === model.contentFingerprint && access.accountId && access.projectId && access.token);
+  const readingStoredEndpoints = storedRouteSelected && (from.busy || to.busy || assignment.refreshPhase === 'reading' || assignment.refreshPhase === 'requested');
+  function togglePath() {
+    if (!storedRouteSelected || pathVisible) { onTogglePath?.(); return; }
+    const endpoints: StoredEndpointContexts = {};
+    if (active && assignment.enabled && !assignment.retired && !assignment.error && !assignment.busy && !pending && !legacyRecovery) {
+      for (const [end, state] of [['from', from], ['to', to]] as const) {
+        if (state.enabled && !state.error && !state.busy && !state.draft && state.context?.canBind && state.context.head?.status === 'confirmed')
+          endpoints[end] = state.context;
+      }
+    }
+    onTogglePath?.(endpoints);
+  }
   const foregroundKey = foregroundReady ? JSON.stringify([displayScope, start!.contextSha256, end!.contextSha256]) : null;
   const foregroundLatest = useRef<PathFinderEndpointForegroundContexts | null>(null);
   foregroundLatest.current = foregroundReady ? { projectId: access.projectId!, accountId: access.accountId!, token: access.token!,
@@ -329,7 +342,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         </details> : null}
         <div className={styles.actions}>
           <Button disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || Boolean(currentReview?.pending) || unsaved || endpointReadUnavailable || calculationPending || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
-          <Button disabled={busy || storedRouteWorking || !onTogglePath || !pathVisible && (!pathReady || refreshing || Boolean(refreshError) || !storedRouteSelected&&(unsaved || calculationPending || endpointReadUnavailable || savedExactPending))} aria-pressed={pathVisible} onClick={onTogglePath}>{storedRouteWorking?'Showing saved route…':pathVisible ? 'Hide' : 'Show'}</Button>
+          <Button disabled={busy || storedRouteWorking || !onTogglePath || !pathVisible && (readingStoredEndpoints || !pathReady || refreshing || Boolean(refreshError) || !storedRouteSelected&&(unsaved || calculationPending || endpointReadUnavailable || savedExactPending))} aria-pressed={pathVisible} onClick={togglePath}>{storedRouteWorking?'Showing saved route…':pathVisible ? 'Hide' : 'Show'}</Button>
           <Button appearance="primary" disabled={busy || Boolean(pending) || !assignment.canSave} onClick={() => void assignment.save('Confirm cable From/To model assignments.')}>Save</Button>
         </div>
         {calculationBlockedReason ? <p role="status" className={styles.note}>{calculationBlockedReason}</p> : null}
