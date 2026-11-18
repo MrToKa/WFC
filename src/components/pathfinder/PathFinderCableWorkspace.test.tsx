@@ -84,6 +84,33 @@ describe('explicit cable status recovery', () => {
     expect(panelProps.pathVisible).toBe(true);expect(panelProps.storedRouteMessage).toContain('does not validate barriers');
     expect(p.pf.submitCalculation).not.toHaveBeenCalled();
   });
+  it.each([503, 401, 403, 404])('independently checks the saved route after a status read returns %s', async status => {
+    const p = props(), show = vi.fn(async () => ({ status: 'historical' as const }));
+    p.pf.showStoredRoute = show;
+    p.pf.clearStoredRoute = vi.fn();
+    listRow = calculatedRow();
+    listRow.cable.routing = '/BC905/BC023/BC023-1';
+    listRow.cable.designLength = '22';
+    vi.mocked(fetchCableRows).mockResolvedValue({ cables: [{ ...listRow.cable, projectId: p.projectId }] } as never);
+    render(<PathFinderCableWorkspace {...p} review={reviewController(id(3), id(80))} />);
+    await openListCable();
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValue(Object.assign(new Error('Status unavailable'), { status }));
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(panelProps.refreshError).toContain('could not be refreshed');
+    expect(panelProps.storedRouteSelected).toBe(true);
+    expect(panelProps.pathReady).toBe(status === 503);
+    expect(panelProps.review).toBeNull();
+    await act(async () => { await panelProps.onTogglePath?.(); });
+    if (status === 503) {
+      expect(fetchCableRows).toHaveBeenCalledExactlyOnceWith(p.projectId, [listRow.cable.id]);
+      expect(show).toHaveBeenCalledWith(listRow.cable.routing, listRow.cable.id, expect.objectContaining({ designLength: '22' }));
+      expect(panelProps.pathVisible).toBe(true);
+    } else {
+      expect(fetchCableRows).not.toHaveBeenCalled();
+      expect(show).not.toHaveBeenCalled();
+    }
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
   it.each(['both', 'different cable', 'different revision', 'different preparation'] as const)('shows verified equipment groups for each matching saved end (%s)', async scenario => {
     listRow.cable.routing='/BC903/BC027-2/SECONDARY';listRow.cable.designLength='21';
     const p=props(), show=vi.fn(async()=>({status:'historical' as const}));

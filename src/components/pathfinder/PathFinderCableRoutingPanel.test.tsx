@@ -705,6 +705,16 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Show' })); expect(p.onTogglePath).not.toHaveBeenCalled();
   });
+  it('lets Show check and display the saved route when calculation status could not be refreshed', () => {
+    const p = props();
+    p.cable!.cable.routing = '/BC905/BC023/BC023-1';
+    render(<PathFinderCableRoutingPanel {...p} storedRouteSelected pathReady refreshError="Status unavailable" />);
+    const show = screen.getByRole('button', { name: 'Show' });
+    expect(show).toBeEnabled();
+    fireEvent.click(show);
+    expect(p.onTogglePath).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+  });
   it('refreshes From/To once after a replacement result and waits for an existing draft before doing so', () => {
     const p = props(), view = render(<PathFinderCableRoutingPanel {...p} endpointRefreshKey={0} />);
     expect(assignment.refresh).not.toHaveBeenCalled();

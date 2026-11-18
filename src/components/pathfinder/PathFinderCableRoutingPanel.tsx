@@ -343,7 +343,9 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         </details> : null}
         <div className={styles.actions}>
           <Button disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || Boolean(currentReview?.pending) || unsaved || endpointReadUnavailable || calculationPending || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
-          <Button disabled={busy || storedRouteWorking || !onTogglePath || !pathVisible && (readingStoredEndpoints || !pathReady || refreshing || Boolean(refreshError) || !storedRouteSelected&&(unsaved || calculationPending || endpointReadUnavailable || savedExactPending))} aria-pressed={pathVisible} onClick={togglePath}>{storedRouteWorking?'Showing saved route…':pathVisible ? 'Hide' : 'Show'}</Button>
+          <Button disabled={busy || storedRouteWorking || !onTogglePath || !pathVisible && (!pathReady || refreshing
+            || (storedRouteSelected ? readingStoredEndpoints : Boolean(refreshError) || unsaved || calculationPending || endpointReadUnavailable || savedExactPending))}
+          aria-pressed={pathVisible} onClick={togglePath}>{storedRouteWorking?'Showing saved route…':pathVisible ? 'Hide' : 'Show'}</Button>
           <Button appearance="primary" disabled={busy || Boolean(pending) || !assignment.canSave} onClick={() => void assignment.save('Confirm cable From/To model assignments.')}>Save</Button>
         </div>
         {calculationBlockedReason ? <p role="status" className={styles.note}>{calculationBlockedReason}</p> : null}

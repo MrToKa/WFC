@@ -146,7 +146,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const verifiedRefreshScope = useRef<{ scope: string; cableId: string; jobId: string | null; proposalId: string | null; proposalHash: string | null } | null>(null);
   const [impact, setImpact] = useState<Impact | null>(null), [revision, setRevision] = useState(0), [notice, setNotice] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
-  const [refreshingSelected, setRefreshingSelected] = useState(false), [selectedReadError, setSelectedReadError] = useState<string | null>(null);
+  const [refreshingSelected, setRefreshingSelected] = useState(false);
+  const [selectedReadFailure, setSelectedReadError] = useState<{ message: string; blocksSavedRoute: boolean } | null>(null);
+  const selectedReadError = selectedReadFailure?.message ?? null;
   const [refreshingState, setRefreshingState] = useState(false);
   const manualRefresh = useRef<AbortController | null>(null);
   const metadataCommit = useRef<{ ticket: AbortController; scope: string; resolve: () => void } | null>(null);
@@ -324,8 +326,12 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       } else if (saved?.cableId === row.cable.id && retryResult) { const resumed = { ...saved, reading: true }; savedCalculationRef.current = resumed; setSavedCalculation(resumed); }
     } catch (error) { if (alive.current && !ticket.signal.aborted && read.current === ticket) {
       const message = 'The cable could not be refreshed. Last read values are retained; refresh again before reviewing or applying a result.';
-      setSelectedReadError(message);
-      if (error && typeof error === 'object' && 'status' in error && [401, 403].includes(Number(error.status))) authorityLost();
+      const status = error && typeof error === 'object' && 'status' in error ? Number(error.status) : null;
+      const accessLost = status === 401 || status === 403;
+      setSelectedReadError(previous => ({
+        message, blocksSavedRoute: Boolean(previous?.blocksSavedRoute || accessLost || status === 404),
+      }));
+      if (accessLost) authorityLost();
     } }
     finally { if (read.current === ticket) { read.current = null; if (alive.current) setRefreshingSelected(false); } }
   }, [rememberSubmission, rememberFeedback, authorityLost, deferDiagnostics]);
@@ -390,7 +396,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       && row.calculation.proposalId === verified.proposalId && row.calculation.proposalHash === verified.proposalHash) {
       setSelectedReadError(null); return;
     }
-    if (selectedRef.current) setSelectedReadError('The current model or route settings changed. Refresh this cable before reviewing or applying its result.');
+    if (selectedRef.current) setSelectedReadError(previous => ({
+      message: 'The current model or route settings changed. Refresh this cable before reviewing or applying its result.',
+      blocksSavedRoute: previous?.blocksSavedRoute ?? false,
+    }));
   }, [selectedReadScope]);
   useEffect(() => {
     const pending = metadataCommit.current;
@@ -884,12 +893,14 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const displayMatches = displaySourceMatches && Boolean(props.display?.ready);
   const currentStoredRouting=selected?.cable.routing?.trim()?selected.cable.routing:null;
   const preferStoredRoute=Boolean(typeof props.pf.showStoredRoute==='function'&&currentStoredRouting&&(!displayMatches||props.display?.routing!==currentStoredRouting));
-  const storedDisplayReady=Boolean(props.active&&open&&currentStoredRouting&&props.pf.viewerPhase==='ready'&&!refreshingSelected&&!selectedReadError&&!props.pf.busy);
+  // Saved Show checks a fresh Cable List row before drawing. Calculation
+  // status can be unavailable independently of that read.
+  const storedDisplayReady=Boolean(panelActive&&open&&currentStoredRouting&&!refreshingSelected&&!selectedReadFailure?.blocksSavedRoute&&!props.pf.busy);
   const ownedStoredDisplay=storedDisplay?.owner===storedDisplayOwner?storedDisplay:null;
   const toggleStoredRoute=async(endpoints: StoredEndpointContexts = {})=>{
     const projectId=props.projectId;
-    if(!projectId||!selected||!currentStoredRouting||!storedDisplayReady)return;
     if(ownedStoredDisplay?.visible){storedDisplayAbort.current?.abort();props.pf.clearStoredRoute();setStoredDisplay(null);return;}
+    if(!projectId||!selected||!currentStoredRouting||!storedDisplayReady)return;
     const owner=storedDisplayOwner,cableId=selected.cable.id,routing=currentStoredRouting,revision=selected.cable.cableWriteRevision;
     const ticket=new AbortController();storedDisplayAbort.current?.abort();storedDisplayAbort.current=ticket;
     const live=()=>!ticket.signal.aborted&&storedDisplayLive.current===owner;
