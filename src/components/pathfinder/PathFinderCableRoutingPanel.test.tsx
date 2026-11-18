@@ -763,6 +763,16 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
     expect(p.onCalculate).not.toHaveBeenCalled(); expect(p.onTogglePath).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
   });
+  it('warns next to the saved route when its recorded Model version differs from the active selection', () => {
+    const p = props();
+    p.cable!.cable.routing = '/SAVED';
+    const view = render(<PathFinderCableRoutingPanel {...p} />);
+    expect(screen.queryByText(/selected 3D model version has changed/)).toBeNull();
+    view.rerender(<PathFinderCableRoutingPanel {...p} cable={{ ...p.cable!, savedRouteModelChanged: true }} />);
+    expect(screen.getByText(/selected 3D model version has changed/)).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Cable routing' })).toHaveValue('/SAVED');
+    expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+  });
   it('retains the saved route after obstacle changes with an actionable Show message instead of an indefinite loading claim', () => {
     const p = props(); p.cable!.cable.routing = '/SAVED'; p.cable!.cable.designLength = '58';
     p.cable!.calculation.outcome = 'calculated'; p.cable!.calculation.currentness = 'changed';

@@ -10,7 +10,7 @@ import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 import { supportedBarrierAdmissionIntentSchema } from '../../shared/pathfinderBarrierSupported.js';
 import { PathFinderError } from './errors.js';
 
-const mocks = vi.hoisted(() => ({ tx: vi.fn(), common: vi.fn(), barrierCommon: vi.fn(), heads: vi.fn(), automatic: vi.fn(), verified: vi.fn(), reviewable: vi.fn(), accepted: vi.fn(), savedExactDisplay: vi.fn() }));
+const mocks = vi.hoisted(() => ({ tx: vi.fn(), common: vi.fn(), barrierCommon: vi.fn(), heads: vi.fn(), automatic: vi.fn(), verified: vi.fn(), reviewable: vi.fn(), accepted: vi.fn(), savedExactDisplay: vi.fn(), writtenProposal: vi.fn() }));
 vi.mock('./cableWorkflowRead.js', () => ({ cableWorkflowReadTransaction: mocks.tx }));
 vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectCommonCalculationInputs: mocks.common, collectBarrierCommonCalculationInputs: mocks.barrierCommon,
   createCablePurposeRoutingReader:async()=>((purpose:unknown)=>purpose==='Control'?{purpose:'Control',allowedRouteCodes:['/B001']}:null),
@@ -18,7 +18,7 @@ vi.mock('./dependencies.js', async original => ({ ...await original<typeof impor
   freezeCableDependenciesForVersion: (common: object, cable: Record<string, unknown>) => ({ cable, status: 'ready', message: '', dependencies: { ...common, cableId: cable.id, cableWriteRevision: cable.cable_write_revision } }) }));
 vi.mock('./endpointBindingRepository.js', () => ({ readCurrentEndpointBindingContext: vi.fn(async () => null), readNeededEndpointBindingHeads: mocks.heads }));
 vi.mock('./automaticEndpointCandidates.js', () => ({ readAutomaticEndpointCandidates: mocks.automatic }));
-vi.mock('./cableWorkflowProof.js', () => ({ createCableWorkflowProofReader: () => ({ verified: mocks.verified, reviewable: mocks.reviewable, accepted: mocks.accepted, savedExactDisplay: mocks.savedExactDisplay }) }));
+vi.mock('./cableWorkflowProof.js', () => ({ createCableWorkflowProofReader: () => ({ verified: mocks.verified, reviewable: mocks.reviewable, accepted: mocks.accepted, savedExactDisplay: mocks.savedExactDisplay, writtenProposal: mocks.writtenProposal }) }));
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const projectId = id(1), who = { userId: id(2), loginId: id(3), loginExpiresAt: Date.now() + 1000_000 };
 function cable(n: number) { return { id: id(1000 + n), cable_type_id: id(4), cable_type_purpose:'Control', mto: 'Control', cable_write_revision: '7', tag: `SYNTHETIC-${n}`,
@@ -32,7 +32,7 @@ function common() { return { status: 'ready', bindingContext: { modelVersionId: 
 function fixture(count = 1) {
   const state = { cables: Array.from({ length: count }, (_, n) => cable(n)), metadata: new Map<string, ReturnType<typeof meta>>(),
     admissionCount: 1, generation: '1', latest: id(10), aliases: true, common: common(), badScan: false, hasReceipt: false, allowReview: true,
-    savedIdentity: null as Record<string, unknown> | null, receiptCableIds: [] as string[] };
+    savedIdentity: null as Record<string, unknown> | null, receiptCableIds: [] as string[], savedModelVersionId: null as string | null };
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
     if (sql.includes('cable-workflow:context')) return { rows: [{ active_model_version_id: id(5), selection_revision: '1', admission_count: state.admissionCount,
       context: { generation: state.generation, latest: state.latest } }] };
@@ -49,7 +49,7 @@ function fixture(count = 1) {
       { normalized_alias: 'B', id: id(21), name: 'B', revision: '1', has_legacy: false }] : [] };
     if (sql.includes('cable-workflow:latest-admissions')) return { rows: (values[1] as string[]).flatMap(cableId => state.metadata.has(cableId) ? [state.metadata.get(cableId)!] : []) };
     if (sql.includes('cable-workflow:accepted-identities')) return { rows: [...new Set([...state.receiptCableIds, ...(state.hasReceipt ? [state.cables[0].id] : [])])]
-      .filter(cableId => (values[1] as string[]).includes(cableId)).map(cable_id => ({ cable_id })) };
+      .filter(cableId => (values[1] as string[]).includes(cableId)).map(cable_id => ({ cable_id, model_version_id: state.savedModelVersionId })) };
     if (sql.includes('cable-workflow:saved-route-identity')) return { rows: state.savedIdentity ? [state.savedIdentity] : [] };
     throw Error('Unexpected SQL in explicit mocked read-model protocol: ' + sql.slice(0, 80));
   });
@@ -63,6 +63,7 @@ function fixture(count = 1) {
   mocks.reviewable.mockImplementation(async (_cable, _job, _proposal, current) => ({ currentness: current ? 'current' : 'changed', reviewable: !!current && state.allowReview, reasonCodes: [] }));
   mocks.accepted.mockResolvedValue(false);
   mocks.savedExactDisplay.mockResolvedValue(false);
+  mocks.writtenProposal.mockResolvedValue(null);
   const repo = createCableWorkflowRepository({} as Pool, { cursorKey: Buffer.alloc(32, 42) });
   return { state, query, repo };
 }
@@ -134,10 +135,23 @@ describe('read-only saved geometry qualification in workflow projection',()=>{
     const f=savedRow();mocks.savedExactDisplay.mockResolvedValue(false);const detail=await f.repo.detail(projectId,who,id(1000),{});
     expect(detail.row.calculation.savedExactDisplay).toBeUndefined();expect(detail.row.calculation).toMatchObject({currentness:'changed',reviewable:false,acceptedMatchesCurrent:false});
   });
+  it.each(['same-model', 'other-model', 'unverified-record'] as const)('warns only when the exact saved route belongs to a different selected model (%s)', async kind => {
+    const f = savedRow('failed');
+    f.state.savedModelVersionId = kind === 'same-model' ? id(5) : id(49);
+    f.state.common = { ...common(), inputs: null, bindingContext: null, status: 'model_unavailable', message: '' } as unknown as ReturnType<typeof common>;
+    mocks.savedExactDisplay.mockResolvedValue(false);
+    if (kind === 'other-model') mocks.writtenProposal.mockResolvedValue({ verified: { dependencies: { model: { id: id(49) } } } });
+    const detail = await f.repo.detail(projectId, who, id(1000), {});
+    expect(detail.row.savedRouteModelChanged).toBe(kind === 'other-model' ? true : undefined);
+    expect(detail.row.calculation).toMatchObject({ reviewable: false, acceptedMatchesCurrent: false });
+    expect((await f.repo.page(projectId, who, { filter: 'needs-routing' })).rows).toEqual([]);
+    expect((await f.repo.page(projectId, who, { filter: 'up-to-date' })).rows).toEqual([detail.row]);
+    if (kind === 'same-model') expect(mocks.writtenProposal).not.toHaveBeenCalled();
+  });
 });
 
 describe('saved route status after a compatible engine upgrade', () => {
-  it('keeps fifteen compatible saved pairs and one strict current pair Updated while retaining the two real exceptions', async () => {
+  it('keeps recorded and manually assigned routes in Saved routes while showing a cable without a route in Needs routing', async () => {
     const f = fixture(18), compatible = new Set(f.state.cables.slice(0, 15).map(value => value.id));
     const strictCurrent = f.state.cables[15], manuallyChanged = f.state.cables[16], missingLocation = f.state.cables[17];
     for (const [n, value] of f.state.cables.entries()) {
@@ -156,9 +170,9 @@ describe('saved route status after a compatible engine upgrade', () => {
     mocks.savedExactDisplay.mockImplementation(async (value: { id: string }) => compatible.has(value.id));
     const before = structuredClone(f.state.cables);
     const needs = await f.repo.page(projectId, who, { filter: 'needs-routing' });
-    expect(needs.rows.map(value => value.cable.id)).toEqual([manuallyChanged.id, missingLocation.id]);
+    expect(needs.rows.map(value => value.cable.id)).toEqual([missingLocation.id]);
     const updated = await f.repo.page(projectId, who, { filter: 'up-to-date' });
-    expect(updated.rows).toHaveLength(16);
+    expect(updated.rows).toHaveLength(17);
     expect(updated.rows.slice(0, 15).every(value => value.calculation.savedExactDisplay === true
       && value.calculation.currentness === 'changed' && !value.calculation.reviewable && !value.calculation.acceptedMatchesCurrent)).toBe(true);
     expect(f.state.cables).toEqual(before);
@@ -219,7 +233,7 @@ describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth
       f.state.common.inputs.settings.revision = '2';
       const stale = await f.repo.detail(projectId, who, id(1000), requested);
       expect(stale.row.calculation).toMatchObject({ currentness: kind === 'unavailable-barrier' ? 'unavailable' : 'changed', acceptedMatchesCurrent: false, reviewable: false });
-      expect((await f.repo.page(projectId, who, { ...requested, filter: 'needs-routing' })).rows).toHaveLength(1);
+      expect((await f.repo.page(projectId, who, { ...requested, filter: 'needs-routing' })).rows).toEqual([]);
     },
   );
   it.each(['current', 'saved-exact'] as const)('checks a separate %s saved receipt with its recorded options after a failed attempt', async currentness => {
@@ -267,8 +281,8 @@ describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth
     expect(mocks.savedExactDisplay).not.toHaveBeenCalled();
     expect(mocks.barrierCommon).toHaveBeenCalledTimes(kind==='recorded-tolerance'?2:1);
     expect(f.query.mock.calls.every(([sql])=>!/\b(?:INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(true);
-    const page=await f.repo.page(projectId,who,{barrierRouting:intent});
-    expect(page.rows).toEqual([detail.row]);expect(classifyCableWorkflow(page.rows[0]).status).toBe('blocked');
+    const page=await f.repo.page(projectId,who,{filter:'up-to-date',barrierRouting:intent});
+    expect(page.rows).toEqual([detail.row]);expect(classifyCableWorkflow(page.rows[0]).status).toBe('up-to-date');
   });
   it.each([
     new PathFinderError('BARRIER_STORAGE_BUSY',503),new PathFinderError('BARRIER_CALCULATION_DEADLINE',503),

@@ -32,8 +32,10 @@ CREATE TABLE pf_project_state(project_id uuid PRIMARY KEY,registry_revision bigi
 CREATE TABLE pf_project_preparations(project_id uuid PRIMARY KEY,current_aggregate_id uuid,current_artifact_id uuid,geometry_revision bigint DEFAULT 0);
 CREATE TABLE pf_purpose_project_state(project_id uuid PRIMARY KEY,catalog_revision bigint DEFAULT 0,routing_policy_revision bigint DEFAULT 0);
 CREATE TABLE pf_recalculation_state(project_id uuid PRIMARY KEY,desired_generation bigint DEFAULT 0);
+CREATE TABLE pf_barrier_heads(project_id uuid PRIMARY KEY,revision bigint,snapshot_id uuid);
 CREATE TABLE pf_revision_comparison_targets(project_id uuid,target_aggregate_id uuid,target_model_version_id uuid,current_comparison_id uuid,
  comparison_revision bigint,decision_set_sha256 text);
+CREATE TABLE cable_types(project_id uuid,id uuid PRIMARY KEY,name text,purpose text);
 CREATE TABLE cables(project_id uuid,id uuid PRIMARY KEY,cable_type_id uuid,cable_write_revision bigint DEFAULT 0,
  tag text,from_location text,to_location text,routing text,mto text,design_length numeric,install_length numeric);
 CREATE INDEX cables_owned ON cables(project_id,id);
@@ -41,11 +43,13 @@ CREATE TABLE pf_revision_admissions(project_id uuid,id uuid PRIMARY KEY,job_id u
 CREATE TABLE pf_revision_baselines(project_id uuid,admission_id uuid,cable_id uuid,status text);
 CREATE TABLE pf_jobs(project_id uuid,id uuid PRIMARY KEY,state text,cancel_requested boolean DEFAULT false);
 CREATE TABLE pf_job_items(project_id uuid,job_id uuid,cable_id uuid,state text,status text);
-CREATE TABLE pf_proposals(project_id uuid,id uuid PRIMARY KEY,job_id uuid,cable_id uuid,status text,proposal_hash text);
+CREATE TABLE pf_proposals(project_id uuid,id uuid PRIMARY KEY,job_id uuid,cable_id uuid,status text,proposal_hash text,dependencies jsonb);
+CREATE TABLE pf_automatic_pair_dispatch(project_id uuid,job_id uuid,cable_id uuid,status text,receipt_id uuid,reason_code text);
+CREATE TABLE pf_automatic_pair_admission_decisions(project_id uuid,job_id uuid,cable_id uuid,reason_code text);
 CREATE TABLE pf_location_aliases(project_id uuid,normalized_alias text,location_id uuid);
 CREATE TABLE pf_locations(project_id uuid,id uuid,name text,revision bigint);
 CREATE TABLE pf_location_bindings(project_id uuid,location_id uuid);
-CREATE TABLE pf_apply_receipts(project_id uuid,cable_id uuid,applied_at timestamptz,id uuid);
+CREATE TABLE pf_apply_receipts(project_id uuid,cable_id uuid,applied_at timestamptz,id uuid,proposal_id uuid);
 `;
 async function seed(count = 1, names?: string[]) {
   const data = Array.from({ length: count }, (_, index) => ({ id: id(1000 + index), tag: names?.[index] ?? `Synthetic ${index}` }));
@@ -80,12 +84,29 @@ describe.runIf(Boolean(fixturePath))('PF-U1 real SQL slice in an explicitly owne
       await pool.query(`INSERT INTO ${table}(project_id) VALUES($1)`, [projectId]);
   });
   beforeEach(async () => {
-    await pool.query('TRUNCATE cables,pf_revision_admissions,pf_revision_baselines,pf_jobs,pf_job_items,pf_proposals');
+    await pool.query('TRUNCATE cables,pf_revision_admissions,pf_revision_baselines,pf_jobs,pf_job_items,pf_proposals,pf_apply_receipts');
     await pool.query('UPDATE users SET is_admin=true');
     await pool.query('UPDATE viewer_login_bindings SET revoked_at=NULL');
     queries.length = 0;
   });
   afterAll(async () => { await pool?.end(); });
+
+  it('keeps the recorded route out of Needs routing while the same model is being prepared', async () => {
+    const [routed, unrouted] = await seed(2);
+    const model = id(97), proposal = id(98);
+    await pool.query('UPDATE project_model_selections SET active_model_version_id=$2 WHERE project_id=$1', [projectId, model]);
+    await pool.query('UPDATE cables SET routing=$2,design_length=21 WHERE id=$1', [routed.id, '/B903/SECONDARY']);
+    await pool.query('INSERT INTO pf_proposals(project_id,id,cable_id,dependencies) VALUES($1,$2,$3,$4)',
+      [projectId, proposal, routed.id, JSON.stringify({ model: { id: model }, preparation: { geometryRevision: '26' } })]);
+    await pool.query('INSERT INTO pf_apply_receipts VALUES($1,$2,clock_timestamp(),$3,$4)', [projectId, routed.id, id(99), proposal]);
+    await pool.query('UPDATE pf_project_preparations SET geometry_revision=27 WHERE project_id=$1', [projectId]);
+    const repo = repository();
+    const saved = await repo.page(projectId, who, { filter: 'up-to-date' });
+    expect(saved.rows.map(row => row.cable.id)).toEqual([routed.id]);
+    expect(saved.rows[0].savedRouteModelChanged).toBeUndefined();
+    expect(saved.rows[0].calculation.reviewable).toBe(false);
+    expect((await repo.page(projectId, who, { filter: 'needs-routing' })).rows.map(row => row.cable.id)).toEqual([unrouted.id]);
+  });
 
   it('finds a literal target beyond the first400 project rows in its first page without DML', async () => {
     const names = Array.from({ length: 405 }, (_, index) => index === 404 ? 'Last_%\\target' : `Earlier ${index}`);

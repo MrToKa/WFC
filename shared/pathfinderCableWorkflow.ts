@@ -113,10 +113,14 @@ export const cableWorkflowRowSchema = z.object({
   from: calculationAvailabilitySchema,
   to: calculationAvailabilitySchema,
   calculation: cableWorkflowCalculationSchema,
+  /** The verified save belongs to another selected Model version. */
+  savedRouteModelChanged: z.literal(true).optional(),
   /** Receipt-proven stored geometry, independent of a later unsuccessful attempt. Never grants Review/Apply authority. */
   savedRoute: z.object({ receiptId: policyUuidSchema, jobId: policyUuidSchema, proposalId: policyUuidSchema,
     proposalHash: policyHashSchema, currentness: z.enum(['current', 'saved-exact']) }).strict().optional(),
 }).strict().superRefine((value, context) => {
+  if (value.savedRouteModelChanged && !value.cable.routing?.trim())
+    context.addIssue({ code: 'custom', message: 'A saved model warning requires a saved route.' });
   if(value.calculation.itemApplicability && (value.calculation.itemApplicability.projectId!==value.projectId||value.calculation.itemApplicability.cableId!==value.cable.id))
     context.addIssue({code:'custom',message:'Sealed item evidence belongs to the exact project and cable.'});
   if ((value.calculation.reviewable || value.calculation.acceptedMatchesCurrent || value.calculation.savedExactDisplay || value.savedRoute) && (!value.from.pointAvailable || !value.to.pointAvailable))
@@ -166,6 +170,8 @@ export function hasVerifiedSavedCableRoute(row: CableWorkflowRow): boolean {
   return row.calculation.acceptedMatchesCurrent || row.calculation.savedExactDisplay === true || row.savedRoute !== undefined;
 }
 
+export const SAVED_ROUTE_MODEL_CHANGED_NOTICE = 'The selected 3D model version has changed since this route was saved. The saved route may be out of date.';
+
 /** Display only: no status, including ready-for-review/up-to-date, permits a write. */
 export function classifyCableWorkflow(input: unknown): CableWorkflowDecision {
   const parsed = cableWorkflowRowSchema.safeParse(input);
@@ -178,10 +184,15 @@ export function classifyCableWorkflow(input: unknown): CableWorkflowDecision {
   // receipt-proven saved path when its engineering dependencies still match.
   // Historical calculation currentness and all Review/Apply gates stay strict.
   if (hasVerifiedSavedCableRoute(row)) return { status: 'up-to-date', reasonCodes: reasons() };
+  const activeJob = calculation.jobStatus === 'queued' || calculation.jobStatus === 'running';
+  const activeItem = activeJob && (calculation.itemState === 'waiting' || calculation.itemState === 'running');
+  // Cable List is the source for whether routing is assigned. A new attempt
+  // can still be in progress or ready to review without changing the saved route.
+  if (row.cable.routing?.trim() && !activeItem && !calculation.reviewable)
+    return { status: 'up-to-date', reasonCodes: reasons() };
   if (calculation.jobStatus === 'cancelled' || calculation.jobStatus === 'failed')
     return { status: 'blocked', reasonCodes: reasons(calculation.jobStatus === 'cancelled' ? 'CALCULATION_CANCELLED' : 'CALCULATION_FAILED') };
-  const activeJob = calculation.jobStatus === 'queued' || calculation.jobStatus === 'running';
-  if (activeJob && (calculation.itemState === 'waiting' || calculation.itemState === 'running'))
+  if (activeItem)
     return { status: 'calculating', reasonCodes: reasons(calculation.jobStatus === 'queued' || calculation.itemState === 'waiting' ? 'CALCULATION_QUEUED' : 'CALCULATION_RUNNING') };
   const blockedOutcomes: Partial<Record<CableWorkflowCalculation['outcome'], string>> = {
     'settings-required': 'SETTINGS_REQUIRED', 'category-required': 'CABLE_CATEGORY_REQUIRED',

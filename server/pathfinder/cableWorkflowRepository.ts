@@ -170,9 +170,13 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       : { availability: availability(found.status, 'AUTOMATIC_ENDPOINT_' + found.status.replaceAll('-', '_').toUpperCase(), found.candidateObjectIds), point: null };
   };
   const latest = await metadata(client, projectId, candidates.map(value => value.id)); check();
-  const acceptedIds = new Set(candidates.length ? (await client.query<{ cable_id: string }>(`/* cable-workflow:accepted-identities */ SELECT DISTINCT ON(cable_id) cable_id
-    FROM pf_apply_receipts WHERE project_id=$1 AND cable_id=ANY($2::uuid[]) ORDER BY cable_id,applied_at DESC,id DESC`, [projectId, candidates.map(value => value.id)])).rows.map(value => value.cable_id) : []);
-  if ([...acceptedIds].some(id => !candidates.some(value => value.id === id))) return fail('WORKFLOW_RECEIPT_SCOPE');
+  const receipts = new Map(candidates.length ? (await client.query<{ cable_id: string; model_version_id: string | null }>(`/* cable-workflow:accepted-identities */
+    SELECT r.cable_id,p.dependencies #>> '{model,id}' AS model_version_id
+    FROM (SELECT DISTINCT ON(cable_id) cable_id,proposal_id FROM pf_apply_receipts
+      WHERE project_id=$1 AND cable_id=ANY($2::uuid[]) ORDER BY cable_id,applied_at DESC,id DESC) r
+    LEFT JOIN pf_proposals p ON p.project_id=$1 AND p.cable_id=r.cable_id AND p.id=r.proposal_id`,
+  [projectId, candidates.map(value => value.id)])).rows.map(value => [value.cable_id, value.model_version_id] as const) : []);
+  if ([...receipts.keys()].some(id => !candidates.some(value => value.id === id))) return fail('WORKFLOW_RECEIPT_SCOPE');
   const proof = createCableWorkflowProofReader(client, projectId, check);
   const contextHash = hash({ database: readContext.context, admissionCount: readContext.admission_count, common: common.inputs ?? { status: common.status } });
   return { contextHash, async row(cable: Data): Promise<CableWorkflowRow> {
@@ -228,10 +232,10 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       currentness = result.currentness; reviewable = result.reviewable; reasons.push(...result.reasonCodes);
       itemApplicability='itemApplicability' in result?result.itemApplicability:null;
     }
-    const cableSnapshot = snapshot(cable), accepted = Boolean(acceptedIds.has(cable.id) && meta?.job_id && meta.proposal_id && meta.proposal_hash
+    const cableSnapshot = snapshot(cable), accepted = Boolean(receipts.has(cable.id) && meta?.job_id && meta.proposal_id && meta.proposal_hash
       && await proof.accepted(cableSnapshot, freshSaved, {jobId:meta.job_id,proposalId:meta.proposal_id,proposalHash:meta.proposal_hash})) && savedUnavailableReasons.size === 0; check();
     if (accepted) currentness = 'current';
-    const savedExactDisplay = Boolean(!accepted && savedUnavailableReasons.size === 0 && ['changed', 'unavailable'].includes(currentness) && acceptedIds.has(cable.id)
+    const savedExactDisplay = Boolean(!accepted && savedUnavailableReasons.size === 0 && ['changed', 'unavailable'].includes(currentness) && receipts.has(cable.id)
       && ['complete', 'failed'].includes(jobStatus ?? '') && itemState === 'complete' && status === 'calculated' && meta?.cancel_requested === false
       && meta.job_id && meta.proposal_id && meta.proposal_hash
       && await proof.savedExactDisplay(cableSnapshot, freshSaved, { jobId: meta.job_id, proposalId: meta.proposal_id, proposalHash: meta.proposal_hash })); check();
@@ -239,7 +243,7 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
     let savedRoute: CableWorkflowRow['savedRoute'];
     // A later terminal failure describes the attempt, not the already-written
     // route. Keep its diagnostics and qualify the latest receipt independently.
-    if (savedUnavailableReasons.size === 0 && acceptedIds.has(cable.id) && meta?.job_id && ['complete', 'failed', 'cancelled'].includes(jobStatus ?? '')
+    if (savedUnavailableReasons.size === 0 && receipts.has(cable.id) && meta?.job_id && ['complete', 'failed', 'cancelled'].includes(jobStatus ?? '')
       && !['waiting', 'running'].includes(itemState ?? '') && status !== 'calculated'
       && !['pending', 'running', 'unknown'].includes(meta.automatic_update_status ?? '')
       && from.availability.pointAvailable && to.availability.pointAvailable && cableSnapshot.routing?.trim() && cableSnapshot.designLength !== null) {
@@ -258,9 +262,17 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       reviewable = false; reasons.push(...unavailableReasons, ...savedUnavailableReasons);
       if (!accepted && !savedExactDisplay && !savedRoute) currentness = 'unavailable';
     }
+    // The active selection exists even while its routing network is being prepared.
+    const savedModelVersionId = receipts.get(cable.id);
+    const activeModelVersionId = readContext.active_model_version_id;
+    const savedRouteModelChanged = Boolean(cableSnapshot.routing?.trim() && savedModelVersionId && activeModelVersionId
+      && savedModelVersionId !== activeModelVersionId
+      && (await proof.writtenProposal(cableSnapshot))?.verified.dependencies.model.id === savedModelVersionId);
+    check();
     return cableWorkflowRowSchema.parse({ projectId, cable: cableSnapshot, mto: cable.mto, from: from.availability, to: to.availability,
       displayMetadata: { typeName: cable.display_type_name ?? null, purpose: cable.display_purpose ?? null },
       ...(savedRoute ? { savedRoute } : {}),
+      ...(savedRouteModelChanged ? { savedRouteModelChanged: true } : {}),
       calculation: { jobId: jobStatus && meta ? meta.job_id : null, jobStatus, itemState: jobStatus ? itemState : null, outcome: status,
         // Historical item/job tables retain status and free-form text, not a structured error code. Never parse private messages into codes.
         reasonCodes: [...new Set(reasons)].slice(0, CABLE_WORKFLOW_LIMITS.reasonCodes), errorCode: null, currentness,

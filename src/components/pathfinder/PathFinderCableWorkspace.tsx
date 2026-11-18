@@ -962,7 +962,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       onClose={dismissPreview} onOpen={() => openCable(preview.row)} /> : null}
     {notice ? <p role="status">{notice}</p> : null}
     {selected ? <p role="status">Selected cable: {selected.cable.tag ?? 'Untagged cable'} — {submittedCalculation || waitingForSavedCalculation ? 'Recalculating'
-      : selectedStatus?.status === 'ready-for-review' && !displayMatches ? 'Checking the calculated result' : selectedStatus?.status === 'up-to-date' ? 'Updated in Cable list'
+      : selectedStatus?.status === 'ready-for-review' && !displayMatches ? 'Checking the calculated result' : selectedStatus?.status === 'up-to-date' ? 'Route saved in Cable list'
       : selectedStatus?.status === 'ready-for-review' ? 'Ready for review; existing values remain until Apply' : selectedStatus?.status === 'calculating' ? 'Recalculating' : 'Needs routing or attention'}.</p> : null}
     {selected && !open ? <Button onClick={() => openCable(selected)}>Open selected cable</Button> : null}
     {selected ? <Button disabled={!panelActive || refreshingSelected || refreshingState} onClick={() => { setRevision(value => value + 1); void refreshCableStatus(); void progress.refresh(); void writes.refresh(); }}>Refresh selected cable</Button> : null}
@@ -974,7 +974,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
         {writes.progress.outstanding ? ' Automatic updates are still being processed.' : ' Automatic update processing has stopped.'}</p> : null}
       {writes.progress?.selected?.reasonCode ? <p>Update needs attention: {writes.progress.selected.reasonCode.toLowerCase().replaceAll('_', ' ')}.</p> : null}
       {writes.error ? <p role="alert">{writes.error}</p> : null}
-      <details><summary>Advanced progress details</summary><p>Calculation and conditional initial fill are separate. Updated is shown only after live cable evidence confirms the receipt-backed values.</p>
+      <details><summary>Advanced progress details</summary><p>Calculation and conditional initial fill are separate. Write counts use verified Cable list updates.</p>
         <p>History reads do not renew the original administrator permission.</p>
         {progress.impact?.reasonCodes.map(code => <p key={code}>{code}</p>)}
       </details>

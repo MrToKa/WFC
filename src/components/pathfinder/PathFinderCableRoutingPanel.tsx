@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useFloatingCablePanel, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
 import { Button, Caption1, Checkbox, Portal, Spinner } from '@fluentui/react-components';
 import { useCableEndpointPairSelection, type CableEndpointPairSelectionAccess } from '@/hooks/useCableEndpointPairSelection';
-import { hasVerifiedSavedCableRoute, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
+import { hasVerifiedSavedCableRoute, SAVED_ROUTE_MODEL_CHANGED_NOTICE, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
 import { CablePopupSurface, type CablePopupSurfaceStyles } from '@/components/CablePopupSurface';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
@@ -305,6 +305,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       {endpoint('from', from, styles)}{endpoint('to', to, styles)}
       <section className={styles.field} aria-label="Cable routing actions">
         <h4 className={styles.heading}>{routingHeading}</h4>
+        {cable.savedRouteModelChanged ? <p role="status" className={styles.note}>{SAVED_ROUTE_MODEL_CHANGED_NOTICE}</p> : null}
         <textarea aria-label="Cable routing" className={styles.value} readOnly value={storedRouteSelected?storedRouting??'':hasCalculatedRouting ? calculatedRouting : storedRouting ?? ''} placeholder={calculationPending ? 'Calculating this cable’s new route…' : 'No routing saved in Cable list'} rows={3} />
         {showingStoredRouting ? <>
           <p className={styles.note}>{previousStoredRouting ? 'Previous Cable list' : 'Cable list'} design length: {cable.cable.designLength === null ? 'Not set' : cable.cable.designLength === '' ? 'Empty stored value' : `${cable.cable.designLength} m`}</p>

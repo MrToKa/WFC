@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { Button, Field, Input, makeStyles, tokens } from '@fluentui/react-components';
 import { usePathFinderCableWorkflow, type PathFinderCableWorkflowAccess } from '@/hooks/usePathFinderCableWorkflow';
-import { classifyCableWorkflow, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
+import { classifyCableWorkflow, SAVED_ROUTE_MODEL_CHANGED_NOTICE, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import type { CableWorkflowQuery } from '@/api/pathfinderCableWorkflow';
 import type { CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
 
@@ -41,7 +41,8 @@ function endpointReason(side: string, evidence: CalculationAvailability): string
 }
 export function cableWorkflowReason(row: CableWorkflowRow): string {
   const decision = classifyCableWorkflow(row);
-  if (decision.status === 'up-to-date') return 'The accepted route and design length match the current cable.';
+  if (row.savedRouteModelChanged) return SAVED_ROUTE_MODEL_CHANGED_NOTICE;
+  if (decision.status === 'up-to-date') return 'The cable has a saved route in Cable list.';
   if (decision.status === 'ready-for-review') return 'A current calculation is ready for your review.';
   // Preserve an actual running/blocked outcome before suggesting endpoint work.
   const immediate = decision.reasonCodes.find(code => ['CABLE_CATEGORY_REQUIRED', 'SETTINGS_REQUIRED', 'MODEL_REQUIRED', 'CALCULATION_RESOURCE_LIMIT',
@@ -88,7 +89,7 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
     <form className={styles.controls} onSubmit={event => { event.preventDefault(); submitSearch(); }}>
       <Field label={{ children: 'Cable state', htmlFor: filterId }}><select id={filterId} className={styles.select} value={filter} onChange={event => setFilter(event.target.value as Filter)}>
         <option value="needs-routing">Needs routing</option><option value="calculating">Calculating</option><option value="ready-for-review">Ready for review</option>
-        <option value="up-to-date">Updated</option><option value="all">All non-MV cables</option>
+        <option value="up-to-date">Saved routes</option><option value="all">All non-MV cables</option>
       </select></Field>
       <Field label="Search tags, From or To"><Input value={searchDraft} maxLength={256} onChange={(_, data) => setSearchDraft(data.value)} /></Field>
       <Button type="submit">Search cables</Button><Button type="button" disabled={!workflow.enabled || workflow.busy} onClick={workflow.refresh}>Refresh cables</Button>

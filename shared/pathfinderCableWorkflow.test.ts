@@ -192,9 +192,10 @@ describe('cable workflow status is a display projection', () => {
     expect(classifyCableInitialFill({ mto: input.mto, ...input.cable }).mode).toBe('manual-review');
     expect(classifyCableWorkflow(input)).not.toHaveProperty('canApply');
   });
-  it('requires explicit current accepted-result evidence for up-to-date rather than the presence of old values', () => {
+  it('classifies stored text as a saved route independently of verified calculation evidence', () => {
     const input = row({ cable: { ...row().cable, routing: '/EXISTING', designLength: '20' } });
-    expect(classifyCableWorkflow(input).status).toBe('needs-routing');
+    expect(classifyCableWorkflow(input).status).toBe('up-to-date');
+    expect(classifyCableWorkflow({ ...input, cable: { ...input.cable, routing: '  ' } }).status).toBe('needs-routing');
     expect(classifyCableWorkflow({ ...input, calculation: { ...ready(), reviewable: false, acceptedMatchesCurrent: true } }).status).toBe('up-to-date');
     expect(classifyCableWorkflow(row({ calculation: { ...ready(), reviewable: false, acceptedMatchesCurrent: true } })).status).toBe('blocked');
   });
@@ -204,7 +205,7 @@ describe('cable workflow status is a display projection', () => {
     const parsed = cableWorkflowRowSchema.parse(input);
     expect(classifyCableWorkflow(parsed)).toEqual({ status: 'up-to-date', reasonCodes: [] });
     expect(parsed.calculation.reviewable).toBe(false);
-    expect(classifyCableWorkflow({ ...parsed, calculation: { ...parsed.calculation, acceptedMatchesCurrent: false } }).status).toBe('blocked');
+    expect(classifyCableWorkflow({ ...parsed, calculation: { ...parsed.calculation, acceptedMatchesCurrent: false } }).status).toBe('up-to-date');
   });
   it.each([
     { itemState: 'waiting', outcome: 'not-evaluated' }, { itemState: 'running', outcome: 'not-evaluated' },

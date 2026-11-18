@@ -1007,7 +1007,7 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     const p = props(); render(<PathFinderCableWorkspace {...p} />); await openListCable();
     act(() => { void panelProps.access.onSaved?.({ cableId: id(3), locationImpact: { id: id(8) } } as CableEndpointReceipt, endpointBindingFixture().context.current!); });
     await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalled());
-    expect(screen.queryByText(/Updated in Cable list/)).toBeNull(); expect(screen.getByText(/Needs routing or attention/)).toBeVisible();
+    expect(screen.queryByText(/Route saved in Cable list/)).toBeNull(); expect(screen.getByText(/Needs routing or attention/)).toBeVisible();
   });
   it('rejects a late old-owner detail response after model change', async () => {
     let finish!: (value: Awaited<ReturnType<typeof fetchPathFinderCableWorkflowDetail>>) => void;
