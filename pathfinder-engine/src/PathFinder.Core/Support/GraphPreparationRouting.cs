@@ -204,6 +204,7 @@ namespace AddinRibbon.Routing
                     writer.Write(piece.Independent);
                     writer.Write(piece.AllowsSideConnections);
                     writer.Write(piece.RouteCode ?? string.Empty);
+                    writer.Write(piece.CadSection != null);
                     writer.Write(piece.Bounds.MinX); writer.Write(piece.Bounds.MinY); writer.Write(piece.Bounds.MinZ); writer.Write(piece.Bounds.MaxX); writer.Write(piece.Bounds.MaxY); writer.Write(piece.Bounds.MaxZ);
                     writer.Write(piece.VerifiedPorts.Count);
                     foreach (var port in piece.VerifiedPorts)

@@ -430,9 +430,31 @@ namespace AddinRibbon.Routing
         private static bool SameRoute(Piece first, Piece last) =>
             first.RouteCode != null && first.RouteCode == last.RouteCode;
 
-        private static bool WithinNeighbourTolerance(Piece first, Piece last, double tolerance) =>
-            Bounds.WithinTolerance(first.Bounds, last.Bounds,
-                SameRoute(first, last) ? VerifiedPortContactPrecisionMeters : tolerance);
+        private static bool WithinNeighbourTolerance(Piece first, Piece last, double tolerance)
+        {
+            if (!SameRoute(first, last)) return Bounds.WithinTolerance(first.Bounds, last.Bounds, tolerance);
+            double cutoff = CanJoinCadEnds(first, last)
+                ? Math.Max(tolerance, VerifiedPortContactPrecisionMeters) : VerifiedPortContactPrecisionMeters;
+            return Bounds.WithinTolerance(first.Bounds, last.Bounds, cutoff);
+        }
+
+        private static bool CanJoinCadEnds(Piece first, Piece last) =>
+            first.CadSection != null && last.CadSection != null && SameRoute(first, last);
+
+        private static bool IsNearestCadEndPair(Piece first, Piece last, double firstFraction,
+            double lastFraction, double distance)
+        {
+            if (!IsChainEnd(first, firstFraction) || !IsChainEnd(last, lastFraction)) return false;
+            var a = first.CadSection.Points;
+            var b = last.CadSection.Points;
+            double closest = Math.Min(
+                Math.Min(a[0].DistanceTo(b[0]), a[0].DistanceTo(b[b.Count - 1])),
+                Math.Min(a[a.Count - 1].DistanceTo(b[0]), a[a.Count - 1].DistanceTo(b[b.Count - 1])));
+            return distance <= closest + ConnectionGapEpsilonMeters;
+        }
+
+        private static bool IsChainEnd(Piece piece, double fraction) =>
+            (fraction == 0 && piece.HasStartPort) || (fraction == 1 && piece.HasEndPort);
 
         private static bool ParallelContactRange(Piece first, Piece last,
             out double lowFirst, out double lowLast, out double highFirst, out double highLast)
@@ -610,6 +632,7 @@ namespace AddinRibbon.Routing
             internal readonly IReadOnlyList<RouteConnectionPort> VerifiedPorts;
             internal readonly IReadOnlyList<TrayMeshClearance> Surfaces;
             internal readonly string RouteCode;
+            internal readonly TraySegment CadSection;
             internal bool HasEndPort;
             internal Piece(int segment, RoutePoint start, RoutePoint end, double along, double length,
                 bool hasStartPort, TraySegment tray)
@@ -620,6 +643,7 @@ namespace AddinRibbon.Routing
                 Independent = tray.Independent;
                 AllowsSideConnections = tray.AllowsSideConnections;
                 RouteCode = tray.ConnectionRouteCode;
+                CadSection = tray.Id.StartsWith("cad:", StringComparison.Ordinal) ? tray : null;
                 VerifiedPorts = tray.VerifiedPorts;
                 Surfaces = tray.ConnectionSurfaces;
                 if (Surfaces.Count != 0 && (!EndsOnly || hasStartPort))
@@ -730,7 +754,13 @@ namespace AddinRibbon.Routing
                     return !localTie || Link(first, last, firstFraction, lastFraction,
                         local != null ? local.DistanceMeters : matching.DistanceMeters, tolerance);
                 }
-                return Link(first, last, firstFraction, lastFraction, distance, tolerance);
+                // A separated CAD continuation may span empty space only at the
+                // nearest pair of section ends. Interior projections are for
+                // genuine physical contacts or exits to a different route.
+                bool cadContinuation = distance > ConnectionGapEpsilonMeters && distance <= tolerance &&
+                    CanJoinCadEnds(first, last) &&
+                    IsNearestCadEndPair(first, last, firstFraction, lastFraction, distance);
+                return Link(first, last, firstFraction, lastFraction, distance, tolerance, cadContinuation);
             }
 
             internal bool AddParallelAttachmentContacts(Piece first, Piece last,
@@ -756,10 +786,10 @@ namespace AddinRibbon.Routing
             }
 
             private bool Link(Piece first, Piece last, double firstFraction, double lastFraction,
-                double gapDistance, double tolerance)
+                double gapDistance, double tolerance, bool cadContinuation = false)
             {
-                // Sections of one route must physically meet, even when their cable centrelines are offset.
-                if (gapDistance > (SameRoute(first, last) ? ConnectionGapEpsilonMeters : tolerance)) return true;
+                if (gapDistance > (SameRoute(first, last) && !cadContinuation ? ConnectionGapEpsilonMeters : tolerance))
+                    return true;
                 var firstPoint = RoutePoint.Interpolate(first.Start, first.End, firstFraction);
                 var lastPoint = RoutePoint.Interpolate(last.Start, last.End, lastFraction);
                 double distance = firstPoint.DistanceTo(lastPoint);

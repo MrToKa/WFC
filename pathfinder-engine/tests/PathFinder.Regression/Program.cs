@@ -28,7 +28,7 @@ internal static class Program
             Run("Physical bend ports retain all curve vertices and interior object attachment", PhysicalBendPorts);
             Run("Port-only segments retain port projections, gaps and paired curves", PortContacts);
             Run("BC903 reaches the interior of the current BC027-2 straight", CadSideJunction);
-            Run("BC904 CAD sections must meet even when the configured gap is larger", CadSectionJunction);
+            Run("BC904 CAD continuation uses the closest section ends within the configured gap", CadSectionJunction);
             Run("Smaller total gap wins even with more connections", ConnectionGapCountPreference);
             Run("Smaller total gap wins over a shorter cable", ConnectionGapDistancePreference);
             Run("Tied gap count and gap distance choose the shortest cable", ConnectionGapLengthTiebreaker);
@@ -360,9 +360,11 @@ internal static class Program
             new[] { top, end }, true, null, null, false, true);
         var options = new RoutingOptions { ConnectionToleranceMeters = 1.2, SecondaryDistanceMeters = 7 };
         Assert(top.DistanceTo(start) < options.ConnectionToleranceMeters, "Fixture gap must be below the configured tolerance.");
-        Assert(!Calculator.Calculate(new[] { vertical, separated }, from, end, CableCategory.Control, options).Success,
-            "Connection gap must not join separated sections of BC904.");
-        foreach (var trays in new[] { new[] { vertical, horizontal }, new[] { horizontal, vertical } })
+        Assert(bottom.DistanceTo(start) < options.ConnectionToleranceMeters, "Fixture must also admit the tempting bottom shortcut by distance.");
+        Assert(!Calculator.Calculate(new[] { vertical, separated }, from, end, CableCategory.Control,
+            new RoutingOptions { ConnectionToleranceMeters = .2 }).Success, "The closest ends still have to be within the configured gap.");
+        foreach (var trays in new[] { new[] { vertical, horizontal }, new[] { horizontal, vertical },
+            new[] { vertical, separated }, new[] { separated, vertical } })
         {
             var route = Calculator.Calculate(trays, from, end, CableCategory.Control, options);
             Assert(route.Success && route.RouteText == "/BC904", route.Message);
@@ -370,6 +372,9 @@ internal static class Program
             Assert(points.Any(point => point.DistanceTo(top) < 1e-8),
                 "The cable must reach the top of the vertical section. Actual stations: " +
                 string.Join(", ", points.Select(point => $"({point.X}, {point.Y}, {point.Z})")));
+            if (trays.Contains(separated))
+                Assert(points.Zip(points.Skip(1), (a, b) => a.DistanceTo(top) < 1e-8 && b.DistanceTo(start) < 1e-8).Any(value => value),
+                    "The connector must link the top directly to the nearest end of the next CAD section.");
             var reverse = Calculator.Calculate(trays, end, from, CableCategory.Control, options);
             Assert(reverse.Success && reverse.PathPoints.SequenceEqual(points.Reverse()), "BC904 must use the same junction in reverse.");
             var checkedRoute = Calculator.CalculateConstrained(trays, from, end, CableCategory.Control,
@@ -377,6 +382,13 @@ internal static class Program
             Assert(checkedRoute.Status == ConstrainedRouteStatus.Clear && checkedRoute.Route.PathPoints.SequenceEqual(points),
                 "Obstacle checking must retain the full BC904 section.");
         }
+        var blocked = Calculator.CalculateConstrained(new[] { vertical, separated }, from, end, CableCategory.Control,
+            (a, b, token) => new RouteCollisionObservation(
+                (a.DistanceTo(top) < 1e-8 && b.DistanceTo(start) < 1e-8) ||
+                (b.DistanceTo(top) < 1e-8 && a.DistanceTo(start) < 1e-8)
+                    ? RouteCollisionStatus.Blocked : RouteCollisionStatus.Clear, null, "", 0), options);
+        Assert(!blocked.Route.Success || blocked.Route.SegmentIds.Count == 1,
+            "Blocking the end-to-end connection must not unlock a shortcut between the sections.");
     }
 
     private static TraySegment Port(string id, string code, params RoutePoint[] points)
