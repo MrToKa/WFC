@@ -928,14 +928,18 @@ namespace AddinRibbon.Routing
             }
             public int CompareTo(PathCost other)
             {
-                // Connection tolerance and collision checks decide admissibility.
-                // Among admissible paths minimize actual cable geometry first;
-                // fewer/measured-smaller gaps only resolve an equal length.
+                // Minimize unsupported distance before comparing total cable length.
+                // The integer sum keeps this ordering stable when a path is extended.
+                int gap = CompareConnectionGaps(other);
+                if (gap != 0) return gap;
                 int physical = PhysicalLength.CompareTo(other.PhysicalLength);
-                if (physical != 0) return physical;
-                int count = GapCount.CompareTo(other.GapCount);
-                if (count != 0) return count;
-                return GapRank.CompareTo(other.GapRank);
+                return physical != 0 ? physical : GapCount.CompareTo(other.GapCount);
+            }
+
+            internal int CompareConnectionGaps(PathCost other)
+            {
+                int unreachable = (GapCount == int.MaxValue).CompareTo(other.GapCount == int.MaxValue);
+                return unreachable != 0 ? unreachable : GapRank.CompareTo(other.GapRank);
             }
         }
 

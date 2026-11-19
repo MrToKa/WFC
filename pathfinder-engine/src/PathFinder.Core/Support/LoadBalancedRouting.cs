@@ -197,12 +197,10 @@ namespace AddinRibbon.Routing
             { return new WeightedPathCost(Physical.Add(edge), SelectionLength + edge.Length * multiplier); }
             public int CompareTo(WeightedPathCost other)
             {
-                // Balancing is a soft preference between equally short physical
-                // paths. Hard route/capacity eligibility is applied separately.
-                int compared = Physical.PhysicalLength.CompareTo(other.Physical.PhysicalLength);
+                int compared = Physical.CompareConnectionGaps(other.Physical);
+                if (compared == 0) compared = Physical.PhysicalLength.CompareTo(other.Physical.PhysicalLength);
                 if (compared == 0) compared = SelectionLength.CompareTo(other.SelectionLength);
-                if (compared == 0) compared = Physical.GapCount.CompareTo(other.Physical.GapCount);
-                return compared != 0 ? compared : Physical.GapRank.CompareTo(other.Physical.GapRank);
+                return compared != 0 ? compared : Physical.GapCount.CompareTo(other.Physical.GapCount);
             }
         }
 

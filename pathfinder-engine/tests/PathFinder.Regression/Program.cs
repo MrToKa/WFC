@@ -29,8 +29,8 @@ internal static class Program
             Run("Port-only segments retain port projections, gaps and paired curves", PortContacts);
             Run("BC903 reaches the interior of the current BC027-2 straight", CadSideJunction);
             Run("BC904 CAD sections must meet even when the configured gap is larger", CadSectionJunction);
-            Run("Shorter physical cable wins over a longer one-gap corridor", ConnectionGapCountPreference);
-            Run("Shorter physical cable wins over a smaller summed gap distance", ConnectionGapDistancePreference);
+            Run("Smaller total gap wins even with more connections", ConnectionGapCountPreference);
+            Run("Smaller total gap wins over a shorter cable", ConnectionGapDistancePreference);
             Run("Tied gap count and gap distance choose the shortest cable", ConnectionGapLengthTiebreaker);
             Run("Continuous contact, tray travel and endpoint legs do not count as gaps", ContinuousConnectionGapMetrics);
             Run("Connection gap metrics survive Reverse and repeated requests", ConnectionGapRepeatability);
@@ -441,10 +441,10 @@ internal static class Program
         Near(14, twoOnly.LengthMeters, "The two-gap alternative follows the shorter straight corridor.");
         var chosen = GapRoute(GapNetwork(longer, shorter));
         Assert(chosen.Success && chosen.SegmentIds.Contains("a-two-first") && !chosen.SegmentIds.Contains("z-one-first"),
-            "The shorter admissible cable must win despite its additional connection gap.");
+            "A lower total gap must win despite the additional connection.");
         Assert(chosen.ConnectionGapCount == 2, "The selected path must report both actual gaps.");
         Near(0.1, chosen.ConnectionGapLengthMeters, "Selected two-gap distance.");
-        Near(14, chosen.LengthMeters, "Physical cable length is the primary objective.");
+        Near(14, chosen.LengthMeters, "The ledger must retain the actual cable length.");
     }
 
     private static void ConnectionGapDistancePreference()
@@ -460,11 +460,11 @@ internal static class Program
         Near(24, lowOnly.LengthMeters, "Smaller total gaps require the longer tray corridor.");
         Near(14, highOnly.LengthMeters, "Larger total gaps permit the shorter tray corridor.");
         var chosen = GapRoute(GapNetwork(lowerTotal, higherTotal));
-        Assert(chosen.Success && chosen.SegmentIds.Contains("a-high-total-middle") && !chosen.SegmentIds.Contains("z-low-total-middle"),
-            "A smaller sum of gaps cannot displace the shorter admissible cable.");
+        Assert(chosen.Success && chosen.SegmentIds.Contains("z-low-total-middle") && !chosen.SegmentIds.Contains("a-high-total-middle"),
+            "A smaller sum of admissible gaps must outrank a shorter cable.");
         Assert(chosen.ConnectionGapCount == 2, "Preferred path gap count.");
-        Near(0.23, chosen.ConnectionGapLengthMeters, "Selected path total gap distance remains measured.");
-        Near(14, chosen.LengthMeters, "Physical cable length outranks total gap distance.");
+        Near(0.1, chosen.ConnectionGapLengthMeters, "Selected path total gap distance remains measured.");
+        Near(24, chosen.LengthMeters, "Cable length reflects the selected longer tray corridor.");
     }
 
     private static void ConnectionGapLengthTiebreaker()
