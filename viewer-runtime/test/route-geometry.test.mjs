@@ -91,6 +91,30 @@ test('saved endpoints select opposite interior stations of one tray', () => {
   assert.deepEqual(line, [from, [7, 0, 0], [3, 0, 0], to]);
 });
 
+test('WG-58301 preview uses BC061 only from the branch to C003 even with an overlapping piece', () => {
+  const [x, y, z] = [7.099998219775827, 66.90999990102273, 10.887499968424255];
+  const far = [x, 78.89999990102274, z], tee = [x, 70.5099999010227, z], nearRiser = [x, y, z];
+  const from = [5.633498219775822, 70.5099999010227, 9.079999968424254];
+  const to = [5.250248219775822, 66.19399990102269, 8.40434982193988];
+  const riserX = 6.499998219775819, riserY = 65.84049990102272;
+  const groups = [
+    { token: 'BC910', profiles: [tube([from[0], from[1], from[2] + .2], [from[0], from[1], z], .3, 'FTUBE', 1),
+      tube([from[0], from[1], z], tee, .3, 'FTUBE', 2)] },
+    { token: 'BC061', profiles: [tube(nearRiser, far, .5, 'FTUBE', 3), tube(far, tee, .5, 'FTUBE', 4)] },
+    { token: 'C003', profiles: [tube([riserX, riserY, 2.9199999989418313],
+      [riserX, riserY, 22.49999999894183], .5, 'FTUBE', 5)] },
+  ];
+  const result = buildRouteLines(groups, { from, to });
+  assert.equal(result.polylines.length, 1);
+  const [line] = result.polylines;
+  assert.deepEqual(line[0], from);
+  assert.deepEqual(line.at(-1), to);
+  assert.ok(line.every(point => point[1] <= tee[1] + 1e-6));
+  const trunk = result.diagnostics.groupClips.find(group => group.token === 'BC061');
+  trunk.entry.forEach((value, axis) => near(value, tee[axis]));
+  trunk.exit.forEach((value, axis) => near(value, nearRiser[axis]));
+});
+
 test('a 90-degree bend joins adjacent straight ports tangentially', () => {
   const a = tube([-3, 0, 0], [0, 0, 0], 0.2, 'FTUBE', 1);
   const arc = bend(2);

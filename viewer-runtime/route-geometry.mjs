@@ -453,11 +453,19 @@ function pathStations(points) {
   return stations;
 }
 
-function nearestGroupJunction(a, b) {
+function centerlineSpans(group, physicalOnly) {
+  const lines = physicalOnly ? group.pieces : [group];
+  return lines.flatMap(line => line.points.slice(0, Math.max(1, line.points.length - 1)).map((start, index) => ({
+    start, end: line.points[index + 1] ?? start, station: (line.from ?? 0) + line.stations[index],
+  })));
+}
+
+function nearestGroupJunction(a, b, physicalOnly) {
   let best;
-  for (let i = 0; i < Math.max(1, a.points.length - 1); i++) for (let j = 0; j < Math.max(1, b.points.length - 1); j++) {
-    const ports = closestFiniteSegments(a.points[i], a.points[i + 1] || a.points[i], b.points[j], b.points[j + 1] || b.points[j]);
-    const fromStation = a.stations[i] + distance(a.points[i], ports.a), toStation = b.stations[j] + distance(b.points[j], ports.b);
+  const incoming = centerlineSpans(a, physicalOnly), outgoing = centerlineSpans(b, physicalOnly);
+  for (const from of incoming) for (const to of outgoing) {
+    const ports = closestFiniteSegments(from.start, from.end, to.start, to.end);
+    const fromStation = from.station + distance(from.start, ports.a), toStation = to.station + distance(to.start, ports.b);
     const trim = a.length - fromStation + toStation;
     if (!best || ports.distance < best.distance - EPSILON || Math.abs(ports.distance - best.distance) <= EPSILON && trim < best.trim) best = { ...ports, fromStation, toStation, trim };
   }
@@ -476,21 +484,98 @@ function atStation(group, station) {
 function nearestStation(group, point, preferredStation) {
   let bestStation = 0, bestDistance = Infinity;
   for (const piece of group.pieces) {
-    let stationAtStart = piece.from;
     for (let i = 1; i < piece.points.length; i++) {
       const start = piece.points[i - 1], end = piece.points[i];
       const port = nearestOnSegment(point, start, end);
       const gap = distance(point, port);
-      const station = stationAtStart + distance(start, port);
+      const station = piece.from + piece.stations[i - 1] + distance(start, port);
       if (gap < bestDistance - EPSILON || Math.abs(gap - bestDistance) <= EPSILON
         && Math.abs(station - preferredStation) < Math.abs(bestStation - preferredStation)) {
         bestStation = station;
         bestDistance = gap;
       }
-      stationAtStart += distance(start, end);
     }
   }
   return bestStation;
+}
+
+function sliceCenterline(line, from, to) {
+  const low = Math.min(from, to), high = Math.max(from, to), clipped = [];
+  appendDistinct(clipped, atStation(line, low));
+  for (let i = 0; i < line.points.length; i++)
+    if (line.stations[i] > low + EPSILON && line.stations[i] < high - EPSILON) appendDistinct(clipped, line.points[i]);
+  appendDistinct(clipped, atStation(line, high));
+  return from > to ? clipped.reverse() : clipped;
+}
+
+// Only endpoints, contacts and the two route anchors need graph nodes. Each
+// edge along a piece keeps its measured arc length and original bend vertices.
+function connectedGroupPath(group) {
+  const tolerance = Math.max(EPSILON * 8, ...group.pieces.map(piece => piece.profile.width * 1e-5));
+  const stops = new Map(group.pieces.map(piece => [piece, new Map()]));
+  const nodeAt = (piece, station) => {
+    const nodes = stops.get(piece);
+    if (!nodes.has(station)) nodes.set(station, { piece, station, links: [] });
+    return nodes.get(station);
+  };
+  const link = (a, b, length) => {
+    a.links.push({ next: b, length });
+    b.links.push({ next: a, length });
+  };
+  const anchor = station => {
+    const piece = group.pieces.find(part => station >= part.from - EPSILON && station <= part.to + EPSILON);
+    return piece && nodeAt(piece, clamp(station - piece.from, 0, piece.length));
+  };
+  const start = anchor(group.entry), end = anchor(group.exit);
+  if (!start || !end) return null;
+  for (const piece of group.pieces) {
+    const contactStations = new Set([0, piece.length]);
+    if (piece === start.piece) contactStations.add(start.station);
+    if (piece === end.piece) contactStations.add(end.station);
+    for (const station of contactStations) {
+      const point = atStation(piece, station);
+      for (const other of group.pieces) {
+        if (other === piece) continue;
+        for (let i = 1; i < other.points.length; i++) {
+          const start = other.points[i - 1], target = nearestOnSegment(point, start, other.points[i]);
+          const gap = distance(point, target);
+          if (gap <= tolerance) link(nodeAt(piece, station), nodeAt(other, other.stations[i - 1] + distance(start, target)), gap);
+        }
+      }
+    }
+  }
+  for (const nodes of stops.values()) {
+    const ordered = [...nodes.values()].sort((a, b) => a.station - b.station);
+    for (let i = 1; i < ordered.length; i++) link(ordered[i - 1], ordered[i], ordered[i].station - ordered[i - 1].station);
+  }
+  const best = new Map([[start, 0]]), previous = new Map(), pending = [{ node: start, length: 0 }];
+  while (pending.length) {
+    const { node, length } = pending.pop();
+    if (length !== best.get(node)) continue;
+    if (node === end) break;
+    for (const edge of node.links) {
+      const total = length + edge.length;
+      if (total >= (best.get(edge.next) ?? Infinity)) continue;
+      best.set(edge.next, total);
+      previous.set(edge.next, node);
+      pending.push({ node: edge.next, length: total });
+    }
+    pending.sort((a, b) => b.length - a.length);
+  }
+  if (!best.has(end)) return null;
+  const path = [end];
+  while (path.at(-1) !== start) path.push(previous.get(path.at(-1)));
+  path.reverse();
+  const points = [], used = new Set();
+  appendDistinct(points, atStation(start.piece, start.station));
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i];
+    if (a.piece === b.piece) {
+      if (b.station !== a.station) used.add(b.piece);
+      for (const point of sliceCenterline(b.piece, a.station, b.station)) appendDistinct(points, point);
+    } else appendDistinct(points, atStation(b.piece, b.station));
+  }
+  return { points, used };
 }
 
 function clipGroupsToJunctions(pieces, { from, to }) {
@@ -501,12 +586,13 @@ function clipGroupsToJunctions(pieces, { from, to }) {
     const before = pathStations(group.points).at(-1) || 0;
     const start = before + (group.points.length ? distance(group.points.at(-1), piece.points[0]) : 0);
     for (const point of piece.points) appendDistinct(group.points, point);
-    group.pieces.push({ ...piece, from: start, to: pathStations(group.points).at(-1) || 0 });
+    const stations = pathStations(piece.points);
+    group.pieces.push({ ...piece, from: start, to: pathStations(group.points).at(-1), stations, length: stations.at(-1) });
   }
   for (const group of groups) { group.stations = pathStations(group.points); group.length = group.stations.at(-1); group.entry = 0; group.exit = group.length; }
   const junctions = [];
   for (let i = 0; i + 1 < groups.length; i++) {
-    const before = groups[i], after = groups[i + 1], junction = nearestGroupJunction(before, after);
+    const before = groups[i], after = groups[i + 1], junction = nearestGroupJunction(before, after, Boolean(from || to));
     before.exit = junction.fromStation; after.entry = junction.toStation;
     junctions.push({ from: before.token, to: after.token, fromPoint: junction.a, toPoint: junction.b, distance: junction.distance });
   }
@@ -522,13 +608,11 @@ function clipGroupsToJunctions(pieces, { from, to }) {
   if (from) first.entry = nearestStation(first, from, first.exit);
   if (to) last.exit = nearestStation(last, to, last.entry);
   for (const group of groups) {
-    const low = Math.min(group.entry, group.exit), high = Math.max(group.entry, group.exit), clipped = [];
-    appendDistinct(clipped, atStation(group, low));
-    for (let i = 0; i < group.points.length; i++) if (group.stations[i] > low + EPSILON && group.stations[i] < high - EPSILON) appendDistinct(clipped, group.points[i]);
-    appendDistinct(clipped, atStation(group, high));
-    if (group.entry > group.exit) clipped.reverse();
-    group.clipped = clipped;
-    group.skippedProfileIds = group.pieces.filter(piece => Math.min(piece.to, high) - Math.max(piece.from, low) <= EPSILON).map(piece => piece.profile.id);
+    const connected = (from || to) && group.pieces.length > 1 ? connectedGroupPath(group) : null;
+    const low = Math.min(group.entry, group.exit), high = Math.max(group.entry, group.exit);
+    group.clipped = connected?.points ?? sliceCenterline(group, group.entry, group.exit);
+    group.skippedProfileIds = group.pieces.filter(piece => connected ? !connected.used.has(piece)
+      : Math.min(piece.to, high) - Math.max(piece.from, low) <= EPSILON).map(piece => piece.profile.id);
   }
   return { groups, junctions };
 }

@@ -9,7 +9,7 @@ const SOURCE = path.join(ROOT, 'viewer-runtime');
 const SDK = path.join(SOURCE, 'sdk', '7.130.0');
 const DESTINATION = path.join(ROOT, 'public', 'viewer-runtime', '7.130.0');
 const MANIFEST_SHA = '747540a153fb18809c428d8ed177aa8a296cff1b5175ab85445e0a2ebdb36d75';
-const GEOMETRY_SHA = 'f42a34230504ad8b04aa21be953cc23c4202676f89a71020d54f8dbc0b8dbf28';
+const GEOMETRY_SHA = 'b54fa34d366b19fd301ab454a5d35404fff49cddef8f8569155cdc0adf6bd63f';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const refuse = code => { throw new Error(code); };
 const samePath = (a, b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
