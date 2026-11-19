@@ -110,6 +110,8 @@ export const cableWorkflowRowSchema = z.object({
   /** Current labels for presentation only; excluded from immutable calculation snapshots. */
   displayMetadata: z.object({ typeName: z.string().max(4096).nullable(), purpose: z.string().max(4096).nullable() }).strict().optional(),
   mto: z.string().max(96).nullable(),
+  /** The current Cable List route matches the protected manual routing. */
+  savedManualRoute: z.literal(true).optional(),
   from: calculationAvailabilitySchema,
   to: calculationAvailabilitySchema,
   calculation: cableWorkflowCalculationSchema,
@@ -183,7 +185,8 @@ export function classifyCableWorkflow(input: unknown): CableWorkflowDecision {
   // Engine/planning upgrades and a later failed attempt do not invalidate a
   // receipt-proven saved path when its engineering dependencies still match.
   // Historical calculation currentness and all Review/Apply gates stay strict.
-  if (hasVerifiedSavedCableRoute(row)) return { status: 'up-to-date', reasonCodes: reasons() };
+  if (hasVerifiedSavedCableRoute(row) || (row.savedManualRoute && row.cable.routing?.trim()))
+    return { status: 'up-to-date', reasonCodes: reasons() };
   const activeJob = calculation.jobStatus === 'queued' || calculation.jobStatus === 'running';
   const activeItem = activeJob && (calculation.itemState === 'waiting' || calculation.itemState === 'running');
   // Cable List is the source for whether routing is assigned. A new attempt

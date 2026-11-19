@@ -81,9 +81,11 @@ const candidatesSql = `/* cable-workflow:candidates */ SELECT c.id,c.cable_type_
  CASE WHEN octet_length(c.from_location)<=4096 THEN c.from_location ELSE NULL END AS from_location,
  CASE WHEN octet_length(c.to_location)<=4096 THEN c.to_location ELSE NULL END AS to_location,
  CASE WHEN char_length(c.routing)<=8000 AND octet_length(c.routing)<=32000 THEN c.routing ELSE NULL END AS routing,
+ rc.manual_protected AND rc.manual_routing=c.routing AS saved_manual_route,
  CASE WHEN octet_length(c.mto)<=96 THEN c.mto ELSE NULL END AS mto,c.design_length::text,c.install_length::text,
  ${inputOversizeSql} AS input_oversize
  FROM cables c LEFT JOIN cable_types ct ON ct.id=c.cable_type_id AND ct.project_id=c.project_id
+ LEFT JOIN pf_cable_routing_controls rc ON rc.project_id=c.project_id AND rc.cable_id=c.id
  WHERE c.project_id=$1 AND c.mto IS DISTINCT FROM 'MV' AND ($2::uuid IS NULL OR c.id>$2)
  AND ($3::uuid IS NULL OR c.id=$3)
  AND ($4::text IS NULL OR ${inputOversizeSql}
@@ -271,6 +273,7 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
     check();
     return cableWorkflowRowSchema.parse({ projectId, cable: cableSnapshot, mto: cable.mto, from: from.availability, to: to.availability,
       displayMetadata: { typeName: cable.display_type_name ?? null, purpose: cable.display_purpose ?? null },
+      ...(cable.saved_manual_route === true ? { savedManualRoute: true } : {}),
       ...(savedRoute ? { savedRoute } : {}),
       ...(savedRouteModelChanged ? { savedRouteModelChanged: true } : {}),
       calculation: { jobId: jobStatus && meta ? meta.job_id : null, jobStatus, itemState: jobStatus ? itemState : null, outcome: status,

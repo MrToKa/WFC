@@ -124,18 +124,19 @@ describe('whole-project background pass', () => {
     expect(backgroundCalculationCounts(makeJob('complete', [{ ...item('locations_required'), state: 'blocked' }]))).toMatchObject({ blocked: 1, calculated: 0 });
   });
   it('distinguishes a retained manual route from expired writes with and without existing routes', async () => {
-    const props = setup();
+    const props = setup(), onReviewReady = vi.fn();
     vi.mocked(fetchPathFinderJob).mockResolvedValue(makeJob('complete', [
       { ...item('calculated', 'review-required'), retainedRoute: 'manual',
         automaticUpdate: { status: 'review-required', receiptId: null, reasonCode: 'ROUTING_MANUAL_PROTECTED' } },
       { ...item('calculated', 'authority-expired'), retainedRoute: 'saved' },
       { ...item('calculated', 'authority-expired'), retainedRoute: 'none' },
     ]));
-    render(<PathFinderRecalculateAll {...props} />);
+    render(<PathFinderRecalculateAll {...props} onReviewReady={onReviewReady} />);
     fireEvent.click(screen.getByRole('button', { name: 'Recalculate all the cables' }));
     expect(await screen.findByText('Permission to save automatically expired (2 cables). 1 with an existing route in Cable list, 1 without a saved route.')).toBeVisible();
     expect(screen.getByText('Protected manual route (1 cable). 1 with a retained manual route.')).toBeVisible();
-    expect(screen.getByText(/need review: 1;.*not saved by this run: 2/)).toBeVisible();
+    expect(screen.getByText(/need review: 0;.*not saved by this run: 2/)).toBeVisible();
+    expect(onReviewReady).not.toHaveBeenCalled();
   });
   it('retries the identical command after reopening with uncertain admission', async () => {
     const props = setup(); vi.mocked(submitAllPathFinderCalculations).mockResolvedValue({ kind: 'unknown', code: 'CALCULATION_SUBMISSION_UNKNOWN' });

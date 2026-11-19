@@ -28,7 +28,7 @@ export function backgroundCalculationCounts(job: PathFinderJob) {
   const pendingUpdates = items.filter(item => ['pending', 'running', 'unknown'].includes(item.automaticUpdate?.status ?? '')).length;
   const saving = items.filter(item => item.status === 'calculated' && ['pending', 'running'].includes(item.automaticUpdate?.status ?? '')).length;
   const calculated = items.filter(item => item.status === 'calculated').length;
-  const review = items.filter(item => item.automaticUpdate?.status === 'review-required').length;
+  const review = items.filter(item => item.automaticUpdate?.status === 'review-required' && item.retainedRoute !== 'manual').length;
   const blocked = items.filter(item => ['complete', 'blocked', 'cancelled', 'failed'].includes(item.state) && item.status !== 'calculated').length;
   const unsaved = items.filter(isUnsavedCalculation).length;
   return { saved, saving, pendingUpdates, calculated, review, blocked, unsaved };

@@ -151,6 +151,22 @@ describe('read-only saved geometry qualification in workflow projection',()=>{
 });
 
 describe('saved route status after a compatible engine upgrade', () => {
+  it('keeps a protected manual route in Saved routes when a new proposal is available', async () => {
+    const f = fixture(2);
+    const [manual, unprotected] = f.state.cables;
+    for (const [index, cable] of f.state.cables.entries()) {
+      Object.assign(cable, { routing: '/BC069/BC069-1/SECONDARY', design_length: '21', saved_manual_route: cable === manual });
+      f.state.metadata.set(cable.id, meta(index, { job_status: 'complete', item_state: 'complete', proposal_status: 'calculated',
+        proposal_id: id(30 + index), proposal_hash: 'f'.repeat(64) }));
+    }
+    const saved = await f.repo.page(projectId, who, { filter: 'up-to-date' });
+    expect(saved.rows.map(row => row.cable.id)).toEqual([manual.id]);
+    expect(saved.rows[0]).toMatchObject({ savedManualRoute: true, calculation: { reviewable: true } });
+    expect((await f.repo.detail(projectId, who, manual.id, {})).row).toEqual(saved.rows[0]);
+    const review = await f.repo.page(projectId, who, { filter: 'ready-for-review' });
+    expect(review.rows.map(row => row.cable.id)).toEqual([unprotected.id]);
+  });
+
   it('keeps recorded and manually assigned routes in Saved routes while showing a cable without a route in Needs routing', async () => {
     const f = fixture(18), compatible = new Set(f.state.cables.slice(0, 15).map(value => value.id));
     const strictCurrent = f.state.cables[15], manuallyChanged = f.state.cables[16], missingLocation = f.state.cables[17];

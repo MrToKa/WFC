@@ -39,6 +39,8 @@ CREATE TABLE cable_types(project_id uuid,id uuid PRIMARY KEY,name text,purpose t
 CREATE TABLE cables(project_id uuid,id uuid PRIMARY KEY,cable_type_id uuid,cable_write_revision bigint DEFAULT 0,
  tag text,from_location text,to_location text,routing text,mto text,design_length numeric,install_length numeric);
 CREATE INDEX cables_owned ON cables(project_id,id);
+CREATE TABLE pf_cable_routing_controls(project_id uuid,cable_id uuid,manual_protected boolean,manual_routing text,
+ PRIMARY KEY(project_id,cable_id));
 CREATE TABLE pf_revision_admissions(project_id uuid,id uuid PRIMARY KEY,job_id uuid,created_at timestamptz DEFAULT clock_timestamp());
 CREATE TABLE pf_revision_baselines(project_id uuid,admission_id uuid,cable_id uuid,status text);
 CREATE TABLE pf_jobs(project_id uuid,id uuid PRIMARY KEY,state text,cancel_requested boolean DEFAULT false);
@@ -84,12 +86,23 @@ describe.runIf(Boolean(fixturePath))('PF-U1 real SQL slice in an explicitly owne
       await pool.query(`INSERT INTO ${table}(project_id) VALUES($1)`, [projectId]);
   });
   beforeEach(async () => {
-    await pool.query('TRUNCATE cables,pf_revision_admissions,pf_revision_baselines,pf_jobs,pf_job_items,pf_proposals,pf_apply_receipts');
+    await pool.query('TRUNCATE cables,pf_cable_routing_controls,pf_revision_admissions,pf_revision_baselines,pf_jobs,pf_job_items,pf_proposals,pf_apply_receipts');
     await pool.query('UPDATE users SET is_admin=true');
     await pool.query('UPDATE viewer_login_bindings SET revoked_at=NULL');
     queries.length = 0;
   });
   afterAll(async () => { await pool?.end(); });
+
+  it('reads protection only for the current saved route and project', async () => {
+    const cables = await seed(3);
+    await pool.query("UPDATE cables SET routing='/MANUAL',design_length=21 WHERE project_id=$1", [projectId]);
+    await pool.query(`INSERT INTO pf_cable_routing_controls VALUES
+      ($1,$2,true,'/MANUAL'),($1,$3,true,'/OTHER'),($4,$5,true,'/MANUAL')`,
+    [projectId, cables[0].id, cables[1].id, id(99), cables[2].id]);
+    const saved = await repository().page(projectId, who, { filter: 'up-to-date' });
+    expect(saved.rows.map(row => row.cable.id)).toEqual(cables.map(cable => cable.id));
+    expect(saved.rows.map(row => row.savedManualRoute)).toEqual([true, undefined, undefined]);
+  });
 
   it('keeps the recorded route out of Needs routing while the same model is being prepared', async () => {
     const [routed, unrouted] = await seed(2);

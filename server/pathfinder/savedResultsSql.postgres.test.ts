@@ -88,13 +88,16 @@ CREATE TABLE pf_revision_comparison_targets(project_id uuid,target_aggregate_id 
  comparison_revision bigint,decision_set_sha256 text);
 CREATE TABLE cables(project_id uuid,id uuid PRIMARY KEY,cable_type_id uuid,cable_write_revision bigint DEFAULT 0,
  tag text,from_location text,to_location text,routing text,mto text,design_length numeric,install_length numeric);
-CREATE TABLE cable_types(project_id uuid,id uuid,purpose text);
+CREATE TABLE cable_types(project_id uuid,id uuid,name text,purpose text);
+CREATE TABLE pf_cable_routing_controls(project_id uuid,cable_id uuid,manual_protected boolean,manual_routing text,
+ PRIMARY KEY(project_id,cable_id));
 CREATE TABLE pf_revision_admissions(project_id uuid,id uuid PRIMARY KEY,job_id uuid,created_at timestamptz DEFAULT clock_timestamp());
 CREATE TABLE pf_revision_baselines(project_id uuid,admission_id uuid,cable_id uuid,status text);
 CREATE TABLE pf_jobs(project_id uuid,id uuid PRIMARY KEY,state text,cancel_requested boolean DEFAULT false);
 CREATE TABLE pf_job_items(project_id uuid,job_id uuid,cable_id uuid,state text,status text);
-CREATE TABLE pf_proposals(project_id uuid,id uuid PRIMARY KEY,job_id uuid,cable_id uuid,status text,proposal_hash text);
+CREATE TABLE pf_proposals(project_id uuid,id uuid PRIMARY KEY,job_id uuid,cable_id uuid,status text,proposal_hash text,dependencies jsonb);
 CREATE TABLE pf_automatic_pair_dispatch(project_id uuid,job_id uuid,cable_id uuid,status text,receipt_id uuid,reason_code text);
+CREATE TABLE pf_automatic_pair_admission_decisions(project_id uuid,job_id uuid,cable_id uuid,reason_code text);
 CREATE TABLE pf_location_aliases(project_id uuid,normalized_alias text,location_id uuid);
 CREATE TABLE pf_locations(project_id uuid,id uuid,name text,revision bigint);
 CREATE TABLE pf_location_bindings(project_id uuid,location_id uuid);
@@ -195,7 +198,8 @@ describe.skipIf(!adminUrl)('saved result readers against an owned disposable Pos
     await workflowPool!.query("INSERT INTO pf_revision_baselines VALUES($1,$2,$3,'ready')", [projectId, id(411), cableId]);
     await workflowPool!.query("INSERT INTO pf_job_items VALUES($1,$2,$3,'blocked','failed')", [projectId, id(410), cableId]);
     const insertProposal = async (proposalId: string, jobId: string, otherProject = projectId, otherCable = cableId) =>
-      workflowPool!.query("INSERT INTO pf_proposals VALUES($1,$2,$3,$4,'calculated',$5)", [otherProject, proposalId, jobId, otherCable, 'd'.repeat(64)]);
+      workflowPool!.query("INSERT INTO pf_proposals(project_id,id,job_id,cable_id,status,proposal_hash) VALUES($1,$2,$3,$4,'calculated',$5)",
+        [otherProject, proposalId, jobId, otherCable, 'd'.repeat(64)]);
     const insertReceipt = async (receiptId: string, proposalId: string, time: string, otherProject = projectId, otherCable = cableId) =>
       workflowPool!.query('INSERT INTO pf_apply_receipts VALUES($1,$2,$3,$4,$5)', [otherProject, otherCable, time, receiptId, proposalId]);
     await insertProposal(id(420), id(421)); await insertProposal(id(422), id(423));
