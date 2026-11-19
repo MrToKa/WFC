@@ -470,7 +470,15 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         readTrayRootSelection:async()=>{current();const result=await run.viewer!.readTrayRootSelection();current();return result;},
         discover: async (request, onProgress) => { current(); const page = await run.viewer!.discoverPreparationObjects(request, { signal: combined, onProgress, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return page; },
         resolveTrayIdentities: async request => { current(); const response = await run.viewer!.resolveTrayIdentities(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return response; },
-        capture: async request => { current(); const capture = await run.viewer!.captureModel(request, progress => captureProgress(run, () => `Collecting project geometry: ${progress.index + 1} data batches…`), { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
+        capture: async request => {
+          current();
+          run.captureProgressAt = null;
+          update(run, { viewerMessage: 'Reading project geometry…' });
+          const capture = await run.viewer!.captureModel(request, undefined, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } });
+          current();
+          update(run, { viewerMessage: 'The active model is ready.' });
+          return capture;
+        },
         captureBarriers: async request => { current(); update(run, { viewerMessage: 'Reading selected barrier geometry…' }); const capture = await run.viewer!.captureBarriers(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
         publishBarriers: async (intentId, observation, onWriteStarted, expectedCommand) => { current(); const receipt = await (expectedCommand !== undefined
           ? run.viewer!.publishBarriers(intentId, observation, combined, onWriteStarted, expectedCommand)
@@ -483,7 +491,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       // must not hide it behind an unrelated generic reload caption.
       update(run, { busy: false, ...(run.viewer?.getLoadSnapshot()?.ready ? { viewerMessage: 'The active model is ready.' } : {}) });
     }
-  }, [captureProgress, isAdmin, live, update]);
+  }, [isAdmin, live, update]);
   const visible = renderedScope.current === scope ? view : initial;
   const displayTray = useCallback(async (expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[] | null, cadTray?: { projectTrayId: string; routeGroupId?: string }): Promise<boolean> => {
     const target = { ...expected }, objectIds = ids === null ? null : [...ids], run = runRef.current;

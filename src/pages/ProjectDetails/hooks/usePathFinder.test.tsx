@@ -778,7 +778,7 @@ afterEach(() => { document.body.replaceChildren(); });
 describe('PathFinder scope and shared-location orchestration', () => {
   it.each(['model', 'lookup', 'project'] as const)('coalesces only %s capture progress across both callback sources while terminal updates and captured data remain immediate', async kind => {
     let now = 0, finish!: (value: { snapshot: unknown; summary: Record<string, unknown> }) => void;
-    let progress!: (value: { index: number; type: string }) => void;
+    let progress: ((value: { index: number; type: string }) => void) | undefined;
     const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
     facts.capture.mockImplementationOnce((_request, onProgress) => { progress = onProgress; return new Promise(resolve => { finish = resolve; }); });
     vi.mocked(pathFinderRequest).mockResolvedValue({ jobId: locationId });
@@ -794,19 +794,22 @@ describe('PathFinder scope and shared-location orchestration', () => {
           : result.current.runProjectPreparation({ modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) }, viewer => viewer.capture(request));
       });
       await waitFor(() => expect(facts.capture).toHaveBeenCalledOnce());
-      const prefix = kind === 'model' ? 'Preparing the selected model' : kind === 'lookup' ? 'Reading lookup geometry' : 'Collecting project geometry';
-      act(() => progress({ index: 0, type: 'object-part' }));
-      expect(result.current.viewerMessage).toBe(`${prefix}: 1 data batches…`);
+      const prefix = kind === 'model' ? 'Preparing the selected model' : 'Reading lookup geometry';
+      const initialProgress = kind === 'project' ? 'Reading project geometry…' : `${prefix}: 1 data batches…`;
+      act(() => progress?.({ index: 0, type: 'object-part' }));
+      expect(result.current.viewerMessage).toBe(initialProgress);
       now = 900;
-      act(() => { for (let index = 1; index <= 50; index++) progress({ index, type: 'object-part' }); });
-      expect(result.current.viewerMessage).toBe(`${prefix}: 1 data batches…`);
+      act(() => { for (let index = 1; index <= 50; index++) progress?.({ index, type: 'object-part' }); });
+      expect(result.current.viewerMessage).toBe(initialProgress);
       now = 999;
-      act(() => facts.events[0]({ type: 'MODEL_CAPTURE_PROGRESS', payload: { phase: 'properties', loaded: 222, total: 777 } }));
-      expect(result.current.viewerMessage).toBe(`${prefix}: 1 data batches…`);
+      if (kind !== 'project') {
+        act(() => facts.events[0]({ type: 'MODEL_CAPTURE_PROGRESS', payload: { phase: 'properties', loaded: 222, total: 777 } }));
+        expect(result.current.viewerMessage).toBe(initialProgress);
+      }
       now = 1000;
       act(() => facts.events[0]({ type: 'MODEL_CAPTURE_PROGRESS', payload: { phase: 'properties', loaded: 222, total: 777 } }));
       expect(result.current.viewerMessage).toBe('Preparing equipment candidates: 222 / 777…');
-      act(() => progress({ index: 999, type: 'object-part' }));
+      act(() => progress?.({ index: 999, type: 'object-part' }));
       expect(result.current.viewerMessage).toBe('Preparing equipment candidates: 222 / 777…');
       now = 1001;
       act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
@@ -816,8 +819,8 @@ describe('PathFinder scope and shared-location orchestration', () => {
       expect(result.current.error).toContain('could not be completed within its limits');
       expect(result.current.viewerPhase).toBe('ready');
       now = 2000;
-      act(() => progress({ index: 999, type: 'object-part' }));
-      expect(result.current.viewerMessage).toBe(`${prefix}: 1000 data batches…`);
+      act(() => progress?.({ index: 999, type: 'object-part' }));
+      expect(result.current.viewerMessage).toBe(kind === 'project' ? 'The active model is ready.' : `${prefix}: 1000 data batches…`);
       await act(async () => { finish(captured); if (kind === 'project') expect(await pending).toEqual(captured); else await pending; });
       expect(result.current.viewerMessage).toBe('The active model is ready.'); expect(result.current.busy).toBe(false);
       if (kind !== 'project') expect(pathFinderRequest).toHaveBeenCalledWith(projectId, 'token', kind === 'model' ? '/artifacts' : '/lookups', 'POST', expect.objectContaining({ snapshot: captured.snapshot }), expect.any(AbortSignal));

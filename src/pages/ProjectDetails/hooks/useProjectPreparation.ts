@@ -835,7 +835,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
                   viewer.assertCurrent();
                   update((value) => ({
                     ...value,
-                    progress: automatic ? `Updating trays (${part.partIndex + 1} of ${session!.plan.partPlan.length})…` : `Collecting part ${part.partIndex + 1} of ${session!.plan.partPlan.length}. Committed parts are retained.`,
+                    progress: `Collecting part ${part.partIndex + 1} of ${session!.plan.partPlan.length} from the 3D model…`,
                   }));
                   const capture = await viewer.capture(
                     preparationCaptureRequest(session!.plan, part.partId),
@@ -846,6 +846,9 @@ export function useProjectPreparation(pf: PF, active: boolean) {
                   });
                   viewer.assertCurrent();
                   assertCurrent(signal);
+                  update(value => ({ ...value,
+                    progress: `Uploading geometry for part ${part.partIndex + 1} of ${session!.plan.partPlan.length}…`,
+                  }));
                   fresh = await execute(
                     {
                       kind: 'part',
@@ -1305,7 +1308,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     }
     if (!fresh.session || !fresh.session.coverage.requestedScopeComplete || fresh.session.coverage.missingPartIds.length)
       throw new Error('The tray update is incomplete. Check the trays again to continue.');
-    update(value => ({ ...value, progress: 'Finishing the tray update…' }));
+    update(value => ({ ...value, progress: 'Validating and saving the network…' }));
     fresh = await execute({ kind: 'publish', sessionId: fresh.session.id, body: {
       schemaVersion: 'wfc.pf.preparation-mutation.v1', expectedSessionRevision: fresh.session.sessionRevision,
       idempotencyKey: generateId(), reason: 'Update the project tray network from the current model.',

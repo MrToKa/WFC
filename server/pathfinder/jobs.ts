@@ -207,16 +207,20 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         const revision = (await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR UPDATE',[projectId])).rows[0];
         if (revision.registry_revision !== matched.registryRevision) throw new PathFinderError('REGISTRY_CONFLICT',409);
         const deadline=bulkDeadline??Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
-        if (input.force && input.automaticPairPolicy && input.cableIds === undefined) {
-          // Recalculate all uses the same verified endpoint recovery as continuous recalculation.
-          // Freeze the job after recovery so its dependencies reference the updated heads.
+        if (input.force && input.automaticPairPolicy && (input.cableIds === undefined || bulkSubmission)) {
+          // Freeze dependencies after checking retained endpoints. A filtered
+          // submission only checks the shared locations used by its cables.
           checkBulkDeadline();
           const recovery = new AbortController();
           const timer = setTimeout(() => recovery.abort(new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503)),
             Math.max(0,deadline-Date.now()));
           try {
-            await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,recovery.signal);
-            await recoverCrossModelEndpointsInTransaction(client,projectId,who,recovery.signal);
+            if (input.cableIds) {
+              await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,recovery.signal,{cableIds:input.cableIds});
+            } else {
+              await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,recovery.signal);
+              await recoverCrossModelEndpointsInTransaction(client,projectId,who,recovery.signal);
+            }
           } finally { clearTimeout(timer); }
         }
         const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline,

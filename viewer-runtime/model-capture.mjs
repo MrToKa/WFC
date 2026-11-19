@@ -296,6 +296,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
     return box;
   }
   const selectedAncestorBounds = new Map();
+  let lastGeometryYield = performance.now();
   // Physical/endpoint objects go first. Hierarchy bounds are a union of the
   // captured descendants only: they are context stubs, never a full-plant mesh.
   for (const record of [...selected.values()].sort((a, b) => (a.role === 'hierarchy') - (b.role === 'hierarchy') || a.id - b.id)) {
@@ -341,7 +342,15 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
     if (record.equipmentEligibility) object.equipmentEligibility = record.equipmentEligibility;
     const body = serialize(object); snapshotBytes += encoder.encode(body).length; if (snapshotBytes > MODEL_CAPTURE_LIMITS.totalBytes) captureRefuse('Selected computational snapshot exceeds64MiB. Reduce scope.', 'MODEL_CAPTURE_PAYLOAD_LIMIT');
     for (const event of textParts('object-part', request.captureId, object.id, body)) yield emit(event);
-    objectCount++; onProgress?.({ phase: 'geometry', loaded: objectCount, total: selected.size }); await pause();
+    objectCount++;
+    // Yield on a time slice instead of scheduling a browser timer for every object.
+    if (objectCount === selected.size || performance.now() - lastGeometryYield >= 16) {
+      onProgress?.({ phase: 'geometry', loaded: objectCount, total: selected.size });
+      if (objectCount < selected.size) {
+        await pause();
+        lastGeometryYield = performance.now();
+      }
+    }
   }
   const propertyScan = { indexedObjectCount: ids.length, attemptedObjectCount: attemptedPropertyIds.size, returnedObjectCount: returnedPropertyIds.size, omittedObjectCount: attemptedPropertyIds.size - returnedPropertyIds.size, complete: equipment.size > 0 && attemptedPropertyIds.size === ids.length && returnedPropertyIds.size === ids.length };
   const equipmentMatches = [...equipment.values()].map(value => ({ name: value.name, status: value.ids.size > 1 ? 'ambiguous' : !propertyScan.complete ? 'unknown' : value.ids.size === 0 ? 'missing' : 'candidate', candidateObjectIds: [...value.ids].sort((a, b) => a - b).map(id => 'dbid:' + id) }));

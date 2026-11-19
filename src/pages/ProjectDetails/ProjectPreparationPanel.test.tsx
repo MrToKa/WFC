@@ -39,6 +39,21 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => {}); });
 
 describe('simple project tray preparation', () => {
+  it('shows the last published network version while a new one is building', () => {
+    const { state, pf } = setup();
+    const publishedAt = '2026-11-19T10:44:56.503Z';
+    state.context.currentAggregate = {
+      ...state.context.scope, sessionId: state.session.id, geometryRevision: '32', publishedAt,
+    } as typeof state.context.currentAggregate;
+    state.busy = true;
+    state.generatingNetwork = true;
+    const { rerender } = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('Last saved network version 32').nextElementSibling).toHaveAttribute('datetime', publishedAt);
+    expect(screen.getByRole('button', { name: 'Pause network generation' })).toBeEnabled();
+    state.context.currentAggregate = { ...state.context.currentAggregate!, geometryRevision: '33' };
+    rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('Last saved network version 33')).toBeVisible();
+  });
   it.each([true, false])('counts all model and manual trays using verified network membership (all manual included: %s)', allManualIncluded => {
     const { state, pf } = setup();
     const template = state.context.trays[0];

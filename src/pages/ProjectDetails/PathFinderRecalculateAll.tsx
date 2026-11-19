@@ -21,6 +21,8 @@ export const useFilteredCableRecalculation = () => useContext(FilteredRecalculat
 type JobItem = NonNullable<PathFinderJob['items']>[number];
 const isUnsavedCalculation = (item: JobItem) => item.status === 'calculated' && (!item.automaticUpdate
   || ['refused', 'stale', 'authority-expired', 'unknown'].includes(item.automaticUpdate.status));
+const isBlockedCalculation = (item: JobItem) =>
+  ['complete', 'blocked', 'cancelled', 'failed'].includes(item.state) && item.status !== 'calculated';
 
 export function backgroundCalculationCounts(job: PathFinderJob) {
   const items = job.items ?? [];
@@ -29,7 +31,7 @@ export function backgroundCalculationCounts(job: PathFinderJob) {
   const saving = items.filter(item => item.status === 'calculated' && ['pending', 'running'].includes(item.automaticUpdate?.status ?? '')).length;
   const calculated = items.filter(item => item.status === 'calculated').length;
   const review = items.filter(item => item.automaticUpdate?.status === 'review-required' && item.retainedRoute !== 'manual').length;
-  const blocked = items.filter(item => ['complete', 'blocked', 'cancelled', 'failed'].includes(item.state) && item.status !== 'calculated').length;
+  const blocked = items.filter(isBlockedCalculation).length;
   const unsaved = items.filter(isUnsavedCalculation).length;
   return { saved, saving, pendingUpdates, calculated, review, blocked, unsaved };
 }
@@ -66,6 +68,16 @@ function savingBreakdown(items: PathFinderJob['items']) {
     groups.set(reason, group);
   }
   return [...groups.entries()].sort(([, first], [, second]) => second.total - first.total);
+}
+
+function blockedCalculationBreakdown(items: PathFinderJob['items']) {
+  const groups = new Map<string, number>();
+  for (const item of items ?? []) {
+    if (!isBlockedCalculation(item)) continue;
+    const reason = item.message?.trim() || 'No calculation reason was recorded.';
+    groups.set(reason, (groups.get(reason) ?? 0) + 1);
+  }
+  return [...groups.entries()].sort(([, first], [, second]) => second - first);
 }
 
 /** Owns only its submission and lightweight progress reads. Never owns the
@@ -118,6 +130,7 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
   }, []);
   const counts = job ? backgroundCalculationCounts(job) : null;
   const saveReasons = savingBreakdown(job?.items);
+  const blockedReasons = blockedCalculationBreakdown(job?.items);
   const networkBlocked = job?.status === 'complete' && job.total > 0 && job.items?.length === job.total
     && job.items.every(item => item.state === 'blocked' && item.status === 'routing_preparation_required');
   const running = Boolean(jobId && (!job || ['queued', 'running'].includes(job.status) || (counts?.pendingUpdates ?? 0) > 0));
@@ -271,6 +284,11 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       {!submitting && !pending && job && counts ? <>
         <ProgressBar value={job.total ? job.completed / job.total : 1} />
         <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}.</Caption1>
+        {blockedReasons.length > 0 ? <ul aria-label="Skipped or failed calculations">
+          {blockedReasons.map(([reason, count]) => <li key={reason}>
+            {count} {count === 1 ? 'cable' : 'cables'} · {reason}
+          </li>)}
+        </ul> : null}
         {saveReasons.length > 0 ? <ul aria-label="Calculated routes requiring attention">
           {saveReasons.map(([reason, { total, routes }]) => <li key={reason}>
             {reason} ({total} {total === 1 ? 'cable' : 'cables'}). {[...routes].map(([route, count]) => `${count} ${retainedRouteLabels[route]}`).join(', ')}.

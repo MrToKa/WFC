@@ -31,6 +31,20 @@ function FilteredAction() {
   return <><button disabled={action.disabled} onClick={() => void action.start({ query: filteredQuery, contextSha256: filterContext })}>Recalculate filtered cables</button>{action.progress}</>;
 }
 describe('filtered background recalculation', () => {
+  it('shows grouped server reasons for cables skipped before calculation', async () => {
+    const props = setup(), ids = [id(30), id(31), id(32)];
+    const location = { ...item('locations_required'), state: 'blocked', message: 'Resolve From locations.' };
+    vi.mocked(collectFilteredCableIds).mockResolvedValue(ids);
+    vi.mocked(fetchPathFinderJob).mockResolvedValue(makeJob('complete', [
+      location, { ...location, cableId: ids[1] },
+      { ...item('no_path'), cableId: ids[2], message: 'No connected path was found.' },
+    ]));
+    render(<PathFinderRecalculateAll {...props}><FilteredAction /></PathFinderRecalculateAll>);
+    fireEvent.click(screen.getByRole('button', { name: 'Recalculate filtered cables' }));
+    const reasons = await screen.findByRole('list', { name: 'Skipped or failed calculations' });
+    expect(reasons).toHaveTextContent('2 cables · Resolve From locations.');
+    expect(reasons).toHaveTextContent('1 cable · No connected path was found.');
+  });
   it('submits the collected set and retries that exact set without collecting again', async () => {
     const props = setup(), onReviewReady = vi.fn(), ids = [id(30), id(32)];
     vi.mocked(collectFilteredCableIds).mockResolvedValue(ids);

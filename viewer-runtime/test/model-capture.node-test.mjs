@@ -42,6 +42,18 @@ function fixture({ ambiguous = true, nonfinite = false, indices = [0, 1, 2], emp
   return { model, tree, properties };
 }
 async function collect(options = {}, input = request) { const value = fixture(options), events = [], assembler = createModelCaptureAssembler(); for await (const event of captureSelectedModel({ model: value.model }, input)) { events.push(event); assembler.accept(event); } return { snapshot: assembler.finish(), summary: assembler.summary(), events, ...value }; }
+test('fast geometry objects share one time slice and still report completion', async t => {
+  t.mock.method(performance, 'now', () => 0);
+  const { model } = fixture();
+  const geometryProgress = [];
+  const assembler = createModelCaptureAssembler();
+  for await (const event of captureSelectedModel({ model }, request, {
+    onProgress: progress => { if (progress.phase === 'geometry') geometryProgress.push(progress); },
+  })) assembler.accept(event);
+  const { objects } = assembler.finish();
+  assert.equal(objects.length, 6);
+  assert.deepEqual(geometryProgress, [{ phase: 'geometry', loaded: objects.length, total: objects.length }]);
+});
 const ruleRequest = rules => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], routeRules: rules }; };
 const rule = (objectIds, allowedCategories, id = '44444444-4444-4444-8444-444444444444') => ({ id, objectIds, allowedCategories });
 const lookupRequest = (lookupRouteCodes = ['/BC001']) => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], lookupRouteCodes }; };

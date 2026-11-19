@@ -88,11 +88,13 @@ describe('manual calculation uses the same exact cable scope for matching and ad
     expect(f.match).toHaveBeenCalledExactlyOnceWith(projectId,who,'7',cableIds,f.client,expect.any(Function));
     expect(seams.collect).toHaveBeenCalledExactlyOnceWith(f.client,expect.objectContaining({projectId,cableIds,options}));
     expect(seams.automatic.mock.calls[0][1].items.map((item:{cableId:string})=>item.cableId)).toEqual(cableIds);
-    expect(seams.requalify).not.toHaveBeenCalled();
+    expect(seams.requalify).toHaveBeenCalledExactlyOnceWith(f.client,projectId,who,expect.any(AbortSignal),{cableIds});
+    expect(seams.requalify.mock.invocationCallOrder[0]).toBeLessThan(seams.collect.mock.invocationCallOrder[0]);
     expect(seams.recover).not.toHaveBeenCalled();
     expect(await f.jobs.create(projectId,{...who,loginId:id(42)},input)).toEqual({jobId:submissionId,duplicate:true,registryRevision:'8'});
     await expect(f.jobs.create(projectId,who,{...input,cableIds:[cableId,id(21)]})).rejects.toMatchObject({code:'BULK_SUBMISSION_CONFLICT'});
     expect(f.match).toHaveBeenCalledOnce();
+    expect(seams.requalify).toHaveBeenCalledOnce();
     expect(seams.collect).toHaveBeenCalledOnce();
     expect(seams.persist).toHaveBeenCalledOnce();
     expect(seams.automatic).toHaveBeenCalledOnce();

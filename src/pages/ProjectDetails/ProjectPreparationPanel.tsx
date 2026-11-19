@@ -34,6 +34,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
   const permissionOwner = JSON.stringify([pf.preparationAccess, state.context?.projectId,
     state.context?.scope.catalogRevision, state.context?.scope.routingPolicyRevision]);
   const context = state.context;
+  const savedNetwork = context?.currentAggregate;
   const displayScope = JSON.stringify(context?.scope);
   const currentDisplay = display?.owner === owner && display.scope === displayScope ? display : null;
   const currentShowError = showError?.owner === owner && showError.scope === displayScope ? showError : null;
@@ -148,6 +149,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     : pf.viewerPhase === 'loading' ? 'The model is loading. Wait for it to finish.'
       : pf.viewerPhase === 'no-model' ? 'Load a model to use these controls.'
         : pf.viewerPhase !== 'ready' ? 'The model is not ready. Reload it to continue.'
+          : state.generatingNetwork ? null
           : pf.busy ? 'The model is busy. Wait for the current operation to finish.'
             : state.loading ? 'Reading the current tray status…'
               : reading ? 'Saving the selected tray assignment…'
@@ -256,6 +258,10 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     }
   };
   return <section aria-label="Project tray preparation">
+    {savedNetwork?.geometryRevision && <p>
+      <strong>Last saved network version {savedNetwork.geometryRevision}</strong>
+      {' · '}<time dateTime={savedNetwork.publishedAt}>{new Date(savedNetwork.publishedAt).toLocaleString()}</time>
+    </p>}
     <Button appearance="primary" disabled={writeDisabled || state.unknown} onClick={() => void state.generateNetwork()}>
       {state.generatingNetwork ? 'Generating network…' : state.generationPaused ? 'Resume network generation' : context?.currentAggregate ? 'Regenerate network' : 'Generate network'}
     </Button>
@@ -267,7 +273,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
       {state.unknown ? state.busy ? 'Checking tray update…' : 'Retry tray update' : 'Discover project tray candidates'}
     </Button>
     <p>Discover checks the project Trays records against model names and Properties, then saves unique matches. Generate network builds from the assigned trays.</p>
-    {state.busy ? <Button onClick={state.pause} style={{ marginLeft: 8 }}>Stop checking</Button> : null}
+    {state.busy ? <Button onClick={state.pause} style={{ marginLeft: 8 }}>{state.generatingNetwork ? 'Pause network generation' : 'Stop checking'}</Button> : null}
     {disabledReason ? <p>{disabledReason}</p> : null}
     {working ? <Spinner size="tiny" label={state.progress ?? (reading ? 'Reading and saving the selected tray…'
       : state.loading ? 'Checking saved network readiness…' : state.unknown ? 'Checking the earlier tray update…' : 'Checking trays and preparing the network…')} style={{ marginBlock: 12 }} /> : null}
