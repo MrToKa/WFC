@@ -2,7 +2,7 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'reac
 import { Body1, Button, Field, Input, Spinner, tokens } from '@fluentui/react-components';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useProjectPreparation } from './hooks/useProjectPreparation';
-import { preparationResolutionMatchesScope, type PreparationScope, type PreparationPlan } from '../../../shared/pathfinderPreparation';
+import { preparedNetworkMatchesScope, preparationResolutionMatchesScope, type PreparationScope, type PreparationPlan } from '../../../shared/pathfinderPreparation';
 import { fetchRoutingPurposePolicy, type RoutingPurposePolicy } from '@/api/pathfinderPolicies';
 import { trayDisplayTarget } from './trayDisplayTarget';
 import { formatPreparationDiagnostics } from './preparationDiagnostics';
@@ -87,12 +87,8 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
   if (!state.enabled) return <Body1>Current administrator project access is required.</Body1>;
   const discovery = context && state.discovery && sameModel(state.discovery, context.scope) ? state.discovery : null;
   const plan = context && state.session?.plan.projectId === context.projectId && sameModel(state.session.plan, context.scope) ? state.session.plan : null;
-  const saved = Boolean(state.networkReady && modelCurrent && pf.viewerPhase === 'ready' && context?.currentAggregate && sameModel(context.currentAggregate, context.scope)
-    && context.currentAggregate.catalogRevision === context.scope.catalogRevision
-    && context.currentAggregate.routingContentSha256 === context.scope.routingContentSha256
-    && context.currentAggregate.routingPolicyRevision === context.scope.routingPolicyRevision
-    && context.currentAggregate.routingPolicySha256 === context.scope.routingPolicySha256
-    && context.currentAggregate.resolutionRevision === context.scope.resolutionRevision);
+  const saved = Boolean(state.networkReady && modelCurrent && pf.viewerPhase === 'ready'
+    && context && preparedNetworkMatchesScope(context, true));
   const diagnosticPlan = plan && context && (Object.keys(context.scope) as Array<keyof PreparationScope>).every(key => plan[key] === context.scope[key]) ? plan : null;
   const currentDiagnostics: PreparationPlan['diagnostics'] = context && modelCurrent ? context.trays.flatMap(tray => {
     if (tray.policyState === 'configured' || tray.policyState === 'excluded'

@@ -65,7 +65,7 @@ describe('simple project tray preparation', () => {
       ...(index >= 89 ? { geometrySource: 'published-cad-route' as const } : {}),
       inNetwork: allManualIncluded || index !== 95,
     }));
-    state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
+    state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
     render(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.getByRole('status')).toHaveTextContent(allManualIncluded
       ? 'Network saved in the database. Ready for routing calculations. 96 of 96 trays included in the calculation network.'
@@ -75,7 +75,7 @@ describe('simple project tray preparation', () => {
   it('does not count a saved model assignment without verified network geometry', () => {
     const { state, pf, tray } = setup();
     tray.inNetwork = false;
-    state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
+    state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
     render(<ProjectPreparationPanel pf={pf} active />);
     expect(within(screen.getByRole('article', { name: `Tray ${tray.rawName}` })).getByText('Assigned')).toBeVisible();
     expect(screen.getByRole('status')).toHaveTextContent(
@@ -88,7 +88,7 @@ describe('simple project tray preparation', () => {
     if (mixedFlags) state.context.trays.push({ ...state.context.trays[0],
       projectTrayId: '85000000-0000-4000-8000-000000000099', rawName: 'BC901',
       geometrySource: 'published-cad-route', inNetwork: true });
-    state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
+    state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
     render(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.getByRole('status')).toHaveTextContent(
       'Network saved in the database. Ready for routing calculations. Tray inclusion count is unavailable. Refresh preparation to verify all trays.',
@@ -167,7 +167,7 @@ describe('simple project tray preparation', () => {
     expect(state.finishNetwork).toHaveBeenCalledOnce(); expect(state.generateNetwork).not.toHaveBeenCalled(); expect(state.discover).not.toHaveBeenCalled();
   });
   it('keeps matching counts visible when the saved network remains ready without generating again', () => {
-    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    const { state, pf } = setup(); state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope } as typeof state.context.currentAggregate;
     state.networkStorageStatus = 'stored-current'; state.trayMatchCounts = { assigned: 0, kept: 91, missing: 0, ambiguous: 0 };
     render(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.getByRole('status', { name: 'Tray matching results' })).toHaveTextContent('assigned: 0; kept: 91; not found: 0; multiple matches: 0');
@@ -180,7 +180,7 @@ describe('simple project tray preparation', () => {
     expect(state.generateNetwork).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Generate network' }));
     expect(state.generateNetwork).toHaveBeenCalledOnce(); expect(state.checkTrays).not.toHaveBeenCalled();
-    state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope } as typeof state.context.currentAggregate;
     state.networkStorageStatus = 'stored-current'; state.error = 'The saved routing network file is missing.';
     page.rerender(<ProjectPreparationPanel pf={pf} active />);
     fireEvent.click(screen.getByRole('button', { name: 'Regenerate network' }));
@@ -411,14 +411,14 @@ describe('simple project tray preparation', () => {
     const { state, pf } = setup(), extra = { ...state.context.trays[0], projectTrayId: '85000000-0000-4000-8000-000000000001', rawName: 'A120', inNetwork: false };
     state.context.trays[0].inNetwork = true;
     state.context.trays.push(extra);
-    state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
+    state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
     render(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations. 1 of 2 trays included in the calculation network. 1 tray is not included.');
     expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
   });
   it('waits for the verified frame proof before showing ready or refreshing obstacles', () => {
     const { state, pf } = setup(), ready = vi.fn();
-    state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope } as typeof state.context.currentAggregate;
     state.networkReady = false; state.networkStorageStatus = 'stored-current'; state.loading = true; state.busy = true;
     const view = render(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
     expect(screen.getByText('Network saved in the database. Checking readiness for routing calculations…')).toBeVisible();
@@ -433,7 +433,7 @@ describe('simple project tray preparation', () => {
     expect(ready).toHaveBeenCalledTimes(1);
   });
   it('shows a saved network that still needs verification without claiming readiness or requiring a rebuild', () => {
-    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    const { state, pf } = setup(); state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope } as typeof state.context.currentAggregate;
     state.networkReady = false; state.networkStorageStatus = 'stored-current';
     render(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Readiness still needs verification.');
@@ -453,7 +453,7 @@ describe('simple project tray preparation', () => {
     expect(state.checkTrays).not.toHaveBeenCalled();
   });
   it.each(['model', 'routing-policy', 'tray-assignment'] as const)('distinguishes a saved network with changed %s from a missing network', changed => {
-    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    const { state, pf } = setup(); state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope } as typeof state.context.currentAggregate;
     if (changed === 'model') state.context.currentAggregate!.contentFingerprint = 'd'.repeat(64);
     if (changed === 'routing-policy') state.context.scope.routingPolicyRevision = '99';
     if (changed === 'tray-assignment') state.context.scope.resolutionRevision = '99';
@@ -464,7 +464,7 @@ describe('simple project tray preparation', () => {
     expect(screen.queryByText(/Ready for routing calculations\.|No routing network is saved/)).toBeNull();
   });
   it('keeps a verified saved network ready after reopening without invoking network preparation', () => {
-    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    const { state, pf } = setup(); state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope } as typeof state.context.currentAggregate;
     state.networkStorageStatus = 'stored-current';
     const first = render(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.getByRole('status')).toHaveTextContent('Ready for routing calculations.'); first.unmount();
@@ -473,14 +473,26 @@ describe('simple project tray preparation', () => {
     expect(screen.getByText('Reopening the project and changing From/To locations reuse the saved network.')).toBeVisible();
     expect(state.checkTrays).not.toHaveBeenCalled(); expect(state.assignTray).not.toHaveBeenCalled();
   });
+  it('shows a verified CAD addition in the current network even when its base catalog is older', () => {
+    const { state, pf, tray } = setup();
+    state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope } as typeof state.context.currentAggregate;
+    state.context.scope.catalogRevision = '41';
+    state.context.scope.routingContentSha256 = 'e'.repeat(64);
+    state.context.trays = [{ ...tray, geometrySource: 'published-cad-route', inNetwork: true }];
+    state.networkStorageStatus = 'stored-current';
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('Ready for routing calculations. 1 of 1 trays included');
+    expect(screen.getByRole('img', { name: 'Included in calculation network' })).toBeVisible();
+    expect(state.generateNetwork).not.toHaveBeenCalled();
+  });
   it('does not show ready for an aggregate from a different model or mapping revision', () => {
     const { state, pf } = setup();
-    state.context.currentAggregate = { ...state.context.scope, resolutionRevision: '99' } as typeof state.context.currentAggregate;
+    state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope, resolutionRevision: '99' } as typeof state.context.currentAggregate;
     render(<ProjectPreparationPanel pf={pf} active />); expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull();
   });
   it('does not retain ready or assigned labels when the Viewer switches to another model', () => {
     const { state, pf } = setup();
-    state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.context.currentAggregate = { projectId: state.context.projectId, ...state.context.scope } as typeof state.context.currentAggregate;
     const view = render(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations.');
     const changed = { ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, contentFingerprint: 'e'.repeat(64) } } };

@@ -38,6 +38,8 @@ const safe = (handler: (req: Request, res: Response) => Promise<void>) =>
   };
 const routeSelect = `SELECT g.id,g.name,g.tag,g.color,g.purpose,g.revision,g.status,
   g.project_tray_id AS "projectTrayId",
+  (SELECT e.tray_id FROM cad_route_tray_exports e
+    WHERE e.project_id=g.project_id AND e.design_id=g.design_id AND e.route_group_id=g.id) AS "exportedTrayId",
   CASE WHEN g.status='published' THEN 'automatic' ELSE NULL END AS "networkMode",
   COALESCE((SELECT jsonb_agg(m.instance_id::text ORDER BY m.instance_id) FROM cad_route_group_members m
     WHERE m.project_id=g.project_id AND m.design_id=g.design_id AND m.route_group_id=g.id),'[]'::jsonb) AS "instanceIds"

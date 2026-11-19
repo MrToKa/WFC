@@ -18,7 +18,7 @@ import { composeTransform, rotateVector, connectorAlignmentIsValid, type RigidTr
 import { MATE_OPPOSING_FACE, type PocPort } from '../../shared/cadPocPorts.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
 import type { TrayRow } from '../models/tray.js';
-import { encodeCadOverlay } from '../pathfinder/cadOverlay.js';
+import { encodeCadOverlay, readUnpreparedCadTrayExports } from '../pathfinder/cadOverlay.js';
 import { PathFinderError } from '../pathfinder/errors.js';
 import { markRecalculationDirty } from '../pathfinder/recalculationSchema.js';
 
@@ -296,6 +296,8 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
       return refuse('CAD_ROUTE_TRAY_NAME_TAG_MISMATCH','This legacy route name differs from its routing identifier. Rename the route to one identifier and refresh its Trays row before publishing.');
     const model=(await client.query<{model_version_id:string}>('SELECT model_version_id FROM cad_designs WHERE project_id=$1 AND id=$2',[projectId,designId])).rows[0];
     const {artifact,options,routing,segmentCount}=await networkOptions(client,projectId,model.model_version_id,requiresAttachment);
+    const trayInBaseCatalog = trayExport !== null &&
+      !(await readUnpreparedCadTrayExports(client, projectId, artifact.id, model.model_version_id)).includes(trayExport.row.id);
     const rules=(await client.query<{allowed_categories:string[]}>(`SELECT r.allowed_categories FROM pf_routing_purpose_rules r JOIN pf_catalog_purpose_incarnations i
       ON i.project_id=r.project_id AND i.purpose_key=r.purpose_key AND i.incarnation_id=r.purpose_incarnation_id
       WHERE r.project_id=$1 AND r.purpose_key=$2 AND i.active AND i.row_count>0`,[projectId,normalizeCatalogKey(group.purpose)])).rows[0];
@@ -319,10 +321,10 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     const previous=routing.cadOverlay?cadOverlayPayloadSchema.parse(JSON.parse(Buffer.from(routing.cadOverlay.payloadBase64,'base64').toString('utf8'))).segments:[];
     const compositeSegments=[...previous,...overlay.segments];
     const verifiedOverlay=encodeCadOverlay({...overlay,segments:compositeSegments});
-    const fingerprint=createHash('sha256').update(canonicalPurposeJson({group:{id:group.id,revision:group.revision,tag:group.tag,purpose:group.purpose},material,routing,transitions,
+    const fingerprint=createHash('sha256').update(canonicalPurposeJson({group:{id:group.id,revision:group.revision,tag:group.tag,purpose:group.purpose},material,routing,transitions,trayInBaseCatalog,
       trayExport:trayExport?{trayId:trayExport.row.id,sourceSha256:trayExport.sourceSha256,projection:trayExport.projection}:null,
       artifactId:artifact.id,verifiedOverlay,sources:instances.map(row=>({id:row.id,revision:row.revision,assetId:row.material_asset_id,sha256:row.source_sha256,lengthMm:row.cut_length_mm}))})).digest('hex');
-    return {group,chain,instances,transitions,material,trayExport,artifact,overlay,verifiedOverlay,modelId:model.model_version_id,expectedSegments:segmentCount+previous.length+segments.length,fingerprint};
+    return {group,chain,instances,transitions,material,trayExport,trayInBaseCatalog,artifact,overlay,verifiedOverlay,modelId:model.model_version_id,expectedSegments:segmentCount+previous.length+segments.length,fingerprint};
   };
   // Release all database locks while the private worker validates geometry.
   // A running calculation may itself need the project mutex to finish.
@@ -338,14 +340,14 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     const current=await freeze(client);
     if(current.fingerprint!==frozen.fingerprint)return refuse('CAD_ROUTE_CHANGED_DURING_PROOF','The network or route changed during verification. Refresh and publish again.');
     const {projectId,designId,routeId}=req.params;
-    const {group,chain,instances,transitions,material,trayExport,artifact,overlay}=current;
+    const {group,chain,instances,transitions,material,trayExport,trayInBaseCatalog,artifact,overlay}=current;
     const trayId=trayExport?.row.id??randomUUID();
     const traySnapshot={id:trayId,name:trayExport?.row.name??group.tag,purpose:trayExport?.row.purpose??normalizeCatalogKey(group.purpose),...material,lengthMm:chain.lengthMetres*1000};
     if(!trayExport){
       const inserted=await client.query<TrayRow>('INSERT INTO trays(id,project_id,name,purpose,tray_type,width_mm,height_mm,length_mm) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[trayId,projectId,traySnapshot.name,traySnapshot.purpose,material.trayType,material.widthMm,material.heightMm,traySnapshot.lengthMm]);
       await recordTrayChanges(client,req.userId!,null,inserted.rows[0]);
     }
-    const publication={schemaVersion:'wfc.cad.route-publication.v1',baseArtifactId:artifact.id,overlay,traySnapshot,trayInBaseCatalog:Boolean(trayExport),
+    const publication={schemaVersion:'wfc.cad.route-publication.v1',baseArtifactId:artifact.id,overlay,traySnapshot,trayInBaseCatalog,
       trayExportSourceSha256:trayExport?.sourceSha256??null,attachments,
       routingTransitions:transitions.map(link=>({id:link.id,kind:link.kind,sourceInstanceId:link.source_instance_id,sourcePortName:link.source_name,
         targetInstanceId:link.target_instance_id,targetPortName:link.target_name,

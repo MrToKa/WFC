@@ -104,6 +104,23 @@ export type PreparationSession = z.infer<typeof preparationSessionSchema>;
 export type PreparationPart = z.infer<typeof preparationPartSchema>;
 export type PreparationDiscovery = z.infer<typeof preparationDiscoverySchema>;
 export type PreparationContext = z.infer<typeof preparationContextSchema>;
+
+export function hasVerifiedPreparationCatalogDelta(context: PreparationContext): boolean {
+  const aggregate = context.currentAggregate;
+  // The server reports membership only after validating the routing scope and its saved trace.
+  return Boolean(aggregate && (aggregate.catalogRevision !== context.scope.catalogRevision
+    || aggregate.routingContentSha256 !== context.scope.routingContentSha256)
+    && context.trays.some(tray => tray.inNetwork === true));
+}
+
+export function preparedNetworkMatchesScope(context: PreparationContext, allowVerifiedCatalogDelta = false): boolean {
+  const aggregate = context.currentAggregate;
+  if (!aggregate || aggregate.projectId !== context.projectId) return false;
+  const catalogVerified = allowVerifiedCatalogDelta && hasVerifiedPreparationCatalogDelta(context);
+  return (Object.keys(context.scope) as Array<keyof PreparationScope>).every(key =>
+    key === 'locationRegistryRevision' || aggregate[key] === context.scope[key]
+    || catalogVerified && (key === 'catalogRevision' || key === 'routingContentSha256'));
+}
 export type PreparationAggregate = z.infer<typeof preparationAggregateSchema>;
 export type PreparationCreate = z.infer<typeof preparationCreateSchema>;
 export type PreparationResolutionWrite = z.infer<typeof preparationResolutionWriteSchema>;

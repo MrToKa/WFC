@@ -213,6 +213,7 @@ beforeEach(() => {
     if (text.startsWith('SELECT * FROM cad_route_groups')) return { rows: [currentGroup] };
     if (text.startsWith('SELECT * FROM cad_route_tray_exports')) return {rows:exportLink?[exportLink]:[]};
     if (text.startsWith('SELECT tray_id FROM cad_route_tray_exports')) return {rows:exportLink?[{tray_id:exportLink.tray_id}]:[]};
+    if (text.startsWith('/* cad-unprepared-tray-exports */')) return {rows:[]};
     if (text.startsWith('SELECT * FROM trays')) return {rows:exportedTray&&values[0]===projectId&&values[1]===exportedTray.id?[exportedTray]:[]};
     if (text.startsWith('SELECT i.*,c.original_filename')) return { rows: [instance] };
     if (text.startsWith('SELECT COUNT(*)::int AS member_count'))
@@ -338,6 +339,25 @@ describe('CAD publication HTTP authorization and refusal', () => {
     expect(publication).toMatchObject({trayInBaseCatalog:true,trayExportSourceSha256:exportLink!.source_sha256,traySnapshot:{id:trayId,name:draft.tag}});
     expect(sql('SELECT i.*,c.original_filename')?.[0]).toContain('ORDER BY i.created_at,i.id');
     expect(sql('SELECT pf_recalculation_dirty')?.[1]).toEqual([projectId,'geometry','CAD_ROUTE_PUBLISHED',`${routeId}:8`]);
+  });
+  it('publishes a Trays export missing from the prepared base as an additive route on the same artifact',async()=>{
+    seedListExport();
+    const query=mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (text:string, values:unknown[]=[]) =>
+      text.startsWith('/* cad-unprepared-tray-exports */')
+        ? {rows:[{tray_id:trayId}]}
+        : query(text,values));
+    const response=await post(await start(),'publish',publishBody);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({projectTrayId:trayId,status:'published'});
+    expect(sql('INSERT INTO trays')).toBeUndefined();
+    expect(mocks.execute).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({operation:'prepare',snapshotId:artifactId,cadOverlay:expect.any(Object)}),
+      expect.any(AbortSignal),
+    );
+    expect(JSON.parse(String(sql('UPDATE cad_route_groups')?.[1][4]))).toMatchObject({
+      baseArtifactId:artifactId,trayInBaseCatalog:false,traySnapshot:{id:trayId},
+    });
   });
   it('requires an explicit list refresh for changed CAD source and preserves manually edited rows',async()=>{
     seedListExport({...instance,revision:instance.revision-1});

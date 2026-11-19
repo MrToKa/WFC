@@ -625,6 +625,32 @@ describe('automatic tray workflow', () => {
     expect(f.discover).toHaveBeenCalledOnce(); expect(api.createPreparation).toHaveBeenCalledOnce();
     expect(synchronizeAssignedCadTrays).not.toHaveBeenCalled();
   });
+  it('reuses a verified additive CAD network for calculations while other CAD drafts remain in Trays', async () => {
+    const f = automaticSetup(), session = f.makeSession();
+    f.publishSession(session);
+    const aggregate = f.store.context.currentAggregate!;
+    const trace = f.makeTrace();
+    f.store.traces.set(trace.aggregateId, trace);
+    f.store.context.scope = { ...f.store.context.scope, catalogRevision: '41', routingContentSha256: 'e'.repeat(64) };
+    f.store.context.trays.push(
+      { ...f.context.trays[0], projectTrayId: crypto.randomUUID(), rawName: 'BC911', geometrySource: 'published-cad-route', inNetwork: true },
+      { ...f.context.trays[0], projectTrayId: crypto.randomUUID(), rawName: 'BC912', geometrySource: 'saved-cad-route', inNetwork: false },
+    );
+    const { result } = renderHook(() => useProjectPreparation(f.pf, false));
+    await act(async () => {
+      await expect(result.current.ensureForCalculation(new AbortController().signal)).resolves.toMatchObject({
+        projectId: ids.project, scope: f.store.context.scope, captureFrameId: aggregate.coordinateFrameId,
+      });
+    });
+    expect(result.current.networkTrace?.id).toBe(trace.id);
+    expect(result.current.networkStorageStatus).toBe('stored-current');
+    expect(result.current.networkReady).toBe(true);
+    expect(f.discover).not.toHaveBeenCalled();
+    expect(f.capture).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled();
+    expect(createGeometryTrace).not.toHaveBeenCalled();
+    expect(prepareAssignedCadNetwork).not.toHaveBeenCalled();
+  });
   it('generates and saves a network only after the explicit generation action', async () => {
     const f = automaticSetup(), { result } = renderHook(() => useProjectPreparation(f.pf, true));
     await waitFor(() => expect(result.current.context).not.toBeNull());

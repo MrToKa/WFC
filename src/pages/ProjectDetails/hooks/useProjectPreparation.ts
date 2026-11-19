@@ -25,7 +25,7 @@ import type {
   PreparationDiscovery,
   PreparationScope,
 } from '../../../../shared/pathfinderPreparation';
-import { PREPARATION_LIMITS, preparationResolutionMatchesScope } from '../../../../shared/pathfinderPreparation';
+import { PREPARATION_LIMITS, hasVerifiedPreparationCatalogDelta, preparedNetworkMatchesScope, preparationResolutionMatchesScope } from '../../../../shared/pathfinderPreparation';
 import { preparationCaptureRequest } from '../../../../shared/preparationMerge';
 import { collectPreparationDiscovery } from './collectPreparationDiscovery';
 import { PreparationDiscoveryError } from '../../../../shared/collectPreparationDiscovery';
@@ -95,15 +95,15 @@ const sameScope = (left: PreparationScope, right: PreparationScope) =>
   ) === canonicalPurposeJson(right);
 const sameModel = (left: PreparationModel, right: PreparationModel) =>
   left.modelVersionId === right.modelVersionId && left.contentFingerprint === right.contentFingerprint && left.selectionRevision === right.selectionRevision;
-const publishedNetworkMatches = (context: PreparationContext) => Boolean(context.currentAggregate &&
-  context.currentAggregate.projectId === context.projectId &&
-  (Object.keys(context.scope) as Array<keyof PreparationScope>).every(key =>
-    key === 'locationRegistryRevision' || context.currentAggregate![key] === context.scope[key]));
+const publishedNetworkMatches = (context: PreparationContext) => preparedNetworkMatchesScope(context);
 const assignedCadNetworkMatches = (context: PreparationContext) => context.trays.every(tray =>
   !tray.geometrySource || (tray.geometrySource !== 'published-cad-route' && tray.policyState !== 'configured') || tray.inNetwork === true);
+const calculationCadNetworkMatches = (context: PreparationContext) => hasVerifiedPreparationCatalogDelta(context)
+  ? context.trays.every(tray => tray.geometrySource !== 'published-cad-route' || tray.inNetwork === true)
+  : assignedCadNetworkMatches(context);
 const networkTraceMatches = (context: PreparationContext, trace: GeometryTraceManifest | null) => {
   const aggregate = context.currentAggregate;
-  return Boolean(aggregate && trace && publishedNetworkMatches(context) && trace.projectId === context.projectId
+  return Boolean(aggregate && trace && preparedNetworkMatchesScope(context, true) && trace.projectId === context.projectId
     && trace.aggregateId === aggregate.id && trace.modelVersionId === aggregate.modelVersionId
     && trace.sessionId === aggregate.sessionId && trace.geometryRevision === aggregate.geometryRevision
     && trace.captureFrameId === aggregate.coordinateFrameId && trace.derivationVersion === GEOMETRY_TRACE_DERIVATION
@@ -231,7 +231,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     [enabled, identity],
   );
   const readNetworkTrace = useCallback(async (context: PreparationContext, signal?: AbortSignal): Promise<GeometryTraceManifest | null> => {
-    if (!publishedNetworkMatches(context)) return null;
+    if (!preparedNetworkMatchesScope(context, true)) return null;
     const aggregate = context.currentAggregate!;
     let offset = 0;
     const visited = new Set<number>();
@@ -1331,10 +1331,10 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       automaticModelKey.current = latestModelKey.current;
       update(value => ({ ...value, progress: 'Checking the routing network for automatic recalculation…', notice: null }));
       const current = await readCurrent(signal, null);
-      const fresh = networkTraceMatches(current.context, current.networkTrace) && assignedCadNetworkMatches(current.context)
+      const fresh = networkTraceMatches(current.context, current.networkTrace) && calculationCadNetworkMatches(current.context)
         ? current : await finishAssignedCadNetwork(await prepareTrays(signal, current), signal);
       assertCurrent(signal);
-      if (!networkTraceMatches(fresh.context, fresh.networkTrace) || !assignedCadNetworkMatches(fresh.context))
+      if (!networkTraceMatches(fresh.context, fresh.networkTrace) || !calculationCadNetworkMatches(fresh.context))
         throw new Error('Automatic recalculation needs a current routing network. Check the preparation status in Routes.');
       update(value => ({ ...value, progress: null }));
       return fresh;
@@ -1445,11 +1445,11 @@ export function useProjectPreparation(pf: PF, active: boolean) {
   }, [assignmentContext, pf.setTrayAssignmentContext, pf.preparationViewerGeneration]);
   const canMutate = enabled && active && !view.busy && !view.unknown && !view.conflict;
   const networkReady = Boolean(!view.unknown && !view.conflict && view.context && networkTraceMatches(view.context, view.networkTrace)
-    && assignedCadNetworkMatches(view.context));
+    && calculationCadNetworkMatches(view.context));
   const networkStorageStatus: PreparationNetworkStorageStatus = !view.context
     ? view.error ? 'unavailable' : 'loading'
     : !view.context.currentAggregate ? 'missing'
-      : publishedNetworkMatches(view.context) ? 'stored-current' : 'stored-needs-update';
+      : preparedNetworkMatchesScope(view.context, true) ? 'stored-current' : 'stored-needs-update';
   const networkReadinessKey = networkReady ? canonicalPurposeJson({ projectId: view.context!.projectId,
     aggregateId: view.context!.currentAggregate!.id, artifactId: view.context!.currentAggregate!.artifactId,
     geometryRevision: view.context!.currentAggregate!.geometryRevision, projection: view.context!.currentAggregate!.projection,

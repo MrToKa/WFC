@@ -13,6 +13,7 @@ import {
   Spinner,
   Title3,
 } from '@fluentui/react-components';
+import { Flowchart20Regular, TableSimple20Regular } from '@fluentui/react-icons';
 import { getApiBaseUrl } from '@/api/http';
 import { useToast } from '@/context/ToastContext';
 import { useProjectTrayPurposes } from '@/hooks/useProjectTrayPurposes';
@@ -577,6 +578,14 @@ export function CadRoutesPanel({
       ).json();
       if (typeof result.lengthMm !== 'number' || !Number.isFinite(result.lengthMm))
         throw new Error('Cannot read the saved centreline length.');
+      const trayId = result.trayId;
+      if (typeof trayId === 'string') {
+        setRoutes((old) =>
+          old.map((route) =>
+            route.id === selected.id ? { ...route, exportedTrayId: trayId } : route,
+          ),
+        );
+      }
       await onTraysChanged?.();
       reportCommand(
         'Route added to trays list',
@@ -682,6 +691,20 @@ export function CadRoutesPanel({
                   marginLeft: 8,
                 }}
               />
+              <span
+                style={{ display: 'inline-flex', gap: 8, marginLeft: 8, verticalAlign: 'middle' }}
+              >
+                {route.projectTrayId || route.exportedTrayId ? (
+                  <span role="img" aria-label="In Trays list" title="In Trays list">
+                    <TableSimple20Regular aria-hidden />
+                  </span>
+                ) : null}
+                {route.status === 'published' ? (
+                  <span role="img" aria-label="In routing network" title="In routing network">
+                    <Flowchart20Regular aria-hidden />
+                  </span>
+                ) : null}
+              </span>
             </li>
           ))}
         </ul>
@@ -948,8 +971,8 @@ export function CadRoutesPanel({
         ) : null}
         {selected?.status === 'draft' ? (
           <Caption1>
-            Add to trays list assigns this route to its saved geometry. Generate network in Path
-            Finder includes the assigned route and verifies it for cable calculations.
+            Add to trays list saves this route in the project Trays list. Use Add to routing network
+            to make the saved route available for cable calculations.
           </Caption1>
         ) : null}
         {selected?.status === 'draft' ? (

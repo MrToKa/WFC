@@ -108,7 +108,7 @@ export async function readViewerRoutingBindings(client: PoolClient, input: { pro
     throw error;
   }
   const cadBindings: NonNullable<ViewerRoutingBindings['cadBindings']> = [];
-  if (overlay && overlay !== 'retired-base-proof') {
+  if (overlay && overlay !== 'base-catalog-proof') {
     const payload = cadOverlayPayloadSchema.parse(JSON.parse(Buffer.from(overlay.payloadBase64, 'base64').toString('utf8')));
     let points = 0, paths = 0;
     for (const segment of payload.segments) {

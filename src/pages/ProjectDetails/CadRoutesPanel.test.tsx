@@ -198,6 +198,24 @@ describe('automatic Trays display updates after membership changes', () => {
 });
 
 describe('complete CAD routes', () => {
+  it('shows independent Trays and network indicators for saved routes', async () => {
+    catalogue([
+      draft,
+      { ...draft, id: id(11), name: 'Listed route', exportedTrayId: id(70) },
+      { ...draft, id: id(12), name: 'Published route', status: 'published', projectTrayId: id(71) },
+    ]);
+    show();
+    await screen.findByRole('button', { name: /Main riser/ });
+    const [unlisted, listed, published] = screen.getAllByRole('listitem');
+    expect(within(unlisted).queryByRole('img')).not.toBeInTheDocument();
+    expect(within(listed).getByRole('img', { name: 'In Trays list' })).toBeInTheDocument();
+    expect(
+      within(listed).queryByRole('img', { name: 'In routing network' }),
+    ).not.toBeInTheDocument();
+    expect(within(published).getByRole('img', { name: 'In Trays list' })).toBeInTheDocument();
+    expect(within(published).getByRole('img', { name: 'In routing network' })).toBeInTheDocument();
+  });
+
   it('offers only purposes used by existing project trays, including custom names', async () => {
     purposesRequest.mockResolvedValue([
       { name: draft.purpose, trayCount: 9 },
@@ -357,7 +375,7 @@ describe('complete CAD routes', () => {
     await act(async () =>
       completeExport({
         ok: true,
-        json: async () => ({ projectTrayId: id(70), lengthMm: 2680.25, reused: false }),
+        json: async () => ({ trayId: id(70), lengthMm: 2680.25, reused: false }),
       }),
     );
     expect(writes()[0][0]).toMatch(new RegExp(`/routes/${draft.id}/trays-list$`));
@@ -366,6 +384,8 @@ describe('complete CAD routes', () => {
       expect.objectContaining({ Authorization: 'Bearer cad-token' }),
     );
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Trays list/i));
+    expect(screen.getByRole('img', { name: 'In Trays list' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'In routing network' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Centreline length: 2.680 m.');
     expect(showToast).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -779,6 +799,8 @@ describe('complete CAD routes', () => {
     expect(
       await screen.findByRole('button', { name: 'Withdraw from routing network' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'In Trays list' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'In routing network' })).toBeInTheDocument();
     expect(screen.getByLabelText('Route name')).toBeDisabled();
   });
 

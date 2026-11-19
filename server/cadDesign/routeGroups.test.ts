@@ -219,10 +219,16 @@ describe('CAD route authoring contract', () => {
     expect(mocks.connect).not.toHaveBeenCalled();
   });
   it('lists scoped groups without caching and locks the active healthy proposed design', async () => {
+    const listedDraft = {...route,exportedTrayId:'00000000-0000-4000-8000-000000000075'};
+    const fallback = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.startsWith('SELECT g.id')) return {rows:[listedDraft]};
+      return fallback(sql);
+    });
     const base = await start();
     const response = await fetch(base,{headers:{'x-test-edit':'yes'}});
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({routes:[route]});
+    expect(await response.json()).toEqual({routes:[listedDraft]});
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(mocks.query.mock.calls[0][0]).toBe('BEGIN');
     const lock = mocks.query.mock.calls[1];
@@ -230,6 +236,9 @@ describe('CAD route authoring contract', () => {
     expect(lock[0]).toContain("d.status='proposed'");
     expect(lock[0]).toContain("v.health='healthy'");
     expect(lock[1]).toEqual([projectId,designId]);
+    const listQuery = mocks.query.mock.calls[2];
+    expect(listQuery[0]).toContain('e.project_id=g.project_id AND e.design_id=g.design_id AND e.route_group_id=g.id) AS "exportedTrayId"');
+    expect(listQuery[1]).toEqual([projectId,designId]);
     expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
   });
 });

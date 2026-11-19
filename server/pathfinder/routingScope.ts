@@ -62,7 +62,7 @@ export async function requirePreparedRoutingScope(client: PoolClient, projectId:
     if (!artifact) throw new PathFinderError('PREPARATION_CURRENT_INTEGRITY',409);
     const { readCadOverlay } = await import('./cadOverlay.js');
     const cadOverlay = await readCadOverlay(client,projectId,artifactId,artifact.snapshot_sha256,artifact.model_version_id,prepared.data,current,options);
-    if (cadOverlay==='retired-base-proof') return current;
+    if (cadOverlay==='base-catalog-proof') return current;
     if (cadOverlay) return {...current,cadOverlay};
   }
   if (!equalRoutingScope(current,prepared.data))

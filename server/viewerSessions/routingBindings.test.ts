@@ -101,7 +101,7 @@ describe('ordinary Viewer published routing bindings', () => {
   });
   it('withdrawn CAD paths disappear on the next read while validated base mappings survive', async () => {
     const f = fixture(); f.row.catalog_revision = f.policy.catalog_revision = '2';
-    vi.mocked(readCadOverlay).mockResolvedValueOnce('retired-base-proof');
+    vi.mocked(readCadOverlay).mockResolvedValueOnce('base-catalog-proof');
     const result = await readViewerRoutingBindings(f.client,f.input);
     expect(result.schemaVersion).toBe('wfc.viewer.routing-bindings.v1'); expect(result.cadBindings).toBeUndefined();
     expect(result.bindings).toHaveLength(1);

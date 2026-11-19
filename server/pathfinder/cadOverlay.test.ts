@@ -21,7 +21,9 @@ const current={...prepared,catalogRevision:'2',routingContentSha256:'c'.repeat(6
 const traySnapshot={id:'00000000-0000-4000-8000-000000000006',name:'CAD001',purpose:'Control',trayType:'KL',widthMm:300,heightMm:60,lengthMm:1000};
 const actual={id:traySnapshot.id,name:'CAD001',purpose:'Control',tray_type:'KL',width_mm:'300',height_mm:'60',length_mm:'1000'};
 const group=(publication:unknown={baseArtifactId:artifactId,overlay:payload,traySnapshot})=>({status:'published',project_tray_id:traySnapshot.id,publication});
-const fake=(rows:unknown[],base=source,trays=[actual])=>({query:vi.fn().mockResolvedValueOnce({rows}).mockResolvedValueOnce({rows:trays}).mockResolvedValueOnce({rows:base})});
+const fake=(rows:unknown[],base=source,trays=[actual],listOnly:string[]=[])=>({query:vi.fn()
+  .mockResolvedValueOnce({rows}).mockResolvedValueOnce({rows:trays}).mockResolvedValueOnce({rows:base})
+  .mockResolvedValueOnce({rows:listOnly.map(tray_id=>({tray_id}))})});
 afterEach(()=>vi.unstubAllEnvs());
 describe('immutable CAD overlay and additive base-network scope',()=>{
   it('derives automatic v3 for an old independent publication without changing the sealed source',async()=>{
@@ -73,7 +75,7 @@ describe('immutable CAD overlay and additive base-network scope',()=>{
   it('retains exact base provenance after withdrawal without keeping a deleted project tray in the graph',async()=>{
     vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');
     const db=fake([{...group(),status:'draft',project_tray_id:null}],source,[]);
-    expect(await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current)).toBe('retired-base-proof');
+    expect(await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current)).toBe('base-catalog-proof');
   });
   it('keeps a previously exported row inside the prepared base catalogue during publication and withdrawal',async()=>{
     vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');
@@ -84,13 +86,31 @@ describe('immutable CAD overlay and additive base-network scope',()=>{
     expect(await readCadOverlay(active as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,scope,scope)).toEqual(encodeCadOverlay(automaticCadOverlayView(payload)));
     expect(active.query.mock.calls[2][1]).toEqual([projectId,[]]);
     const retired=fake([{...group(publication),status:'draft',project_tray_id:null}],included,[]);
-    expect(await readCadOverlay(retired as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,scope,scope)).toBe('retired-base-proof');
+    expect(await readCadOverlay(retired as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,scope,scope)).toBe('base-catalog-proof');
   });
-  it('requires fresh preparation when a publication-created row is later exported and retained on withdrawal',async()=>{
+  it('keeps a withdrawn additive route in Trays without keeping its geometry in the network',async()=>{
     vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');
     const publication={baseArtifactId:artifactId,overlay:payload,traySnapshot,trayInBaseCatalog:false};
     const retained=[...source,{id:actual.id,name:actual.name,purpose:actual.purpose}];
-    await expect(readCadOverlay(fake([{...group(publication),status:'draft',project_tray_id:null}],retained,[]) as unknown as PoolClient,
-      projectId,artifactId,sha,modelVersionId,prepared,current)).rejects.toMatchObject({code:'ROUTING_PREPARATION_REQUIRED'});
+    const db=fake([{...group(publication),status:'draft',project_tray_id:null}],retained,[],[actual.id]);
+    expect(await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current)).toBe('base-catalog-proof');
+  });
+  it('admits multiple post-base draft exports without graph segments or a prior publication',async()=>{
+    vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');
+    const other={id:'00000000-0000-4000-8000-000000000007',name:'CAD002',purpose:'Control'};
+    const db=fake([],[...source,actual,other],[],[actual.id,other.id]);
+    expect(await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current)).toBe('base-catalog-proof');
+    expect(db.query.mock.calls[3][1]).toEqual([projectId,artifactId,modelVersionId]);
+  });
+  it('keeps a published CAD overlay usable with another route pending in Trays',async()=>{
+    vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');
+    const other={id:'00000000-0000-4000-8000-000000000007',name:'CAD002',purpose:'Control'};
+    const db=fake([group()],[...source,other],[actual],[other.id]);
+    expect(await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current))
+      .toEqual(encodeCadOverlay(automaticCadOverlayView(payload)));
+    const unrelated={...source[0],name:'RENAMED'};
+    const stale=fake([group()],[unrelated,other],[actual],[other.id]);
+    await expect(readCadOverlay(stale as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current))
+      .rejects.toMatchObject({code:'ROUTING_PREPARATION_REQUIRED'});
   });
 });

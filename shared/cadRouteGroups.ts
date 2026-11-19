@@ -31,5 +31,6 @@ export type CadRouteGroupInput = z.output<typeof cadRouteGroupInputSchema>;
 export type CadRouteGroup = {
   id: string; name: string; tag: string; color: string; purpose: string; revision: number;
   status: 'draft' | 'published'; instanceIds: string[]; projectTrayId: string | null;
+  exportedTrayId?: string | null;
   networkMode?: 'attached' | 'independent' | 'automatic';
 };
