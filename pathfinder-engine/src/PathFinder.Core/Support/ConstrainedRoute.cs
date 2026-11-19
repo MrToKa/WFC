@@ -80,6 +80,7 @@ namespace AddinRibbon.Routing
             if (!RoutePoint.IsFinite(first.Distance) || !RoutePoint.IsFinite(last.Distance))
                 return new ConstrainedRouteEvaluation(RouteResult.Failure("The endpoint distances are outside the supported coordinate range."),
                     ConstrainedRouteStatus.Indeterminate, "NONFINITE_ENDPOINT_DISTANCE", false, budget);
+            var anchors = new EndpointSections(first, last);
             if (options.PreferVerticalApproach)
             {
                 budget.Charge(2L * pieceCount);
@@ -90,7 +91,7 @@ namespace AddinRibbon.Routing
             var toChecks = new Dictionary<Tuple<int, double>, RouteCollisionObservation>();
             // This pair, its construction order and every remaining Edge are the
             // exact legacy choice. Other candidates never enter its initial graph.
-            var result = ConstrainedPair(eligible, from, to, first, last, collision, options, budget, fromChecks, toChecks);
+            var result = ConstrainedPair(eligible, from, to, first, last, collision, options, budget, fromChecks, toChecks, anchors);
             if (result != null) return new ConstrainedRouteEvaluation(result, ConstrainedRouteStatus.Clear, "LEGACY_PAIR_CLEAR", true, budget);
 
             var fromCandidates = ConstrainedCandidates(eligible, from, collision, options, budget, fromChecks);
@@ -103,10 +104,11 @@ namespace AddinRibbon.Routing
                     int j = sum - i; if (j < 0 || j >= toCandidates.Count) continue;
                     var a = fromCandidates[i]; var b = toCandidates[j];
                     if (SameProjection(a, first) && SameProjection(b, last)) continue;
-                    result = ConstrainedPair(eligible, from, to, a, b, collision, options, budget, fromChecks, toChecks);
+                    result = ConstrainedPair(eligible, from, to, a, b, collision, options, budget, fromChecks, toChecks, anchors);
                     if (result != null) return new ConstrainedRouteEvaluation(result, ConstrainedRouteStatus.Clear,
                         "ACCESSIBLE_CANDIDATE_PAIR_CLEAR", !budget.CandidatesTruncated, budget);
                 }
+            if (budget.DisconnectedEndpointSection) return DisconnectedEndpointRoute(budget);
             if (budget.CandidatesTruncated) return budget.Failure("CANDIDATE_DOMAIN_TRUNCATED");
             return ConstrainedNoRoute(budget, "NO_CLEAR_CONNECTED_CANDIDATE_PAIR");
         }
@@ -114,6 +116,7 @@ namespace AddinRibbon.Routing
         private static ConstrainedRouteEvaluation BypassedEndpointAlternatives(List<TraySegment> eligible,
             RoutePoint from, RoutePoint to, RoutingOptions options, ConstrainedBudget budget, RouteResult original)
         {
+            var anchors = new EndpointSections(FindNearest(eligible, from, budget.Token), FindNearest(eligible, to, budget.Token));
             var fromCandidates = ConstrainedCandidates(eligible, from, null, options, budget,
                 new Dictionary<Tuple<int, double>, RouteCollisionObservation>(), false);
             var toCandidates = ConstrainedCandidates(eligible, to, null, options, budget,
@@ -126,10 +129,11 @@ namespace AddinRibbon.Routing
             {
                 budget.BeginPair(); RouteConnectorPlan unusedFrom, unusedTo;
                 var route = ConstrainedPairGraph(eligible, from, to, pair.Item1, pair.Item2, null,
-                    options, budget, null, null, out unusedFrom, out unusedTo, true);
+                    options, budget, null, null, out unusedFrom, out unusedTo, true, endpointSections: anchors);
                 if (route != null) return new ConstrainedRouteEvaluation(route, ConstrainedRouteStatus.Bypassed,
                     "DRILLING_BYPASS_ACCESSIBLE_CANDIDATE_PAIR", !budget.CandidatesTruncated, budget);
             }
+            if (budget.DisconnectedEndpointSection) return DisconnectedEndpointRoute(budget);
             if (budget.CandidatesTruncated) return budget.Failure("CANDIDATE_DOMAIN_TRUNCATED");
             return new ConstrainedRouteEvaluation(original, ConstrainedRouteStatus.Bypassed,
                 "NO_CONNECTED_CANDIDATE_PAIR", true, budget);
@@ -142,6 +146,9 @@ namespace AddinRibbon.Routing
                 uncertain ? ConstrainedRouteStatus.Indeterminate : ConstrainedRouteStatus.Blocked, reason, !uncertain, budget);
         }
         private static bool SameProjection(Projection a, Projection b) { return a.Segment == b.Segment && a.Along == b.Along; }
+        private static ConstrainedRouteEvaluation DisconnectedEndpointRoute(ConstrainedBudget budget) =>
+            new ConstrainedRouteEvaluation(RouteResult.Failure("No clear continuation was found between the nearby endpoint section and the next section of its route."),
+                ConstrainedRouteStatus.SearchIncomplete, "ENDPOINT_ROUTE_SECTIONS_DISCONNECTED", false, budget);
         private static RouteCollisionObservation ConstrainedApproach(RoutePoint endpoint, Projection projection, RouteCollisionQuery collision,
             ConstrainedBudget budget, Dictionary<Tuple<int, double>, RouteCollisionObservation> checkedPoints)
         {
@@ -212,21 +219,22 @@ namespace AddinRibbon.Routing
         private static RouteResult ConstrainedPair(List<TraySegment> eligible, RoutePoint from, RoutePoint to, Projection first, Projection last,
             RouteCollisionQuery collision, RoutingOptions options, ConstrainedBudget budget,
             Dictionary<Tuple<int, double>, RouteCollisionObservation> fromChecks,
-            Dictionary<Tuple<int, double>, RouteCollisionObservation> toChecks)
+            Dictionary<Tuple<int, double>, RouteCollisionObservation> toChecks, EndpointSections endpointSections)
         {
             budget.BeginPair();
             var firstCheck = ConstrainedApproach(from, first, collision, budget, fromChecks);
             var lastCheck = ConstrainedApproach(to, last, collision, budget, toChecks);
             if (firstCheck.Status != RouteCollisionStatus.Clear || lastCheck.Status != RouteCollisionStatus.Clear) return null;
             RouteConnectorPlan unusedFrom, unusedTo;
-            return ConstrainedPairGraph(eligible, from, to, first, last, collision, options, budget, null, null, out unusedFrom, out unusedTo);
+            return ConstrainedPairGraph(eligible, from, to, first, last, collision, options, budget, null, null, out unusedFrom, out unusedTo,
+                endpointSections: endpointSections);
         }
 
         private static RouteResult ConstrainedPairGraph(List<TraySegment> eligible, RoutePoint from, RoutePoint to, Projection first, Projection last,
             RouteCollisionQuery collision, RoutingOptions options, ConstrainedBudget budget,
             Func<RoutePoint, RouteConnectorPlan> fromPlanner, Func<RoutePoint, RouteConnectorPlan> toPlanner,
             out RouteConnectorPlan fromPlan, out RouteConnectorPlan toPlan, bool skipBarrierChecks = false,
-            IReadOnlyList<string> manualOrderedCodes = null)
+            IReadOnlyList<string> manualOrderedCodes = null, EndpointSections endpointSections = null)
         {
             fromPlan = null; toPlan = null;
             int maxNodes = Math.Min(options.MaxGraphNodes, budget.Limits.MaxGraphNodes);
@@ -234,6 +242,9 @@ namespace AddinRibbon.Routing
             long graphStarted = GraphPreparationRequest.StartGraphAssembly();
             var nodes = new List<Node>(); var pieces = new List<Piece>(); var segmentNodes = new List<List<int>>();
             int firstNode = -1, lastNode = -1;
+            Projection? fromSection = EndpointSectionToCheck(eligible, first, endpointSections?.From, options);
+            Projection? toSection = EndpointSectionToCheck(eligible, last, endpointSections?.To, options);
+            int fromSectionNode = -1, toSectionNode = -1;
             // Deliberately the pinned graph construction arithmetic/order. Each
             // candidate pair gets a fresh graph and its own original initialNodes.
             for (int segmentIndex = 0; segmentIndex < eligible.Count; segmentIndex++)
@@ -254,6 +265,8 @@ namespace AddinRibbon.Routing
                 vertices.Add(new Vertex(along, tray.Points[tray.Points.Count - 1]));
                 if (first.Segment == segmentIndex) vertices.Add(new Vertex(first.Along, first.Point));
                 if (last.Segment == segmentIndex) vertices.Add(new Vertex(last.Along, last.Point));
+                if (fromSection?.Segment == segmentIndex) vertices.Add(new Vertex(fromSection.Value.Along, fromSection.Value.Point));
+                if (toSection?.Segment == segmentIndex) vertices.Add(new Vertex(toSection.Value.Along, toSection.Value.Point));
                 vertices.Sort((left, right) => left.Along.CompareTo(right.Along));
                 int previous = -1; double previousAlong = double.NaN;
                 foreach (var vertex in vertices)
@@ -268,6 +281,8 @@ namespace AddinRibbon.Routing
                     }
                     if (first.Segment == segmentIndex && vertex.Along == first.Along) firstNode = index;
                     if (last.Segment == segmentIndex && vertex.Along == last.Along) lastNode = index;
+                    if (fromSection?.Segment == segmentIndex && vertex.Along == fromSection.Value.Along) fromSectionNode = index;
+                    if (toSection?.Segment == segmentIndex && vertex.Along == toSection.Value.Along) toSectionNode = index;
                 }
             }
             GraphLimit limit;
@@ -309,6 +324,12 @@ namespace AddinRibbon.Routing
                     }
                 }
                 if (retained < edges.Count) edges.RemoveRange(retained, edges.Count - retained);
+            }
+            if (SkipsEndpointSection(nodes, eligible, from, firstNode, fromSectionNode, collision, budget)
+                || SkipsEndpointSection(nodes, eligible, to, lastNode, toSectionNode, collision, budget))
+            {
+                budget.DisconnectedEndpointSection = true;
+                return null;
             }
             budget.Charge(nodes.Count + directedEdges); PathCost graphCost;
             var path = manualOrderedCodes == null

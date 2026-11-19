@@ -49,6 +49,36 @@ internal static class ShortestAdmissibleChecks
     }
     internal static void Run(Action<string, Action> run)
     {
+        run("a nearby section is followed through its modeled centerline joint and may exit sideways", () =>
+        {
+            var drop = new TraySegment("drop", "/BC911", CableCategory.Control, new[] { P(0), P(0, 0, 1) }, true);
+            var rail = new TraySegment("rail", "/BC911", CableCategory.Control, new[] { P(.3, 0, 1), P(4, 0, 1) },
+                true, null, null, false, true);
+            var joint = new TraySegment("joint", "/BC911", CableCategory.Control, new[] { P(0, 0, 1), P(.3, 0, 1) }, true);
+            var branch = Port("SIDE", P(2, 0, 1), P(2, 3, 1));
+            var options = new RoutingOptions { ConnectionToleranceMeters = 1.2, SecondaryDistanceMeters = 2 };
+            var collision = Query(Kernel(Box("far", x0: 100, x1: 101)));
+            var from = P(0, 0, -.2);
+            var to = P(2, 3, 1);
+
+            var split = Calculator.CalculateConstrainedWithLocalApproaches(new[] { drop, rail, branch }, from, to,
+                CableCategory.Control, collision, options).RouteEvaluation;
+            Need(split.Route.Success && split.Route.SegmentIds.SequenceEqual(new[] { "drop" }) && split.Route.ToRequiresSecondary,
+                "A side departure from the drop is valid, but the approach cannot skip it for the disconnected rail.");
+            var bypassed = Calculator.CalculateConstrained(new[] { drop, rail, branch }, from, to,
+                CableCategory.Control, collision, options, drillThroughWalls: true);
+            Need(bypassed.Route.Success && bypassed.Route.SegmentIds.SequenceEqual(new[] { "drop" }),
+                "Drilling bypass must still use the nearby drop instead of the disconnected rail.");
+
+            var trays = new[] { drop, joint, rail, branch };
+            var connected = Calculator.CalculateConstrained(trays, from, to, CableCategory.Control, collision, options);
+            Need(connected.Route.Success && connected.Route.SegmentIds.SequenceEqual(new[] { "drop", "joint", "rail", "SIDE" }),
+                "The route must follow the joined tray sections before leaving partway along the rail.");
+            Need(!connected.Route.PathPoints.Contains(P(4, 0, 1)), "A side exit must not traverse the unused end of the rail.");
+            var reversed = Calculator.CalculateConstrained(trays, to, from, CableCategory.Control, collision, options);
+            Need(reversed.Route.Success && reversed.Route.PathPoints.SequenceEqual(connected.Route.PathPoints.Reverse()),
+                "Section and side-exit behavior changed when the cable was reversed.");
+        });
         run("smaller total gap wins over a physically shorter admissible corridor", () =>
         {
             var route = Calculator.Calculate(Network(), P(-1), P(81), CableCategory.Control, Options()); LowerGap(route);

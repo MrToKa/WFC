@@ -159,6 +159,7 @@ namespace AddinRibbon.Routing
         internal int Queries { get; private set; }
         internal int Pairs { get; private set; }
         internal bool CandidatesTruncated;
+        internal bool DisconnectedEndpointSection;
         internal bool SawIndeterminate;
         internal RouteCollisionObservation FirstBlocking;
         internal readonly InterTrayOpeningContext InterTray;

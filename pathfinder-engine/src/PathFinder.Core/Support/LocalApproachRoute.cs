@@ -67,6 +67,7 @@ namespace AddinRibbon.Routing
             Projection first = FindNearest(eligible, from, budget.Token), last = FindNearest(eligible, to, budget.Token);
             if (!RoutePoint.IsFinite(first.Distance) || !RoutePoint.IsFinite(last.Distance))
                 return LocalResult(budget.Failure("NONFINITE_ENDPOINT_DISTANCE"), context);
+            var anchors = new EndpointSections(first, last);
             if (options.PreferVerticalApproach)
             {
                 budget.Charge(2L * pieceCount);
@@ -76,7 +77,7 @@ namespace AddinRibbon.Routing
             var fromChecks = new Dictionary<Tuple<int, double>, RouteCollisionObservation>();
             var toChecks = new Dictionary<Tuple<int, double>, RouteCollisionObservation>();
             RouteResult route; int pairBase = budget.Pairs;
-            try { route = ConstrainedPair(eligible, from, to, first, last, collision, options, budget, fromChecks, toChecks); }
+            try { route = ConstrainedPair(eligible, from, to, first, last, collision, options, budget, fromChecks, toChecks, anchors); }
             finally { context.StraightPairs = budget.Pairs - pairBase; }
             if (route != null) return LocalResult(new ConstrainedRouteEvaluation(route, ConstrainedRouteStatus.Clear, "LEGACY_PAIR_CLEAR", true, budget), context);
             var fromClear = ConstrainedCandidates(eligible, from, collision, options, budget, fromChecks);
@@ -85,7 +86,7 @@ namespace AddinRibbon.Routing
             {
                 if (SameProjection(pair.Item1, first) && SameProjection(pair.Item2, last)) continue;
                 if (context.StraightPairs >= context.Options.MaxStraightPairs) { context.StraightPhaseTruncated = true; break; }
-                try { route = ConstrainedPair(eligible, from, to, pair.Item1, pair.Item2, collision, options, budget, fromChecks, toChecks); }
+                try { route = ConstrainedPair(eligible, from, to, pair.Item1, pair.Item2, collision, options, budget, fromChecks, toChecks, anchors); }
                 finally { context.StraightPairs = budget.Pairs - pairBase; }
                 if (route != null) return LocalResult(new ConstrainedRouteEvaluation(route, ConstrainedRouteStatus.Clear,
                     "ACCESSIBLE_STRAIGHT_PAIR_CLEAR", !budget.CandidatesTruncated, budget), context);
@@ -109,11 +110,12 @@ namespace AddinRibbon.Routing
                 budget.BeginPair(); var a = pair.Item1; var b = pair.Item2; RouteConnectorPlan usedFrom, usedTo;
                 route = ConstrainedPairGraph(eligible, from, to, a, b, collision, options, budget,
                     target => LocalPlan(fromPlans, from, a, target, collision, context),
-                    target => LocalPlan(toPlans, to, b, target, collision, context), out usedFrom, out usedTo);
+                    target => LocalPlan(toPlans, to, b, target, collision, context), out usedFrom, out usedTo, endpointSections: anchors);
                 if (route != null) return LocalResult(new ConstrainedRouteEvaluation(route, ConstrainedRouteStatus.Clear,
                     "LOCAL_APPROACH_PAIR_CLEAR", !budget.CandidatesTruncated && !context.StraightPhaseTruncated, budget), context, usedFrom, usedTo);
             }
-            return LocalResult(budget.Failure(context.Limited ? "LOCAL_PLAN_OR_EDGE_LIMIT" : "LOCAL_CANDIDATE_DOMAIN_EXHAUSTED"), context);
+            return LocalResult(budget.DisconnectedEndpointSection ? DisconnectedEndpointRoute(budget)
+                : budget.Failure(context.Limited ? "LOCAL_PLAN_OR_EDGE_LIMIT" : "LOCAL_CANDIDATE_DOMAIN_EXHAUSTED"), context);
         }
 
         private static IEnumerable<Tuple<Projection, Projection>> LocalPairs(List<Projection> first, List<Projection> last)
