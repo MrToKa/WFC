@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { PathFinderError } from './errors.js';
-import { collectDependenciesForVersion, createTransactionDependencyReadCollector, hash, hasSyntheticProof,
+import { canonicalJson, collectDependenciesForVersion, createTransactionDependencyReadCollector, hash, hasSyntheticProof,
   type TransactionDependencyReadCollector } from './dependencies.js';
 import type { PathFinderRepository } from './repository.js';
 import { defaultOptions, type createJobSchema, type BarrierDependencySnapshot, type DependencySnapshot, type JobPrincipal } from './jobContracts.js';
@@ -101,7 +101,14 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean,readC
 }
 
 function batchHash(batch:DependencyBatch,timeout:number):string{
-  return hash({timeoutMilliseconds:timeout,items:batch.items.map(item=>({id:item.id,dependencies:item.dependencies,status:item.status,cableWriteRevision:item.cable.cable_write_revision}))});
+  // Keep the canonical digest of existing jobs without building a single string
+  // containing the dependencies of every cable in a large submission.
+  const digest = createHash('sha256').update('{"items":[');
+  for (const [index, item] of batch.items.entries()) {
+    if (index > 0) digest.update(',');
+    digest.update(canonicalJson({id:item.id,dependencies:item.dependencies,status:item.status,cableWriteRevision:item.cable.cable_write_revision}));
+  }
+  return digest.update(`],"timeoutMilliseconds":${canonicalJson(timeout)}}`).digest('hex');
 }
 async function admissionModelRef(client:PoolClient,projectId:string){
   const row=(await client.query<{id:string;selectionRevision:string;contentFingerprint:string}>(`SELECT m.id,s.selection_revision::text AS "selectionRevision",m.content_fingerprint AS "contentFingerprint"
@@ -116,13 +123,25 @@ export async function insertCalculationBatch(client:PoolClient,projectId:string,
   const id=bulkSubmission?.id??randomUUID(),blocked=batch.items.filter(item=>!item.dependencies).length;
   await client.query(`INSERT INTO pf_jobs(id,project_id,requested_by,login_id,login_expires_at,state,total,completed,options,timeout_ms,request_hash,authority_kind,grant_provenance,bulk_submission_sha256,bulk_submission_registry_revision)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,[id,projectId,who.userId,who.loginId??null,isGrantPrincipal(who)?null:new Date(who.loginExpiresAt),blocked===batch.items.length?'complete':'queued',batch.items.length,blocked,batch.options,timeout,requestHash,isGrantPrincipal(who)?'calculation-grant':'current-login',isGrantPrincipal(who)?grantProvenance(who):null,bulkSubmission?.sha256??null,bulkSubmission?batch.registryRevision:null]);
-  for(let offset=0;offset<batch.items.length;offset+=RECALCULATION_LIMITS.cableChunk){
+  const itemChunkBytes = 8 * 1024 ** 2;
+  let rows: string[] = [];
+  let bytes = 2;
+  const insertItems = async () => {
     check();
-    const rows=batch.items.slice(offset,offset+RECALCULATION_LIMITS.cableChunk).map(item=>({cable_id:item.id,state:item.dependencies?'waiting':'blocked',dependencies:item.dependencies,status:item.status,message:item.message}));
     await client.query(`INSERT INTO pf_job_items(project_id,job_id,cable_id,state,dependencies,status,message)
       SELECT $1::uuid,$2::uuid,x.cable_id,x.state,x.dependencies,x.status,x.message FROM jsonb_to_recordset($3::jsonb)
-      AS x(cable_id uuid,state text,dependencies jsonb,status text,message text)`,[projectId,id,JSON.stringify(rows)]);
+      AS x(cable_id uuid,state text,dependencies jsonb,status text,message text)`,[projectId,id,`[${rows.join(',')}]`]);
+    rows = [];
+    bytes = 2;
+  };
+  for (const item of batch.items) {
+    const row = JSON.stringify({cable_id:item.id,state:item.dependencies?'waiting':'blocked',dependencies:item.dependencies,status:item.status,message:item.message});
+    const rowBytes = Buffer.byteLength(row);
+    if (rows.length && (rows.length === RECALCULATION_LIMITS.cableChunk || bytes + 1 + rowBytes > itemChunkBytes)) await insertItems();
+    bytes += Number(rows.length > 0) + rowBytes;
+    rows.push(row);
   }
+  if (rows.length) await insertItems();
   check();
   await persistRevisionAdmission(client,{projectId,jobId:id,kind:admission.kind,generation:admission.generation,inputSha256:requestHash,items:batch.items,options:batch.options,modelRef:await admissionModelRef(client,projectId)});
   return id;
@@ -224,7 +243,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
           } finally { clearTimeout(timer); }
         }
         const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline,
-          dependencyVersion:'pathfinder.dependencies.v8'}).catch(rethrowScopeError);
+          dependencyVersion:'pathfinder.dependencies.v8',bulkSubmission:bulkSubmission!==undefined}).catch(rethrowScopeError);
         const calculationSha256=batchHash(batch,input.timeoutMilliseconds??60000);
         // A write policy is exact request authority, never a mathematical input.
         // Historical requests without it retain their original hash and meaning.

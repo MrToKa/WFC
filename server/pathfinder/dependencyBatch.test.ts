@@ -283,6 +283,18 @@ describe('bulk dependency collection, mocked SQL protocol with real freeze/head/
     expect(db.state.cables.reduce((n, c) => n + Buffer.byteLength(canonicalJson(c)), 0)).toBeLessThan(RECALCULATION_LIMITS.dependencyBytes);
     await expect(collectDependencyBatchInTransaction(db.client, { projectId, options: defaultOptions })).rejects.toMatchObject({ code: 'RECALCULATION_DEPENDENCY_BYTES' });
   }, 20_000);
+  it('admits all 10,000 cables in a bulk submission with a large shared routing snapshot', async () => {
+    const db = fixture(RECALCULATION_LIMITS.cables);
+    const routing = await mocked.routing();
+    mocked.routing.mockResolvedValue({ ...routing, cadOverlay: { payload: 'R'.repeat(104 * 1024) } });
+    const options = barrierOptions();
+    const batch = await collectDependencyBatchInTransaction(db.client, {
+      projectId, options, dependencyVersion: 'pathfinder.dependencies.v8', bulkSubmission: true,
+    });
+    expect(batch.items).toHaveLength(RECALCULATION_LIMITS.cables);
+    expect(batch.items.every(item => item.status === 'ready')).toBe(true);
+    expect(batch.bytes).toBeGreaterThan(1024 ** 3);
+  }, 30_000);
   it('stops on a deadline/abort during collection without a partial batch or write', async () => {
     const db = fixture(251); db.state.onQuery = sql => { if (sql.includes('CASE WHEN octet_length')) vi.mocked(Date.now).mockReturnValue(NOW + 2); };
     await expect(collectDependencyBatchInTransaction(db.client, { projectId, options: defaultOptions, deadline: NOW + 1 })).rejects.toMatchObject({ code: 'RECALCULATION_COLLECTION_DEADLINE' }); expect(mocked.active).not.toHaveBeenCalled();

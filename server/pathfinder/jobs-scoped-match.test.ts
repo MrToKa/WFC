@@ -14,6 +14,7 @@ import {createPathFinderJobs} from './jobs.js';
 import {createJobSchema,defaultOptions} from './jobContracts.js';
 import {PathFinderError} from './errors.js';
 import {hash} from './dependencies.js';
+import {BULK_CALCULATION_SUBMISSION_LIMITS} from '../../shared/pathfinderCalculationSubmission.js';
 
 const id=(n:number)=>'b2700000-0000-4000-8000-'+n.toString(16).padStart(12,'0');
 const projectId=id(1),cableId=id(2),who={userId:id(3),loginId:id(4),loginExpiresAt:Date.parse('2099-01-01T00:00:00Z')};
@@ -161,9 +162,10 @@ describe('manual calculation uses the same exact cable scope for matching and ad
   it('refuses expired keyed preparation before creating a job',async()=>{
     const f=fixture(),now=vi.spyOn(Date,'now');
     const started=Date.now();
+    now.mockReturnValue(started);
     try {
       f.match.mockImplementationOnce(async(_project,_who,_revision,_ids,_client,check:()=>void)=>{
-        now.mockReturnValue(started+120_001);
+        now.mockReturnValue(started+BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds+1);
         check();
       });
       const input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId:id(41)});

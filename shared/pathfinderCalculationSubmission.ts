@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const BULK_CALCULATION_SUBMISSION_LIMITS = Object.freeze({
   admissionMilliseconds: 120_000,
   responseMilliseconds: 150_000,
+  dependencyBytesPerCable: 256 * 1024,
 });
 
 /** This invocation did not commit a calculation job. Registry matching may

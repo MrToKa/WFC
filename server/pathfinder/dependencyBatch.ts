@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
+import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../shared/pathfinderCalculationSubmission.js';
 import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { optionsSchema, type EngineOptions } from './jobContracts.js';
 import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, createCablePurposeRoutingReader, readLinkedCableTypePurposes, canonicalJson, type CollectedDependencies } from './dependencies.js';
@@ -22,12 +23,15 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
   deadline?:number;engineIdentity?:CalculationEngineIdentity;
   dependencyVersion?:'pathfinder.dependencies.v7'|'pathfinder.dependencies.v8';
   continuous?:boolean;
+  bulkSubmission?:boolean;
 }):Promise<DependencyBatch>{
   const projectId=policyUuidSchema.parse(input.projectId),options=optionsSchema.parse(input.options);
   const barrierVersion=input.dependencyVersion==='pathfinder.dependencies.v8';
   if (barrierVersion ? !options.barrierRouting : options.barrierRouting!==undefined)
     throw new PathFinderError('BARRIER_ADMISSION_REQUIRED',409,'The exact barrier choice requires a barrier-aware calculation version.');
-  const deadline=Math.min(input.deadline??Infinity,Date.now()+RECALCULATION_LIMITS.collectionMilliseconds);
+  const collectionMilliseconds = input.bulkSubmission
+    ? BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds : RECALCULATION_LIMITS.collectionMilliseconds;
+  const deadline=Math.min(input.deadline??Infinity,Date.now()+collectionMilliseconds);
   const check=()=>{input.signal?.throwIfAborted();if(Date.now()>deadline)refused('RECALCULATION_COLLECTION_DEADLINE',503);};
   if(input.cableIds&&input.cableIds.length>RECALCULATION_LIMITS.cables)refused('JOB_CABLE_BUDGET');
   const requested=input.cableIds?[...new Set(input.cableIds.map(id=>policyUuidSchema.parse(id)))].sort():undefined;
@@ -69,7 +73,17 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
   const registry=common.inputs===null?(await client.query<{registry_revision:string}>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR SHARE',[projectId])).rows[0]?.registry_revision:common.inputs.registryRevision;
   if(!registry)throw new PathFinderError('REGISTRY_CONFLICT',409);
   const items:DependencyBatch['items']=[];let bytes=0;
-  const append=(item:CollectedDependencies)=>{bytes+=Buffer.byteLength(canonicalJson({id:item.cable.id,status:item.status,message:item.message,dependencies:item.dependencies}));if(bytes>RECALCULATION_LIMITS.dependencyBytes)refused('RECALCULATION_DEPENDENCY_BYTES');items.push({id:item.cable.id,...item});};
+  // Each ready cable persists its own routing and barrier snapshot. Size explicit
+  // bulk submissions by the number of cables while retaining a finite ceiling.
+  const dependencyBytes = input.bulkSubmission
+    ? Math.max(RECALCULATION_LIMITS.dependencyBytes, cables.length * BULK_CALCULATION_SUBMISSION_LIMITS.dependencyBytesPerCable)
+    : RECALCULATION_LIMITS.dependencyBytes;
+  const append = (item: CollectedDependencies) => {
+    const record = {id:item.cable.id,status:item.status,message:item.message,dependencies:item.dependencies};
+    bytes += Buffer.byteLength(input.bulkSubmission ? JSON.stringify(record) : canonicalJson(record));
+    if (bytes > dependencyBytes) refused('RECALCULATION_DEPENDENCY_BYTES');
+    items.push({id:item.cable.id,...item});
+  };
   if(common.inputs===null){for(const cable of cables){check();append({cable,dependencies:null,...(excluded?.get(cable.id) ?? {status:common.status,message:common.message})});}return{items,registryRevision:registry,options,bytes};}
   const names=[...new Set(candidates.flatMap(cable=>[cable.from_location,cable.to_location]).filter((name):name is string=>typeof name==='string'&&normalizeLocation(name)!=='').map(normalizeLocation))].sort();
   if(names.length>RECALCULATION_LIMITS.neededLocations)refused('ENDPOINT_NEEDED_LOCATION_LIMIT');
