@@ -155,8 +155,7 @@ namespace AddinRibbon.Routing
             if (path == null)
             {
                 if (codes.Count == 1 || reached >= codes.Count - 1)
-                    return RouteResult.Failure("Route " + codes[codes.Count - 1] + " is internally disconnected at " +
-                        tolerance.ToString("0.###", CultureInfo.InvariantCulture) + " m Connection gap.");
+                    return RouteResult.Failure("Route " + codes[codes.Count - 1] + " has internally disconnected sections.");
                 return RouteResult.Failure("The entered route cannot connect " + codes[reached] + " to " + codes[reached + 1] +
                     " at " + tolerance.ToString("0.###", CultureInfo.InvariantCulture) + " m Connection gap. No unlisted route is used.");
             }
@@ -256,7 +255,7 @@ namespace AddinRibbon.Routing
             }
             if (visited.Count != links.Count)
             {
-                error = "Route " + code + " has disconnected geometry at the current Connection gap. A partial logical route cannot be shown as a complete path.";
+                error = "Route " + code + " has internally disconnected sections. A partial route cannot be shown as a complete path.";
                 return null;
             }
             if (terminals.Length < 2) terminals = links.Keys.ToArray();

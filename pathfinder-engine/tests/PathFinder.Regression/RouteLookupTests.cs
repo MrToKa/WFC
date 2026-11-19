@@ -123,8 +123,8 @@ internal static class RouteLookupTests
         Near(4, closed.LengthMeters, "A loop uses its farthest geodesic span, with a real closing seam");
         Assert(closed.PathPoints[0].DistanceTo(P(0)) == 0 && closed.PathPoints[closed.PathPoints.Count - 1].DistanceTo(P(2, 2)) == 0,
             "A loop must use geometry-first diameter endpoints.");
-        var disjoint = Find(new[] { T("a", "/5LD04", P(0), P(1)), T("b", "/5LD04", P(10), P(11)) }, "/5LD04", .05);
-        Assert(!disjoint.Success && disjoint.Message.Contains("disconnected"), "Two disconnected same-name chains silently selected one.");
+        var disjoint = Find(new[] { T("a", "/5LD04", P(0), P(1)), T("b", "/5LD04", P(1.04), P(2)) }, "/5LD04", .05);
+        Assert(!disjoint.Success && disjoint.Message.Contains("disconnected"), "Lookup must reject an internal gap even below the configured tolerance.");
         var zero = Find(new[] { T("zero", "/5LD04", P(0), P(0)) }, "/5LD04", .05);
         Assert(!zero.Success && zero.Message.Contains("non-zero"), "Degenerate one-candidate geometry must return a clear failure.");
         var restrictedContact = Find(new[] {

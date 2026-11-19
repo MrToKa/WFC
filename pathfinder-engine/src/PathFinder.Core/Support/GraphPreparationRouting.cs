@@ -167,7 +167,7 @@ namespace AddinRibbon.Routing
                 {
                     token.ThrowIfCancellationRequested(); var record = item.Value;
                     started = Stopwatch.GetTimestamp(); TrayMeshClearanceResult result;
-                    try { Interlocked.Increment(ref Request.Diagnostics.surfaceQueries); surfaces[record.First].TryDistanceTo(surfaces[record.Last], tolerance, token, out result); }
+                    try { Interlocked.Increment(ref Request.Diagnostics.surfaceQueries); surfaces[record.First].TryDistanceTo(surfaces[record.Last], Math.Max(tolerance, ConnectionGapEpsilonMeters), token, out result); }
                     finally { Interlocked.Add(ref Request.Diagnostics.surfaceTicks, Stopwatch.GetTimestamp() - started); }
                     // Persisted numerical claims are checked against current immutable geometry once.
                     if (!SameSurfaceResult(result, record.Result)) return null;
@@ -203,7 +203,7 @@ namespace AddinRibbon.Routing
                     writer.Write(piece.Along); writer.Write(piece.Length); writer.Write(piece.EndsOnly); writer.Write(piece.HasStartPort); writer.Write(piece.HasEndPort);
                     writer.Write(piece.Independent);
                     writer.Write(piece.AllowsSideConnections);
-                    writer.Write(piece.CadSection?.RouteCode ?? string.Empty);
+                    writer.Write(piece.RouteCode ?? string.Empty);
                     writer.Write(piece.Bounds.MinX); writer.Write(piece.Bounds.MinY); writer.Write(piece.Bounds.MinZ); writer.Write(piece.Bounds.MaxX); writer.Write(piece.Bounds.MaxY); writer.Write(piece.Bounds.MaxZ);
                     writer.Write(piece.VerifiedPorts.Count);
                     foreach (var port in piece.VerifiedPorts)
@@ -225,13 +225,13 @@ namespace AddinRibbon.Routing
             GraphContactPair[] pairs, ref int position, ref int visits, CancellationToken token)
         {
             if ((++visits & 127) == 0) token.ThrowIfCancellationRequested(); var first = pieces[firstIndex];
-            if (!Bounds.WithinTolerance(first.Bounds, node.Bounds, tolerance)) return true;
+            if (!Bounds.WithinTolerance(first.Bounds, node.Bounds, Math.Max(tolerance, VerifiedPortContactPrecisionMeters))) return true;
             if (node.Left != null) return ValidateCandidates(node.Left, indices, pieces, firstIndex, tolerance, pairs, ref position, ref visits, token)
                 && ValidateCandidates(node.Right, indices, pieces, firstIndex, tolerance, pairs, ref position, ref visits, token);
             for (int offset = 0; offset < node.Count; offset++)
             {
                 int lastIndex = indices[node.Start + offset]; if (lastIndex <= firstIndex) continue; var last = pieces[lastIndex];
-                if (first.Segment == last.Segment || !Bounds.WithinTolerance(first.Bounds, last.Bounds, tolerance)) continue;
+                if (first.Segment == last.Segment || !WithinNeighbourTolerance(first, last, tolerance)) continue;
                 if (position >= pairs.Length) return false; var pair = pairs[position++];
                 if (pair.First != firstIndex || pair.Last != lastIndex || pair.PortsOnly != (first.EndsOnly || last.EndsOnly)) return false;
                 if (pair.PortsOnly) { if (pair.Overlap || pair.FirstFraction != 0 || pair.LastFraction != 0 || pair.HighFirst != 0 || pair.HighLast != 0) return false; continue; }

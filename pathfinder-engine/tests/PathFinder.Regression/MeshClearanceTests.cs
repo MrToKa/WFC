@@ -25,6 +25,7 @@ internal static class MeshClearanceTests
         run("Triangle build and query honor cancellation before returning a witness", Cancellation);
         run("Localized station queries preserve distinct tied parallel contacts", LocalStations);
         run("Routing qualifies by physical clearance while retaining raw cable centreline length", PhysicalGapGraph);
+        run("BC068 retains the physically connected section instead of jumping across it", ContinuousRouteSections);
         run("Equal gap counts prefer the shorter physical clearance over the shorter axis jump", SurfaceGapOrdering);
         run("Parallel physical clearances retain the shortest contact at either overlap end", ParallelContactGraph);
         run("End-only mesh connections cannot bypass the middle of a bend", EndOnlyGraph);
@@ -146,6 +147,29 @@ internal static class MeshClearanceTests
                 "A local station borrowed a remote minimum witness.");
         }
     }
+    private static void ContinuousRouteSections()
+    {
+        var from = P(0, 0, -2);
+        var to = P(1.25, 1, .1);
+        var drop = Body("drop", "/BC068", from, P(0), Box(-.15, .15, -.04, .04, -2, 0));
+        var bridge = Body("bridge", "bc068", P(-.1, 0, .05), P(1.2, 0, .05), Box(-.1, 1.2, -.15, .15, 0, .1));
+        var transition = Body("transition", "/BC068", P(1.25, 0, .1), to, Box(1.2, 1.3, 0, 1, .05, .15));
+        var calculator = new RouteCalculator();
+        var options = new RoutingOptions { ConnectionToleranceMeters = 1.2, PreferVerticalApproach = false };
+
+        Assert(!calculator.Calculate(new[] { drop, transition }, from, to, CableCategory.Control, options).Success,
+            "A positive clearance between two BC068 sections must not become a connection.");
+        var trays = new[] { drop, bridge, transition };
+        var route = calculator.Calculate(trays, from, to, CableCategory.Control, options);
+        Assert(route.Success && route.SegmentIds.SequenceEqual(new[] { "drop", "bridge", "transition" }),
+            "The actual mesh joints must retain the transverse section despite the offsets of the centrelines. " + route.Message);
+        Assert(route.ConnectionGapCount == 0, "Physical joints inside BC068 must not count as connection gaps.");
+        var constrained = calculator.CalculateConstrained(trays, from, to, CableCategory.Control,
+            (a, b, token) => new RouteCollisionObservation(RouteCollisionStatus.Clear, null, "", 0), options);
+        Assert(constrained.Status == ConstrainedRouteStatus.Clear && constrained.Route.SegmentIds.SequenceEqual(route.SegmentIds),
+            "Barrier-aware calculation must also use the transverse section.");
+    }
+
     private static void PhysicalGapGraph()
     {
         var a = Body("vertical", "/C001", P(0, 0, 0), P(0, 0, 2), Box(-.2, .2, -.2, .2, 0, 2), true);

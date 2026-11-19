@@ -77,6 +77,7 @@ namespace AddinRibbon.Routing
         public string Id { get; private set; }
         public string Name { get; private set; }
         public string RouteCode { get; private set; }
+        internal string ConnectionRouteCode { get; }
         public CableCategory AllowedCategories { get; private set; }
         public IReadOnlyList<RoutePoint> Points { get; private set; }
         /// <summary>Cross-tray connections originate at the physical first/last ports. Explicit straight CAD side-entry targets may receive them in their interior.</summary>
@@ -123,6 +124,7 @@ namespace AddinRibbon.Routing
             Id = id;
             Name = name ?? string.Empty;
             RouteCode = RouteCodeParser.Parse(Name);
+            ConnectionRouteCode = RouteCodeParser.ConnectionIdentity(Name);
             AllowedCategories = allowedCategories;
             Points = new ReadOnlyCollection<RoutePoint>(copy);
             ConnectionsAtEndsOnly = connectionsAtEndsOnly;

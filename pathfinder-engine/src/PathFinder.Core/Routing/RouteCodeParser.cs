@@ -18,6 +18,8 @@ namespace AddinRibbon.Routing
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex BareCode = new Regex(@"^(?:[A-Za-z]{1,12}\d+[A-Za-z0-9]*|\d+[A-Za-z][A-Za-z0-9]*)(?:-\d+)?$",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex ExplicitCode = new Regex(@"^/?(?<code>[A-Za-z0-9][A-Za-z0-9_.-]*)$",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         /// <summary>Preserves complete codes including BC/DFBC and numeric piece suffixes.</summary>
         public static string Parse(string name)
@@ -61,6 +63,14 @@ namespace AddinRibbon.Routing
         internal static bool IsQualifiedComponentName(string name)
         {
             return !string.IsNullOrWhiteSpace(name) && QualifiedPath.IsMatch(name);
+        }
+
+        internal static string ConnectionIdentity(string name)
+        {
+            var explicitCode = ExplicitCode.Match(name.Trim());
+            var code = explicitCode.Success ? "/" + explicitCode.Groups["code"].Value.ToUpperInvariant()
+                : TryParseNamedCode(name, out var parsed) ? parsed : null;
+            return code == "/UNNAMED" ? null : code;
         }
     }
 }

@@ -28,7 +28,7 @@ internal static class Program
             Run("Physical bend ports retain all curve vertices and interior object attachment", PhysicalBendPorts);
             Run("Port-only segments retain port projections, gaps and paired curves", PortContacts);
             Run("BC903 reaches the interior of the current BC027-2 straight", CadSideJunction);
-            Run("BC904 traverses the vertical section before joining the horizontal section", CadSectionJunction);
+            Run("BC904 CAD sections must meet even when the configured gap is larger", CadSectionJunction);
             Run("Shorter physical cable wins over a longer one-gap corridor", ConnectionGapCountPreference);
             Run("Shorter physical cable wins over a smaller summed gap distance", ConnectionGapDistancePreference);
             Run("Tied gap count and gap distance choose the shortest cable", ConnectionGapLengthTiebreaker);
@@ -352,12 +352,16 @@ internal static class Program
         var top = new RoutePoint(10.4, 80.32, 18.83);
         var start = new RoutePoint(10.55, 80.13, 18.63);
         var end = new RoutePoint(12.6, 80.13, 18.63);
-        var vertical = new TraySegment("cad:vertical", "/BC904", CableCategory.Control,
+        var vertical = new TraySegment("cad:vertical", "/bc904", CableCategory.Control,
             new[] { bottom, top }, true, null, null, false, true);
-        var horizontal = new TraySegment("cad:horizontal", "/BC904", CableCategory.Control,
+        var separated = new TraySegment("cad:separated", "BC904", CableCategory.Control,
             new[] { start, end }, true, null, null, false, true);
+        var horizontal = new TraySegment("cad:horizontal", "BC904", CableCategory.Control,
+            new[] { top, end }, true, null, null, false, true);
         var options = new RoutingOptions { ConnectionToleranceMeters = 1.2, SecondaryDistanceMeters = 7 };
-        Assert(bottom.DistanceTo(start) < options.ConnectionToleranceMeters, "Fixture must admit an unrestricted diagonal.");
+        Assert(top.DistanceTo(start) < options.ConnectionToleranceMeters, "Fixture gap must be below the configured tolerance.");
+        Assert(!Calculator.Calculate(new[] { vertical, separated }, from, end, CableCategory.Control, options).Success,
+            "Connection gap must not join separated sections of BC904.");
         foreach (var trays in new[] { new[] { vertical, horizontal }, new[] { horizontal, vertical } })
         {
             var route = Calculator.Calculate(trays, from, end, CableCategory.Control, options);

@@ -83,8 +83,8 @@ internal static class RouteNameResolverTests
         string label = resolved ? RouteNameResolver.Resolve(new[] { "Tube /B1", "/5LD04/B1", "/5LD04", "/ROUTE_ZONE" }) : "/B1";
         return TrayGeometryBuilder.Build(new[] {
             new TrayGeometryInput("first", label, CableCategory.MV, "Tube", P(0, -0.2, -0.1), P(8, 0.2, 0.1)),
-            new TrayGeometryInput("middle", label, CableCategory.MV, "Tube", P(8.3, -0.2, -0.1), P(12, 0.2, 0.1)),
-            new TrayGeometryInput("last", label, CableCategory.MV, "Tube", P(12.3, -0.2, -0.1), P(18.5, 0.2, 0.1)) });
+            new TrayGeometryInput("middle", label, CableCategory.MV, "Tube", P(8, -0.2, -0.1), P(12, 0.2, 0.1)),
+            new TrayGeometryInput("last", label, CableCategory.MV, "Tube", P(12, -0.2, -0.1), P(18.5, 0.2, 0.1)) });
     }
     private static void GeometryAndLength()
     {
@@ -107,8 +107,8 @@ internal static class RouteNameResolverTests
         Near(oldResult.LengthMeters, result.LengthMeters);
         Near(oldResult.FromDistanceMeters, result.FromDistanceMeters); Near(oldResult.ToDistanceMeters, result.ToDistanceMeters);
         Near(oldResult.ConnectionGapLengthMeters, result.ConnectionGapLengthMeters);
-        Assert(oldResult.ConnectionGapCount == result.ConnectionGapCount && result.ConnectionGapCount == 2,
-            "Connection gap count changed.");
+        Assert(oldResult.ConnectionGapCount == 0 && result.ConnectionGapCount == 0,
+            "Physical joints should remain gap-free after resolving the name.");
         Assert(oldResult.PathPoints.SequenceEqual(result.PathPoints) && oldResult.SegmentIds.SequenceEqual(result.SegmentIds),
             "The selected 3D path changed.");
         Assert(CableDesignLength.Calculate(result, 6m, 6m, 5m).DesignLengthMeters == 39m

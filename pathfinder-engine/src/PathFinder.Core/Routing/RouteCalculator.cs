@@ -339,7 +339,7 @@ namespace AddinRibbon.Routing
         {
             if ((++treeVisits & 255) == 0) token.ThrowIfCancellationRequested();
             var first = pieces[firstIndex];
-            if (!Bounds.WithinTolerance(first.Bounds, node.Bounds, tolerance)) return true;
+            if (!Bounds.WithinTolerance(first.Bounds, node.Bounds, Math.Max(tolerance, VerifiedPortContactPrecisionMeters))) return true;
             if (node.Left != null)
                 return VisitCandidates(node.Left, indices, pieces, firstIndex, tolerance,
                     graph, token, ref candidates, maxCandidates, ref treeVisits, preparation) &&
@@ -351,7 +351,7 @@ namespace AddinRibbon.Routing
                 if (lastIndex <= firstIndex) continue;
                 var last = pieces[lastIndex];
                 if (last.Segment == first.Segment ||
-                    !Bounds.WithinTolerance(first.Bounds, last.Bounds, tolerance)) continue;
+                    !WithinNeighbourTolerance(first, last, tolerance)) continue;
                 if (++candidates > maxCandidates) return false;
                 if ((candidates & 255) == 0) token.ThrowIfCancellationRequested();
                 if (first.EndsOnly || last.EndsOnly)
@@ -427,25 +427,12 @@ namespace AddinRibbon.Routing
                 (target.Y - piece.Start.Y) * y + (target.Z - piece.Start.Z) * z) / lengthSquared);
         }
 
-        private static bool IsCadSectionJunction(Piece first, Piece last, double firstFraction,
-            double lastFraction, double distance)
-        {
-            // Gaps between sections of one CAD route join their facing ends.
-            // A diagonal from the opposite end would erase the section from
-            // the cable geometry while still reporting the same route code.
-            if (!IsEndPort(first, firstFraction) || !IsEndPort(last, lastFraction)) return false;
+        private static bool SameRoute(Piece first, Piece last) =>
+            first.RouteCode != null && first.RouteCode == last.RouteCode;
 
-            var firstPoint = firstFraction == 0 ? first.Start : first.End;
-            var lastPoint = lastFraction == 0 ? last.Start : last.End;
-            var firstEnds = first.CadSection.Points;
-            var lastEnds = last.CadSection.Points;
-            double nearestFirst = Math.Min(lastPoint.DistanceTo(firstEnds[0]), lastPoint.DistanceTo(firstEnds[firstEnds.Count - 1]));
-            double nearestLast = Math.Min(firstPoint.DistanceTo(lastEnds[0]), firstPoint.DistanceTo(lastEnds[lastEnds.Count - 1]));
-            return distance <= Math.Min(nearestFirst, nearestLast) + ConnectionGapEpsilonMeters;
-        }
-
-        private static bool IsEndPort(Piece piece, double fraction) =>
-            (fraction == 0 && piece.HasStartPort) || (fraction == 1 && piece.HasEndPort);
+        private static bool WithinNeighbourTolerance(Piece first, Piece last, double tolerance) =>
+            Bounds.WithinTolerance(first.Bounds, last.Bounds,
+                SameRoute(first, last) ? VerifiedPortContactPrecisionMeters : tolerance);
 
         private static bool ParallelContactRange(Piece first, Piece last,
             out double lowFirst, out double lowLast, out double highFirst, out double highLast)
@@ -622,7 +609,7 @@ namespace AddinRibbon.Routing
             internal readonly bool EndsOnly, HasStartPort, Independent, AllowsSideConnections;
             internal readonly IReadOnlyList<RouteConnectionPort> VerifiedPorts;
             internal readonly IReadOnlyList<TrayMeshClearance> Surfaces;
-            internal readonly TraySegment CadSection;
+            internal readonly string RouteCode;
             internal bool HasEndPort;
             internal Piece(int segment, RoutePoint start, RoutePoint end, double along, double length,
                 bool hasStartPort, TraySegment tray)
@@ -632,7 +619,7 @@ namespace AddinRibbon.Routing
                 EndsOnly = tray.ConnectionsAtEndsOnly; HasStartPort = hasStartPort; HasEndPort = false;
                 Independent = tray.Independent;
                 AllowsSideConnections = tray.AllowsSideConnections;
-                CadSection = tray.Id.StartsWith("cad:", StringComparison.Ordinal) ? tray : null;
+                RouteCode = tray.ConnectionRouteCode;
                 VerifiedPorts = tray.VerifiedPorts;
                 Surfaces = tray.ConnectionSurfaces;
                 if (Surfaces.Count != 0 && (!EndsOnly || hasStartPort))
@@ -695,26 +682,24 @@ namespace AddinRibbon.Routing
                 double distance = firstPoint.DistanceTo(lastPoint);
                 bool provenContact = ProvenPortContact(first, last, firstPoint, lastPoint);
                 if (provenContact) return Link(first, last, firstFraction, lastFraction, 0, tolerance);
-                if (distance > ConnectionGapEpsilonMeters && first.CadSection != null && last.CadSection != null &&
-                    StringComparer.OrdinalIgnoreCase.Equals(first.CadSection.RouteCode, last.CadSection.RouteCode) &&
-                    !IsCadSectionJunction(first, last, firstFraction, lastFraction, distance)) return true;
                 var firstSurface = Surface(first, firstFraction);
                 var lastSurface = Surface(last, lastFraction);
                 if (firstSurface != null && lastSurface != null)
                 {
+                    double surfaceSearch = Math.Max(tolerance, ConnectionGapEpsilonMeters);
                     TrayMeshClearanceResult clearance;
                     var surfaceKey = Tuple.Create(firstSurface, lastSurface);
                     bool alreadyQueried = queriedSurfaces.TryGetValue(surfaceKey, out clearance);
                     if (!alreadyQueried)
                     {
-                        if (preparation != null) clearance = preparation.Measure(firstSurface, lastSurface, tolerance, token);
+                        if (preparation != null) clearance = preparation.Measure(firstSurface, lastSurface, surfaceSearch, token);
                         else
                         {
                             long started = System.Diagnostics.Stopwatch.GetTimestamp(); var request = GraphPreparationRequest.Current;
                             try
                             {
                                 if (request != null) Interlocked.Increment(ref request.Diagnostics.surfaceQueries);
-                                firstSurface.TryDistanceTo(lastSurface, tolerance, token, out clearance);
+                                firstSurface.TryDistanceTo(lastSurface, surfaceSearch, token, out clearance);
                             }
                             finally { if (request != null) Interlocked.Add(ref request.Diagnostics.surfaceTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started); }
                         }
@@ -740,7 +725,7 @@ namespace AddinRibbon.Routing
                         && WitnessMatches(last, lastPoint, contact.SecondPoint));
                     bool localTie = matching != null || (first.VerifiedPorts.Count != 0 && last.VerifiedPorts.Count != 0
                         && firstSurface.TryDistanceAtSections(lastSurface, Station(first, firstPoint),
-                            Station(last, lastPoint), tolerance, token, out local)
+                            Station(last, lastPoint), surfaceSearch, token, out local)
                         && GapUnits(local.DistanceMeters) == GapUnits(clearance.DistanceMeters));
                     return !localTie || Link(first, last, firstFraction, lastFraction,
                         local != null ? local.DistanceMeters : matching.DistanceMeters, tolerance);
@@ -773,7 +758,8 @@ namespace AddinRibbon.Routing
             private bool Link(Piece first, Piece last, double firstFraction, double lastFraction,
                 double gapDistance, double tolerance)
             {
-                if (gapDistance > tolerance) return true;
+                // Sections of one route must physically meet, even when their cable centrelines are offset.
+                if (gapDistance > (SameRoute(first, last) ? ConnectionGapEpsilonMeters : tolerance)) return true;
                 var firstPoint = RoutePoint.Interpolate(first.Start, first.End, firstFraction);
                 var lastPoint = RoutePoint.Interpolate(last.Start, last.End, lastFraction);
                 double distance = firstPoint.DistanceTo(lastPoint);
