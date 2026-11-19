@@ -53,6 +53,8 @@ namespace AddinRibbon.Routing
         {
             var first = pieces[pair.First]; var last = pieces[pair.Last];
             if (pair.PortsOnly) return AddPortContacts(first, last, graph, tolerance);
+            // Preserve checked end alternatives if the closest interior transfer is blocked.
+            if ((first.EndsOnly || last.EndsOnly) && !AddPortContacts(first, last, graph, tolerance)) return false;
             if (!graph.AddContact(first, last, pair.FirstFraction, pair.LastFraction, tolerance)) return false;
             if (pair.Overlap && pair.HighFirst != pair.FirstFraction && !graph.AddContact(first, last, pair.HighFirst, pair.HighLast, tolerance)) return false;
             return !pair.Overlap || graph.AddParallelAttachmentContacts(first, last, pair.FirstFraction, pair.HighFirst, tolerance);
@@ -106,7 +108,8 @@ namespace AddinRibbon.Routing
                     if (pair.First < 0 || pair.Last < 0 || pair.First >= pieces.Count || pair.Last >= pieces.Count) return false;
                     // Four port combinations may each introduce two tied surface
                     // witnesses plus its analytical contact (twelve Link calls).
-                    long contacts = pair.PortsOnly ? 12 : 4;
+                    long contacts = pair.PortsOnly ? 24 : 4;
+                    if (!pair.PortsOnly && (pieces[pair.First].EndsOnly || pieces[pair.Last].EndsOnly)) contacts += 24;
                     if (pair.Overlap) contacts += (long)stations[pieces[pair.First].Segment].Count + stations[pieces[pair.Last].Segment].Count;
                     nodes += 2 * contacts; connections += 3 * contacts;
                     if (nodes > maxNodes || connections > maxConnections) return false;
@@ -151,14 +154,14 @@ namespace AddinRibbon.Routing
             private GraphContactRecipe ValidateImported(GraphContactRecipe recipe, double tolerance, CancellationToken token)
             {
                 if (recipe.PieceCount != pieces.Count || recipe.SurfaceCount != surfaces.Count) return null;
-                var indices = Enumerable.Range(0, pieces.Count).Where(i => !pieces[i].EndsOnly || pieces[i].HasStartPort || pieces[i].HasEndPort).ToArray();
+                var indices = Enumerable.Range(0, pieces.Count).Where(i => SearchesContacts(pieces[i])).ToArray();
                 long started = Stopwatch.GetTimestamp(); var tree = BuildAabbTree(pieces, indices, 0, indices.Length, token);
                 Interlocked.Add(ref Request.Diagnostics.treeTicks, Stopwatch.GetTimestamp() - started);
                 int position = 0, visits = 0;
                 for (int i = 0; i < pieces.Count; i++)
                 {
                     if ((i & 127) == 0) token.ThrowIfCancellationRequested();
-                    if (pieces[i].EndsOnly && !pieces[i].HasStartPort && !pieces[i].HasEndPort) continue;
+                    if (!SearchesContacts(pieces[i])) continue;
                     if (!ValidateCandidates(tree, indices, pieces, i, tolerance, recipe.Pairs, ref position, ref visits, token)) return null;
                 }
                 if (position != recipe.Pairs.Length) return null;
@@ -205,6 +208,7 @@ namespace AddinRibbon.Routing
                     writer.Write(piece.AllowsSideConnections);
                     writer.Write(piece.RouteCode ?? string.Empty);
                     writer.Write(piece.CadSection != null);
+                    writer.Write(piece.AllowsInterRouteInteriorConnections);
                     writer.Write(piece.Bounds.MinX); writer.Write(piece.Bounds.MinY); writer.Write(piece.Bounds.MinZ); writer.Write(piece.Bounds.MaxX); writer.Write(piece.Bounds.MaxY); writer.Write(piece.Bounds.MaxZ);
                     writer.Write(piece.VerifiedPorts.Count);
                     foreach (var port in piece.VerifiedPorts)
@@ -232,9 +236,10 @@ namespace AddinRibbon.Routing
             for (int offset = 0; offset < node.Count; offset++)
             {
                 int lastIndex = indices[node.Start + offset]; if (lastIndex <= firstIndex) continue; var last = pieces[lastIndex];
-                if (first.Segment == last.Segment || !WithinNeighbourTolerance(first, last, tolerance)) continue;
+                bool portsOnly;
+                if (!TryContactPair(first, last, tolerance, out portsOnly)) continue;
                 if (position >= pairs.Length) return false; var pair = pairs[position++];
-                if (pair.First != firstIndex || pair.Last != lastIndex || pair.PortsOnly != (first.EndsOnly || last.EndsOnly)) return false;
+                if (pair.First != firstIndex || pair.Last != lastIndex || pair.PortsOnly != portsOnly) return false;
                 if (pair.PortsOnly) { if (pair.Overlap || pair.FirstFraction != 0 || pair.LastFraction != 0 || pair.HighFirst != 0 || pair.HighLast != 0) return false; continue; }
                 double a, b, highA, highB; bool overlap = ParallelContactRange(first, last, out a, out b, out highA, out highB);
                 if (!overlap) ClosestPoints(first, last, out a, out b);

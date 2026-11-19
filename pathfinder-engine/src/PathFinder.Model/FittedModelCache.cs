@@ -394,7 +394,8 @@ public sealed class FittedModelCache
                 }
                 if (surfaces.Count != item.SurfaceCount) throw new InvalidDataException("Cached surface count mismatch.");
             }
-            segments.Add(new TraySegment(item.Id, item.Name, input.Categories, item.Points.Select(AffineTransform.Point), item.EndsOnly, ports, surfaces));
+            segments.Add(new TraySegment(item.Id, item.Name, input.Categories, item.Points.Select(AffineTransform.Point),
+                item.EndsOnly, ports, surfaces, false, false, allowsInterRouteInteriorConnections: true));
         }
         return new ReadOnlyCollection<TraySegment>(segments);
     }

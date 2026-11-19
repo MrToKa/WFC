@@ -28,6 +28,7 @@ internal static class Program
             Run("Physical bend ports retain all curve vertices and interior object attachment", PhysicalBendPorts);
             Run("Port-only segments retain port projections, gaps and paired curves", PortContacts);
             Run("BC903 reaches the interior of the current BC027-2 straight", CadSideJunction);
+            Run("Different routes transfer at interior stations without allowing a same-route shortcut", InterRouteInteriorTransfer);
             Run("BC904 CAD continuation uses the closest section ends within the configured gap", CadSectionJunction);
             Run("Smaller total gap wins even with more connections", ConnectionGapCountPreference);
             Run("Smaller total gap wins over a shorter cable", ConnectionGapDistancePreference);
@@ -343,6 +344,40 @@ internal static class Program
         Assert(TraySegment.IsStraightCenterline(new[] { P(0), P(1), P(1), P(2) }), "Repeated collinear stations lost their straight CAD classification.");
         Throws<ArgumentException>(() => new TraySegment("curve", "C", CableCategory.Control, QuarterCurve(), true, null, null, false, true));
         Throws<ArgumentException>(() => new TraySegment("isolated", "I", CableCategory.Control, new[] { P(0), P(1) }, true, null, null, true, true));
+    }
+
+    private static void InterRouteInteriorTransfer()
+    {
+        var from = P(-4, -2);
+        var to = P(2, 4, .2);
+        var first = new TraySegment("cad:first", "/BC091", CableCategory.Control,
+            new[] { from, P(-4, 0), P(4, 0), P(4, 2) }, true, null, null, false, false, true);
+        var secondPoints = new[] { P(-2, -4, .2), P(0, -4, .2), P(0, 4, .2), to };
+        TraySegment Second(string code) =>
+            new TraySegment("cad:second", code, CableCategory.Control, secondPoints, true, null, null, false, false, true);
+        var options = new RoutingOptions { ConnectionToleranceMeters = .25, PreferVerticalApproach = false };
+        var trays = new[] { first, Second("/BC092") };
+        var route = Calculator.Calculate(trays, from, to, CableCategory.Control, options);
+        Assert(route.Success && route.SegmentIds.SequenceEqual(new[] { "cad:first", "cad:second" }), route.Message);
+        Assert(route.PathPoints.SequenceEqual(new[] { from, P(-4, 0), P(0), P(0, 0, .2), P(0, 4, .2), to }),
+            "The route must leave and enter the centrelines at the two interior stations.");
+        Near(.2, route.ConnectionGapLengthMeters, "The measured inter-route transfer");
+        Assert(!Calculator.Calculate(new[] { first, Second("/BC091") }, from, to, CableCategory.Control, options).Success,
+            "Two sections of one route must not jump between interior stations.");
+        var reverse = Calculator.Calculate(trays.Reverse(), to, from, CableCategory.Control, options);
+        Assert(reverse.Success && reverse.PathPoints.SequenceEqual(route.PathPoints.Reverse()), "Interior transfer must work in either direction.");
+        var cache = new GraphPreparationCache();
+        const string scope = "interior-route-transfer";
+        using (cache.BeginRequest(scope))
+            Assert(Calculator.Calculate(trays, from, to, CableCategory.Control, options).Success, "Cold graph lost the interior transfer.");
+        var restored = new GraphPreparationCache();
+        Assert(restored.Import(scope, cache.Export(scope)), "Interior transfer graph was not persisted.");
+        using (var request = restored.BeginRequest(scope))
+        {
+            var replay = Calculator.Calculate(trays, from, to, CableCategory.Control, options);
+            Assert(replay.Success && replay.PathPoints.SequenceEqual(route.PathPoints) &&
+                request.Diagnostics.BasisImportedHits == 1, "Persisted graph changed the interior transfer.");
+        }
     }
 
     private static void CadSectionJunction()

@@ -238,7 +238,7 @@ namespace AddinRibbon.Routing
                     else diagnostics.Add(input.Id + ": physical clearance evidence is unavailable; " + reason);
                 }
                 segments.Add(new TraySegment(input.Id, input.RouteName, input.Categories, points,
-                    validatedBend, verifiedPorts, connectionSurfaces));
+                    validatedBend, verifiedPorts, connectionSurfaces, false, false, allowsInterRouteInteriorConnections: true));
             }
             return new TrayGeometryBuildResult(segments, validated, fallbackBends, meshStraights.Count,
                 straightCandidates.Count - meshStraights.Count, diagnostics,

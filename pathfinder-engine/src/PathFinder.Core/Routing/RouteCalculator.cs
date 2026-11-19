@@ -281,7 +281,7 @@ namespace AddinRibbon.Routing
             var graph = new ContactGraph(nodes, segmentNodes, maxNodes, maxConnections, token, preparation);
             if (graph.Limit != GraphLimit.None) { limit = graph.Limit; return false; }
             var indices = Enumerable.Range(0, pieces.Count)
-                .Where(i => !pieces[i].EndsOnly || pieces[i].HasStartPort || pieces[i].HasEndPort).ToArray();
+                .Where(i => SearchesContacts(pieces[i])).ToArray();
             long treeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             var tree = BuildAabbTree(pieces, indices, 0, indices.Length, token);
             var request = GraphPreparationRequest.Current;
@@ -291,7 +291,7 @@ namespace AddinRibbon.Routing
             for (int index = 0; index < pieces.Count; index++)
             {
                 if ((index & 127) == 0) token.ThrowIfCancellationRequested();
-                if (pieces[index].EndsOnly && !pieces[index].HasStartPort && !pieces[index].HasEndPort) continue;
+                if (!SearchesContacts(pieces[index])) continue;
                 if (!VisitCandidates(tree, indices, pieces, index, tolerance, graph,
                     token, ref candidates, CandidateLimit(maxConnections), ref treeVisits, preparation))
                 {
@@ -350,11 +350,11 @@ namespace AddinRibbon.Routing
                 int lastIndex = indices[node.Start + offset];
                 if (lastIndex <= firstIndex) continue;
                 var last = pieces[lastIndex];
-                if (last.Segment == first.Segment ||
-                    !WithinNeighbourTolerance(first, last, tolerance)) continue;
+                bool portsOnly;
+                if (!TryContactPair(first, last, tolerance, out portsOnly)) continue;
                 if (++candidates > maxCandidates) return false;
                 if ((candidates & 255) == 0) token.ThrowIfCancellationRequested();
-                if (first.EndsOnly || last.EndsOnly)
+                if (portsOnly)
                 {
                     if (preparation != null) preparation.Capture(new GraphContactPair(firstIndex, lastIndex, true, false, 0, 0, 0, 0));
                     else RecordUnpreparedCandidate();
@@ -365,15 +365,10 @@ namespace AddinRibbon.Routing
                 bool overlap = ParallelContactRange(first, last,
                     out firstFraction, out lastFraction, out highFirst, out highLast);
                 if (!overlap) ClosestPoints(first, last, out firstFraction, out lastFraction);
-                if (preparation != null) preparation.Capture(new GraphContactPair(firstIndex, lastIndex, false, overlap, firstFraction, lastFraction, overlap ? highFirst : 0, overlap ? highLast : 0));
+                var pair = new GraphContactPair(firstIndex, lastIndex, false, overlap, firstFraction, lastFraction, overlap ? highFirst : 0, overlap ? highLast : 0);
+                if (preparation != null) preparation.Capture(pair);
                 else RecordUnpreparedCandidate();
-                if (!graph.AddContact(first, last, firstFraction, lastFraction, tolerance)) return false;
-                // Keep both overlap boundaries and equipment attachment stations:
-                // an interior endpoint must not travel to a tray end to cross.
-                if (overlap && highFirst != firstFraction &&
-                    !graph.AddContact(first, last, highFirst, highLast, tolerance)) return false;
-                if (overlap && !graph.AddParallelAttachmentContacts(first, last,
-                    firstFraction, highFirst, tolerance)) return false;
+                if (!ApplyPreparedPair(pair, pieces, graph, tolerance)) return false;
             }
             return true;
         }
@@ -384,10 +379,7 @@ namespace AddinRibbon.Routing
             {
                 if (first.HasStartPort && !AddPortContact(first, last, 0, graph, tolerance)) return false;
                 if (first.HasEndPort && !AddPortContact(first, last, 1, graph, tolerance)) return false;
-                // Each side entry still starts at a genuine chain end. Consider
-                // both directions so graph ordering cannot hide a vertical drop
-                // arriving at the middle of a current straight CAD rail.
-                if (first.AllowsSideConnections && last.EndsOnly)
+                if (CanReceiveSideContact(first, last) && last.EndsOnly)
                 {
                     if (last.HasStartPort && !graph.AddContact(first, last, ProjectionFraction(first, last.Start), 0, tolerance)) return false;
                     if (last.HasEndPort && !graph.AddContact(first, last, ProjectionFraction(first, last.End), 1, tolerance)) return false;
@@ -408,7 +400,7 @@ namespace AddinRibbon.Routing
             {
                 if (last.HasStartPort && !graph.AddContact(first, last, firstFraction, 0, tolerance)) return false;
                 if (last.HasEndPort && !graph.AddContact(first, last, firstFraction, 1, tolerance)) return false;
-                if (last.AllowsSideConnections)
+                if (CanReceiveSideContact(last, first))
                 {
                     var source = firstFraction == 0 ? first.Start : first.End;
                     if (!graph.AddContact(first, last, firstFraction, ProjectionFraction(last, source), tolerance)) return false;
@@ -429,6 +421,30 @@ namespace AddinRibbon.Routing
 
         private static bool SameRoute(Piece first, Piece last) =>
             first.RouteCode != null && first.RouteCode == last.RouteCode;
+
+        private static bool DifferentRoutes(Piece first, Piece last) =>
+            first.RouteCode != null && last.RouteCode != null && first.RouteCode != last.RouteCode;
+
+        private static bool SearchesContacts(Piece piece) =>
+            !piece.EndsOnly || piece.HasStartPort || piece.HasEndPort ||
+            (piece.AllowsInterRouteInteriorConnections && piece.RouteCode != null && !piece.Independent);
+
+        private static bool UsesPortContacts(Piece first, Piece last) =>
+            (first.EndsOnly || last.EndsOnly) &&
+            !(DifferentRoutes(first, last) && (!first.EndsOnly || first.AllowsInterRouteInteriorConnections)
+                && (!last.EndsOnly || last.AllowsInterRouteInteriorConnections));
+
+        private static bool TryContactPair(Piece first, Piece last, double tolerance, out bool portsOnly)
+        {
+            portsOnly = false;
+            if (first.Segment == last.Segment || !WithinNeighbourTolerance(first, last, tolerance)) return false;
+            portsOnly = UsesPortContacts(first, last);
+            return !portsOnly || (first.EndsOnly && (first.HasStartPort || first.HasEndPort))
+                || (last.EndsOnly && (last.HasStartPort || last.HasEndPort));
+        }
+
+        private static bool CanReceiveSideContact(Piece target, Piece other) =>
+            target.AllowsSideConnections || (target.AllowsInterRouteInteriorConnections && DifferentRoutes(target, other));
 
         private static bool WithinNeighbourTolerance(Piece first, Piece last, double tolerance)
         {
@@ -633,6 +649,7 @@ namespace AddinRibbon.Routing
             internal readonly IReadOnlyList<TrayMeshClearance> Surfaces;
             internal readonly string RouteCode;
             internal readonly TraySegment CadSection;
+            internal readonly bool AllowsInterRouteInteriorConnections;
             internal bool HasEndPort;
             internal Piece(int segment, RoutePoint start, RoutePoint end, double along, double length,
                 bool hasStartPort, TraySegment tray)
@@ -644,6 +661,7 @@ namespace AddinRibbon.Routing
                 AllowsSideConnections = tray.AllowsSideConnections;
                 RouteCode = tray.ConnectionRouteCode;
                 CadSection = tray.Id.StartsWith("cad:", StringComparison.Ordinal) ? tray : null;
+                AllowsInterRouteInteriorConnections = tray.AllowsInterRouteInteriorConnections;
                 VerifiedPorts = tray.VerifiedPorts;
                 Surfaces = tray.ConnectionSurfaces;
                 if (Surfaces.Count != 0 && (!EndsOnly || hasStartPort))
