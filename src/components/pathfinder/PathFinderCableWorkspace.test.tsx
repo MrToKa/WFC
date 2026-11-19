@@ -236,23 +236,30 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     listRow = { ...row(), cable: { ...row().cable, id: id(44) } }; await openListCable();
     expect(panelProps.drillThroughWalls).toBe(false); expect(panelProps.cable?.cable.id).toBe(id(44)); expect(p.pf.submitCalculation).not.toHaveBeenCalled();
   });
-  it('freezes explicit selected-job drilling preferences for submission and polling without changing shared Save or another cable', async () => {
-    const p = props(), strict = barrierCalculationFixture(id, false).preferences, draft = { ...strict, barrierRouting: { ...strict.barrierRouting!, drillThroughWalls: true } };
+  it('freezes selected-cable routing options for submission and polling while keeping shared Save defaults', async () => {
+    const p = props(), strict = { ...barrierCalculationFixture(id, false).preferences, preferVerticalApproach: true };
+    const draft = { ...strict, barrierRouting: { ...strict.barrierRouting!, drillThroughWalls: true } };
     const acknowledged = vi.fn(); vi.mocked(p.pf.submitCalculation).mockResolvedValueOnce({ kind: 'acknowledged', jobId: id(71), registryRevision: '5', duplicate: false });
     vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({ projectId: id(1), cableId: id(3), row: { ...row(), calculation: { ...row().calculation, jobId: id(71), jobStatus: 'running' } } } as never);
     render(<PathFinderCableWorkspace {...p} preferences={strict} getCalculationPreferences={drill => drill ? draft : strict} onCalculationPreferences={acknowledged} />);
-    await openListCable(); act(() => panelProps.onDrillThroughWallsChange?.(true));
+    await openListCable();
+    expect(panelProps.preferVerticalApproach).toBe(true);
+    act(() => { panelProps.onDrillThroughWallsChange?.(true); panelProps.onPreferVerticalApproachChange?.(false); });
+    expect(panelProps.preferVerticalApproach).toBe(false);
     await act(async () => { await panelProps.onCalculate?.(); });
     await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
     draft.barrierRouting.drillThroughWalls = false; act(() => panelProps.onDrillThroughWallsChange?.(false));
-    expect(p.pf.submitCalculation).toHaveBeenCalledExactlyOnceWith([id(3)], expect.objectContaining({ barrierRouting: expect.objectContaining({ drillThroughWalls: true }) }));
-    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(id(1), 'fixture-token', id(3), expect.objectContaining({ barrierRouting: expect.objectContaining({ drillThroughWalls: true }) }), expect.any(AbortSignal));
-    expect(acknowledged).toHaveBeenCalledWith(expect.objectContaining({ cableId: id(3), jobId: id(71), preferences: expect.objectContaining({ barrierRouting: expect.objectContaining({ drillThroughWalls: true }) }) }));
+    const submitted = expect.objectContaining({ preferVerticalApproach: false, barrierRouting: expect.objectContaining({ drillThroughWalls: true }) });
+    expect(p.pf.submitCalculation).toHaveBeenCalledExactlyOnceWith([id(3)], submitted);
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(id(1), 'fixture-token', id(3), submitted, expect.any(AbortSignal));
+    expect(acknowledged).toHaveBeenCalledWith(expect.objectContaining({ cableId: id(3), jobId: id(71), preferences: submitted }));
     expect(panelProps.access.calculation?.preferences.barrierRouting?.drillThroughWalls).toBe(false);
+    expect(panelProps.access.calculation?.preferences.preferVerticalApproach).toBe(true);
     expect(panelProps.calculationFeedback).toMatchObject({ working: true, currentAttempt: true, message: 'Calculating this cable’s routing…' });
     expect(panelProps.submittedDrillThroughWalls).toBe(true);
     act(() => panelProps.onClose()); await openListCable();
     expect(panelProps.drillThroughWalls).toBe(false); expect(panelProps.submittedDrillThroughWalls).toBe(true);
+    expect(panelProps.preferVerticalApproach).toBe(true);
     expect(p.pf.submitCalculation).toHaveBeenCalledOnce();
   });
   it('keeps an unacknowledged submission unknown without polling or borrowing a different independently observed job', async () => {

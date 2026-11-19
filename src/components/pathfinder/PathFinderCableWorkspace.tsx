@@ -154,6 +154,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const manualRefresh = useRef<AbortController | null>(null);
   const metadataCommit = useRef<{ ticket: AbortController; scope: string; resolve: () => void } | null>(null);
   const [drillDraft, setDrillDraft] = useState<{ cableId: string; checked: boolean } | null>(null);
+  const [verticalApproachDraft, setVerticalApproachDraft] = useState<{ cableId: string; checked: boolean } | null>(null);
   const [calculationFeedback, setCalculationFeedback] = useState<CalculationFeedback | null>(null);
   const attemptEpoch = useRef(0);
   const [calculationDiagnostics, setCalculationDiagnostics] = useState<CalculationDiagnosticSnapshot | null>(null);
@@ -206,6 +207,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     calculationDiagnosticsRef.current = null; setCalculationDiagnostics(null);
     setDiagnosticReadRevision(value => value + 1);
     setDrillDraft({ cableId: row.cable.id, checked: false });
+    setVerticalApproachDraft(null);
     setCalculationFeedback(feedback.current.get(row.cable.id) ?? null);
     const retained = submissions.current.get(row.cable.id) ?? null;
     submittedRef.current = retained; setSubmittedCalculation(retained);
@@ -229,6 +231,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const selectedEligible = Boolean(selected && isPathFinderCableEligible(selected.mto));
   const drillThroughWalls = Boolean(selected && drillDraft?.cableId === selected.cable.id && drillDraft.checked);
   const selectedPreferences = props.getCalculationPreferences ? props.getCalculationPreferences(drillThroughWalls) : preferences;
+  const verticalApproachOverride = verticalApproachDraft?.cableId === selected?.cable.id ? verticalApproachDraft?.checked : undefined;
   const calculationBlockedReason = enabled && !selectedPreferences
     ? props.calculationBlocker ?? 'You can save From/To assignments now. Configure the current route settings and barriers before calculating routing. Existing Cable list values are retained.' : null;
   const calculation = calculationEnabled && selectedEligible && preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
@@ -756,7 +759,8 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       const message = '128 unresolved cable calculations are retained in this workspace. Inspect their exact pending work before starting another calculation. No request was submitted.';
       setNotice(message); rememberFeedback({ cableId: row.cable.id, attempt, message, working: false }); return;
     }
-    const snapshot = structuredClone(selectedPreferences);
+    const snapshot = structuredClone({ ...selectedPreferences,
+      preferVerticalApproach: verticalApproachOverride ?? selectedPreferences.preferVerticalApproach });
     read.current?.abort(); read.current = null; setRefreshingSelected(false);
     backgroundState.current = null;
     diagnosticsEpoch.current++; settledDiagnosticsRef.current = null; protectedDiagnostics.current = null; setSettledDiagnostics(null);
@@ -1015,6 +1019,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
     }} onCalculate={enabled && selectedEligible && !submittedCalculation && !waitingForSavedCalculation && !popupReview?.pending && selected && !selectedCalculationPending(selected.calculation) ? calculateSelected : undefined}
       calculationBlockedReason={calculationBlockedReason} onConfigureCalculation={props.onConfigureCalculation}
+      preferVerticalApproach={verticalApproachOverride ?? selectedPreferences?.preferVerticalApproach ?? readPreferences?.preferVerticalApproach ?? true}
+      onPreferVerticalApproachChange={checked => {
+        if (selected) setVerticalApproachDraft({ cableId: selected.cable.id, checked });
+      }}
       drillThroughWalls={drillThroughWalls} onDrillThroughWallsChange={checked => {
         if (selected) setDrillDraft({ cableId: selected.cable.id, checked });
       }} submittedDrillThroughWalls={submittedCalculation?.cableId === selected?.cable.id ? submittedCalculation?.preferences.barrierRouting?.drillThroughWalls : null}

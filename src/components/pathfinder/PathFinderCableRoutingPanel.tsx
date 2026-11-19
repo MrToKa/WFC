@@ -39,6 +39,7 @@ export type PathFinderCableRoutingPanelProps = {
   review?: PathFinderWorkflowReview | null; calculationPending?: boolean;
   calculationBlockedReason?: string | null; onConfigureCalculation?: () => void;
   drillThroughWalls?: boolean; onDrillThroughWallsChange?: (checked: boolean) => void;
+  preferVerticalApproach?: boolean; onPreferVerticalApproachChange?: (checked: boolean) => void;
   submittedDrillThroughWalls?: boolean | null;
   calculationFeedback?: { message: string; working: boolean; currentAttempt?: boolean } | null;
   calculationDiagnostics?: PathFinderCalculationDiagnostics | null;
@@ -89,7 +90,8 @@ function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable:
 }
 function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, onShowLocation, onShowLocationPoint, pathVisible = false,
   pathReady = false, pathSource = null, endpointRefreshKey = 0, actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, calculationBlockedReason = null,
-  onConfigureCalculation, drillThroughWalls = false, onDrillThroughWallsChange, submittedDrillThroughWalls, calculationFeedback, calculationDiagnostics,
+  onConfigureCalculation, drillThroughWalls = false, onDrillThroughWallsChange, preferVerticalApproach, onPreferVerticalApproachChange,
+  submittedDrillThroughWalls, calculationFeedback, calculationDiagnostics,
   onRefresh, refreshing = false, refreshError = null, onEndpointForegroundContexts,storedRouteSelected=false,storedRouteWorking=false,storedRouteMessage,
   floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
   const title = useId(), panel = floating.panelRef;
@@ -317,6 +319,12 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         {storedRouteSelected&&hasCalculatedRouting?<section aria-label="Automatic routing result"><h4>Automatically calculated routing</h4><textarea aria-label="Automatically calculated routing" className={styles.value} readOnly value={calculatedRouting} rows={3}/><p className={styles.note}>Automatically calculated design length: {calculatedDesignLength??'Not available'} m. Show displays the saved Cable list route above.</p></section>:null}
         {usingSavedExactPath ? <Caption1>Saved route. Show displays its saved path without recalculating.</Caption1> : null}
         <PathFinderObstacleList execution={obstacleReport.execution} loading={obstacleReport.loading} error={obstacleReport.error} onRetry={obstacleReport.retry} />
+        {onPreferVerticalApproachChange ? <>
+          <Checkbox label="Prefer vertical approach" checked={preferVerticalApproach}
+            disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || calculationPending || Boolean(currentReview?.pending)}
+            onChange={(_, value) => onPreferVerticalApproachChange(value.checked === true)} />
+          <Caption1>Applies when you select Calculate routing for this cable.</Caption1>
+        </> : null}
         {onDrillThroughWallsChange ? <>
           <Checkbox label="Drill through the walls" checked={drillThroughWalls}
             disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || calculationPending || Boolean(currentReview?.pending)}

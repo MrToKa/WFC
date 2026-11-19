@@ -456,6 +456,18 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(checkbox).toBeDisabled(); expect(screen.getByText(/submission is unconfirmed/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled(); expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
   });
+  it('lets the selected cable turn off vertical approach before calculating', () => {
+    const p = props(), onPreferVerticalApproachChange = vi.fn();
+    const view = render(<PathFinderCableRoutingPanel {...p} preferVerticalApproach onPreferVerticalApproachChange={onPreferVerticalApproachChange} />);
+    const checkbox = screen.getByRole('checkbox', { name: 'Prefer vertical approach' });
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+    expect(onPreferVerticalApproachChange).toHaveBeenCalledWith(false);
+    expect(p.onCalculate).not.toHaveBeenCalled();
+    view.rerender(<PathFinderCableRoutingPanel {...p} preferVerticalApproach={false} onPreferVerticalApproachChange={onPreferVerticalApproachChange} calculationPending />);
+    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toBeDisabled();
+  });
   it('keeps Calculate actionable for configuration while preserving endpoint Save and approval guards', () => {
     const p = props(), configure = vi.fn(), calculate = vi.fn(() => configure());
     p.access = { ...p.access, calculation: null, initialFill: null };
