@@ -607,6 +607,12 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     await waitFor(() => expect(fetchPathFinderJob).toHaveBeenCalledWith(projectId, 'isolated-test-token', bulkJobId, expect.any(AbortSignal)));
     await waitFor(() => expect(Number(popup().refreshKey)).toBeGreaterThan(before.refreshKey));
     expect(popup()).toMatchObject({ active: true, selectedCableId: detail.row.cable.id, reviewRunId: bulkJobId, pf: { busy: false } });
+    await user.click(screen.getByRole('button', { name: 'Show cables: Protected manual route' }));
+    const path = screen.getByRole('tabpanel', { name: 'Path' });
+    const resultList = within(path).getByRole('region', { name: 'Cables by recalculation result' });
+    expect(path.lastElementChild).toBe(resultList);
+    expect(within(resultList).getAllByRole('link').map(link => link.textContent)).toEqual(['=CABLE-2']);
+    expect(popup().selectedCableId).toBe(detail.row.cable.id);
     expect(pf.clear).toHaveBeenCalledTimes(before.clear); expect(current.calculate).not.toHaveBeenCalled();
     expect(current.submitCalculation).not.toHaveBeenCalled(); expect(current.action).not.toHaveBeenCalled();
   });

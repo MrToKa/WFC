@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, Caption1, ProgressBar, Spinner } from '@fluentui/react-components';
-import { bulkCalculationRequestSchema, fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCalculationSubmission, type PathFinderJob, type PathFinderPreferences, type PathFinderState } from '@/api/pathfinder';
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Button, Caption1, Link, ProgressBar, Spinner, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, makeStyles, tokens } from '@fluentui/react-components';
+import { bulkCalculationRequestSchema, fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCalculationSubmission, type PathFinderCable, type PathFinderJob, type PathFinderPreferences, type PathFinderState } from '@/api/pathfinder';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../../shared/pathfinderCalculationSubmission';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
@@ -16,7 +16,12 @@ type Props = Credentials & {
   children?: ReactNode;
 };
 type FilteredSelection = { query: Omit<CableWorkflowQuery, 'cursor'>; contextSha256: string };
-const FilteredRecalculation = createContext<{ disabled: boolean; start: (selection: FilteredSelection) => Promise<void>; progress: ReactNode } | null>(null);
+type IssueSelection = { kind: 'calculation' | 'saving'; reason: string; trigger: HTMLButtonElement };
+type SelectedIssue = { selection: IssueSelection; cableIds: readonly string[] };
+const FilteredRecalculation = createContext<{
+  disabled: boolean; start: (selection: FilteredSelection) => Promise<void>; progress: ReactNode;
+  issue: SelectedIssue | null; closeIssue: () => void;
+} | null>(null);
 export const useFilteredCableRecalculation = () => useContext(FilteredRecalculation);
 type JobItem = NonNullable<PathFinderJob['items']>[number];
 const isUnsavedCalculation = (item: JobItem) => item.status === 'calculated' && (!item.automaticUpdate
@@ -56,28 +61,32 @@ const retainedRouteLabels = {
   unknown: 'with an unknown saved route status',
 };
 
+type SavingIssueGroup = { cableIds: string[]; routes: Map<keyof typeof retainedRouteLabels, number> };
+
 function savingBreakdown(items: PathFinderJob['items']) {
-  const groups = new Map<string, { total: number; routes: Map<keyof typeof retainedRouteLabels, number> }>();
+  const groups = new Map<string, SavingIssueGroup>();
   for (const item of items ?? []) {
     if (item.status !== 'calculated' || (!isUnsavedCalculation(item) && item.automaticUpdate?.status !== 'review-required')) continue;
     const reason = savingReason(item.automaticUpdate);
-    const group = groups.get(reason) ?? { total: 0, routes: new Map() };
+    const group: SavingIssueGroup = groups.get(reason) ?? { cableIds: [], routes: new Map() };
     const route = item.retainedRoute ?? 'unknown';
-    group.total++;
+    group.cableIds.push(item.cableId);
     group.routes.set(route, (group.routes.get(route) ?? 0) + 1);
     groups.set(reason, group);
   }
-  return [...groups.entries()].sort(([, first], [, second]) => second.total - first.total);
+  return [...groups.entries()].sort(([, first], [, second]) => second.cableIds.length - first.cableIds.length);
 }
 
 function blockedCalculationBreakdown(items: PathFinderJob['items']) {
-  const groups = new Map<string, number>();
+  const groups = new Map<string, { cableIds: string[] }>();
   for (const item of items ?? []) {
     if (!isBlockedCalculation(item)) continue;
     const reason = item.message?.trim() || 'No calculation reason was recorded.';
-    groups.set(reason, (groups.get(reason) ?? 0) + 1);
+    const group = groups.get(reason) ?? { cableIds: [] };
+    group.cableIds.push(item.cableId);
+    groups.set(reason, group);
   }
-  return [...groups.entries()].sort(([, first], [, second]) => second - first);
+  return [...groups.entries()].sort(([, first], [, second]) => second.cableIds.length - first.cableIds.length);
 }
 
 /** Owns only its submission and lightweight progress reads. Never owns the
@@ -117,6 +126,7 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     || (pending && pending !== 'legacy' && pending.cableIds)));
   const [submitting, setSubmitting] = useState(false);
   const [findingMatches, setFindingMatches] = useState(false);
+  const [issueSelection, setIssueSelection] = useState<IssueSelection | null>(null);
   const [error, setError] = useState<string | null>(null);
   const lifetime = useRef(new AbortController());
   const submittingRef = useRef(false), changed = useRef(onChanged), refresh = useRef(refreshState), lastSaved = useRef(0);
@@ -129,8 +139,16 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     return () => controller.abort();
   }, []);
   const counts = job ? backgroundCalculationCounts(job) : null;
-  const saveReasons = savingBreakdown(job?.items);
-  const blockedReasons = blockedCalculationBreakdown(job?.items);
+  const items = job?.items;
+  const saveReasons = useMemo(() => savingBreakdown(items), [items]);
+  const blockedReasons = useMemo(() => blockedCalculationBreakdown(items), [items]);
+  const selectedGroup = issueSelection && (issueSelection.kind === 'calculation' ? blockedReasons : saveReasons)
+    .find(([reason]) => reason === issueSelection.reason)?.[1];
+  const issue = issueSelection && selectedGroup ? { selection: issueSelection, cableIds: selectedGroup.cableIds } : null;
+  const closeIssue = () => {
+    issueSelection?.trigger.focus();
+    setIssueSelection(null);
+  };
   const networkBlocked = job?.status === 'complete' && job.total > 0 && job.items?.length === job.total
     && job.items.every(item => item.state === 'blocked' && item.status === 'routing_preparation_required');
   const running = Boolean(jobId && (!job || ['queued', 'running'].includes(job.status) || (counts?.pendingUpdates ?? 0) > 0));
@@ -171,6 +189,7 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     lastSaved.current = 0;
     filteredJob.current = filtered;
     setDisplayFiltered(filtered);
+    setIssueSelection(null);
     setJob(null); setJobId(id); setPending(null);
   };
   const readStoredSubmission = (value: string | null) => {
@@ -277,6 +296,11 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       if (!signal.aborted) { setSubmitting(false); setFindingMatches(false); }
     }
   };
+  const showCables = (kind: IssueSelection['kind'], reason: string) => children == null ? null : <>{' '}
+    <Button size="small" type="button" aria-label={`Show cables: ${reason}`}
+      aria-expanded={issue?.selection.kind === kind && issue.selection.reason === reason}
+      onClick={event => setIssueSelection({ kind, reason, trigger: event.currentTarget })}>Show cables</Button>
+  </>;
   const progress = <>
     {pending ? <Button disabled={submitting} onClick={() => void recover()}>{pending === 'legacy' ? 'Find previous recalculation' : 'Retry same recalculation request'}</Button> : null}
     <div role="status" aria-live="polite">
@@ -285,13 +309,15 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
         <ProgressBar value={job.total ? job.completed / job.total : 1} />
         <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}.</Caption1>
         {blockedReasons.length > 0 ? <ul aria-label="Skipped or failed calculations">
-          {blockedReasons.map(([reason, count]) => <li key={reason}>
-            {count} {count === 1 ? 'cable' : 'cables'} · {reason}
+          {blockedReasons.map(([reason, { cableIds }]) => <li key={reason}>
+            <span>{cableIds.length} {cableIds.length === 1 ? 'cable' : 'cables'} · {reason}</span>
+            {showCables('calculation', reason)}
           </li>)}
         </ul> : null}
         {saveReasons.length > 0 ? <ul aria-label="Calculated routes requiring attention">
-          {saveReasons.map(([reason, { total, routes }]) => <li key={reason}>
-            {reason} ({total} {total === 1 ? 'cable' : 'cables'}). {[...routes].map(([route, count]) => `${count} ${retainedRouteLabels[route]}`).join(', ')}.
+          {saveReasons.map(([reason, { cableIds, routes }]) => <li key={reason}>
+            <span>{reason} ({cableIds.length} {cableIds.length === 1 ? 'cable' : 'cables'}). {[...routes].map(([route, count]) => `${count} ${retainedRouteLabels[route]}`).join(', ')}.</span>
+            {showCables('saving', reason)}
           </li>)}
         </ul> : null}
         {job.failure ? <Caption1 block>{job.failure}</Caption1> : null}
@@ -306,7 +332,68 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     <Caption1 block>Current Routing and Design length update automatically for unprotected cables. Protected routes remain unchanged; automatic results are retained separately. Cables with missing locations or unsupported purposes are skipped; MV is excluded.</Caption1>
     {blocker ? <Caption1 block>{blocker}</Caption1> : null}
     {!displayFiltered ? progress : null}
-  </section><FilteredRecalculation.Provider value={{ disabled: startDisabled, start, progress: displayFiltered ? progress : null }}>
+  </section><FilteredRecalculation.Provider value={{ disabled: startDisabled, start, progress: displayFiltered ? progress : null, issue, closeIssue }}>
     {children}
   </FilteredRecalculation.Provider></>;
+}
+
+const issuePageSize = 50;
+const useIssueStyles = makeStyles({
+  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS, minWidth: 0, overflowWrap: 'anywhere' },
+  heading: { margin: 0 },
+  controls: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: tokens.spacingHorizontalS },
+  table: { tableLayout: 'fixed' },
+});
+
+type IssueListProps = { projectId: string | null; cables: readonly PathFinderCable[] | undefined };
+
+export function PathFinderRecalculationIssueList(props: IssueListProps) {
+  const recalculation = useFilteredCableRecalculation();
+  const issue = recalculation?.issue;
+  if (!issue || !recalculation) return null;
+  return <IssueList key={JSON.stringify([issue.selection.kind, issue.selection.reason])}
+    {...props} issue={issue} onClose={recalculation.closeIssue} />;
+}
+
+function IssueList({ projectId, cables, issue, onClose }: IssueListProps & { issue: SelectedIssue; onClose: () => void }) {
+  const styles = useIssueStyles();
+  const headingId = useId();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [page, setPage] = useState(0);
+  const { selection, cableIds } = issue;
+  useEffect(() => {
+    heading.current?.scrollIntoView?.({ block: 'start' });
+    heading.current?.focus({ preventScroll: true });
+  }, [selection]);
+  const cableIndex = useMemo(() => new Map(cables?.map(cable => [cable.id, cable])), [cables]);
+  const orderedIds = useMemo(() => [...cableIds].sort((a, b) =>
+    (cableIndex.get(a)?.cableId ?? Infinity) - (cableIndex.get(b)?.cableId ?? Infinity)), [cableIds, cableIndex]);
+  const lastPage = Math.max(0, Math.ceil(orderedIds.length / issuePageSize) - 1);
+  const currentPage = Math.min(page, lastPage);
+  const first = currentPage * issuePageSize;
+  const end = Math.min(first + issuePageSize, orderedIds.length);
+  return <section className={styles.root} aria-labelledby={headingId}>
+    <h3 className={styles.heading} id={headingId} ref={heading} tabIndex={-1}>Cables by recalculation result</h3>
+    <div>{selection.reason}</div>
+    <div className={styles.controls}>
+      <Caption1 role="status">Showing {first + 1}–{end} of {orderedIds.length} {orderedIds.length === 1 ? 'cable' : 'cables'}</Caption1>
+      <Button size="small" type="button" onClick={onClose}>Close cable list</Button>
+    </div>
+    <Table size="small" className={styles.table} aria-label="Cables in the selected result group">
+      <TableHeader><TableRow><TableHeaderCell>Cable</TableHeaderCell><TableHeaderCell>From</TableHeaderCell><TableHeaderCell>To</TableHeaderCell></TableRow></TableHeader>
+      <TableBody>{orderedIds.slice(first, end).map(id => {
+        const cable = cableIndex.get(id);
+        const label = cable?.tag || (cable?.cableId ?? id);
+        return <TableRow key={id}>
+          <TableCell>{cable && projectId ? <Link href={`/projects/${projectId}/cables/${id}`}>{label}</Link> : label}</TableCell>
+          <TableCell>{cable?.fromLocation || '—'}</TableCell>
+          <TableCell>{cable?.toLocation || '—'}</TableCell>
+        </TableRow>;
+      })}</TableBody>
+    </Table>
+    {lastPage > 0 ? <div className={styles.controls}>
+      <Button size="small" type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous cables</Button>
+      <Button size="small" type="button" disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)}>Next cables</Button>
+    </div> : null}
+  </section>;
 }

@@ -1,10 +1,10 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderJob, type PathFinderState } from '@/api/pathfinder';
+import { fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCable, type PathFinderJob, type PathFinderState } from '@/api/pathfinder';
 import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 import { collectFilteredCableIds } from '@/api/pathfinderCableWorkflow';
-import { backgroundCalculationCounts, PathFinderRecalculateAll, useFilteredCableRecalculation } from './PathFinderRecalculateAll';
+import { backgroundCalculationCounts, PathFinderRecalculateAll, PathFinderRecalculationIssueList, useFilteredCableRecalculation } from './PathFinderRecalculateAll';
 vi.mock('@/api/pathfinder', async original => ({ ...await original<typeof import('@/api/pathfinder')>(), fetchLegacyBulkCalculationJob: vi.fn(), fetchPathFinderJob: vi.fn(), submitAllPathFinderCalculations: vi.fn() }));
 vi.mock('@/api/pathfinderCableWorkflow', async original => ({ ...await original<typeof import('@/api/pathfinderCableWorkflow')>(), collectFilteredCableIds: vi.fn() }));
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -151,6 +151,47 @@ describe('whole-project background pass', () => {
     expect(screen.getByText('Protected manual route (1 cable). 1 with a retained manual route.')).toBeVisible();
     expect(screen.getByText(/need review: 0;.*not saved by this run: 2/)).toBeVisible();
     expect(onReviewReady).not.toHaveBeenCalled();
+  });
+  it('opens each result group with its own paginated cables even when diagnostics are unavailable', async () => {
+    const props = setup();
+    localStorage.setItem(storageKey, id(20));
+    const cables = Array.from({ length: 54 }, (_, index) => ({
+      id: id(100 + index), cableId: index + 1, tag: `C-${index + 1}`, fromLocation: 'Panel A', toLocation: 'Panel B',
+    } as PathFinderCable));
+    const blocked = cables.slice(0, 51).map(cable => ({
+      ...item('locations_required'), cableId: cable.id, state: 'blocked', message: 'Resolve From locations.',
+    }));
+    const job = makeJob('complete', [
+      ...blocked,
+      { ...item('locations_required'), cableId: cables[51].id, state: 'blocked', message: 'Resolve To locations.' },
+      { ...item('calculated', 'authority-expired'), cableId: cables[52].id },
+      { ...item('calculated', 'written'), cableId: cables[53].id },
+    ]);
+    vi.mocked(fetchPathFinderJob).mockResolvedValue({ ...job, total: cables.length });
+    render(<PathFinderRecalculateAll {...props}>
+      <p role="alert">Cable diagnostics are unavailable.</p>
+      <PathFinderRecalculationIssueList projectId={props.projectId} cables={cables} />
+    </PathFinderRecalculateAll>);
+
+    const from = await screen.findByRole('button', { name: 'Show cables: Resolve From locations.' });
+    fireEvent.click(from);
+    expect(screen.getByRole('heading', { name: 'Cables by recalculation result' })).toHaveFocus();
+    const table = screen.getByRole('table', { name: 'Cables in the selected result group' });
+    expect(within(table).getAllByRole('link')).toHaveLength(50);
+    expect(within(table).getByRole('link', { name: 'C-1' })).toHaveAttribute('href', `/projects/${id(1)}/cables/${id(100)}`);
+    expect(within(table).queryByRole('link', { name: 'C-51' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Next cables' }));
+    expect(within(table).getAllByRole('link').map(link => link.textContent)).toEqual(['C-51']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show cables: Resolve To locations.' }));
+    expect(within(screen.getByRole('table')).getAllByRole('link').map(link => link.textContent)).toEqual(['C-52']);
+    const expired = screen.getByRole('button', { name: 'Show cables: Permission to save automatically expired' });
+    fireEvent.click(expired);
+    expect(within(screen.getByRole('table')).getAllByRole('link').map(link => link.textContent)).toEqual(['C-53']);
+    fireEvent.click(screen.getByRole('button', { name: 'Close cable list' }));
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(expired).toHaveFocus();
+    expect(submitAllPathFinderCalculations).not.toHaveBeenCalled();
   });
   it('retries the identical command after reopening with uncertain admission', async () => {
     const props = setup(); vi.mocked(submitAllPathFinderCalculations).mockResolvedValue({ kind: 'unknown', code: 'CALCULATION_SUBMISSION_UNKNOWN' });

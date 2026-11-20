@@ -8,7 +8,7 @@ import { ModelLocationMatchPanel, type MatchBeforeCalculation } from './ModelLoc
 import { useRoutingsViewerHeight } from './hooks/useRoutingsViewerHeight';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import { PathFinderResults } from './PathFinderResults';
-import { PathFinderRecalculateAll } from './PathFinderRecalculateAll';
+import { PathFinderRecalculateAll, PathFinderRecalculationIssueList } from './PathFinderRecalculateAll';
 import { PathFinderRecalculationPanel } from './PathFinderRecalculationPanel';
 import { PathFinderLookup } from './PathFinderLookup';
 import { PathFinderRoutes } from './PathFinderRoutes';
@@ -369,7 +369,6 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           onEndpointForegroundContexts={endpointForegroundChanged}
           onSelect={row => { setSelectedCableId(row.cable.id); setWorkflowSelection(row);
             setWorkflowCalculationPreferences(previous => previous?.cableId === row.cable.id ? previous : null); }} />
-        </PathFinderRecalculateAll>
         <details><summary>Advanced standalone path</summary><PathFinderPreview {...cablePurposes} pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={preferences} onInputChange={clearView} onEndpointNamesChange={() => {}} /></details>
         <details><summary>Advanced project cables and shared locations</summary>
         <Field label="Search cables"><Input aria-label="Search Path Finder cables" value={search} onChange={(_, value) => setSearch(value.value)} /></Field>
@@ -415,6 +414,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           workflowDisplayRequest={workflowDisplayRequest} onWorkflowDisplayChange={workflowDisplayChanged} onWorkflowReviewChange={workflowReviewChanged}
           endpointForegroundContexts={endpointForegroundContexts}
           onCalculationCommitted={calculationCommitted} />
+        <PathFinderRecalculationIssueList projectId={projectId} cables={data?.cables} />
+        </PathFinderRecalculateAll>
         </div>
         <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>
           <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={clearView} onBusyChange={setLookupBusy} />

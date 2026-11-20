@@ -32,7 +32,7 @@ beforeEach(() => {
 describe('read-only Needs routing list', () => {
   it('recalculates the applied search and state independently of which results page is open', () => {
     const start = vi.fn();
-    vi.mocked(useFilteredCableRecalculation).mockReturnValue({ disabled: false, start, progress: null });
+    vi.mocked(useFilteredCableRecalculation).mockReturnValue({ disabled: false, start, progress: null, issue: null, closeIssue: vi.fn() });
     vi.mocked(usePathFinderCableWorkflow).mockReturnValue({ ...state(), hasPrevious: true });
     mount();
     const recalculate = screen.getByRole('button', { name: 'Recalculate filtered cables' });
