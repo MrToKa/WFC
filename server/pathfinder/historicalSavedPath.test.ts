@@ -23,7 +23,8 @@ function fixture() {
   const dependencies = { schemaVersion: 'pathfinder.dependencies.v8', model: { id: modelVersionId, contentFingerprint },
     preparation: { aggregateId: id(4), captureFrameId: source.aggregate.coordinateFrameId, geometryRevision: '1', projectionSha256: originalProjection },
     artifact: { id: source.aggregate.artifactId, sha256: originalProjection }, barriers: { binding: { scope: { captureFrameSha256: source.frameSha256 } } } };
-  const route = { success: true, routeText: cable.routing, pathPoints: [{ x: 1, y: 2, z: 3 }, { x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }] };
+  const route = { success: true, routeText: cable.routing, segmentIds: ['dbid:44', 'cad:' + id(20), 'dbid:75', 'dbid:44'],
+    pathPoints: [{ x: 1, y: 2, z: 3 }, { x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }] };
   mocks.written.mockResolvedValue({ verified: { dependencies, result: { route, design: { designLengthMeters: '18' } }, raw: { id: id(12) } } });
   mocks.current.mockResolvedValue(current);
   mocks.frame.mockImplementation(async (_client, _projectId, aggregateId) => aggregateId === id(4) ? source : target);
@@ -34,7 +35,21 @@ describe('historical geometry of the current saved cable write', () => {
   it('returns the original polyline including both terminal legs in a matching republished frame', async () => {
     const f = fixture();
     expect(await f.read()).toEqual({ projectId: id(1), cableId: id(2), cableWriteRevision: '4', routing: f.cable.routing,
-      designLength: '18.00', proposalId: id(12), current: f.current, points: [[1,2,3],[4,5,6],[7,8,9]] });
+      designLength: '18.00', proposalId: id(12), current: f.current, objectIds: ['dbid:44', 'cad:' + id(20), 'dbid:75'],
+      points: [[1,2,3],[4,5,6],[7,8,9]] });
+  });
+  it('retains every recorded foreground identity without truncating or replacing it from current preparation', async () => {
+    const f = fixture();
+    f.route.segmentIds = Array.from({ length: 1000 }, (_, index) => 'dbid:' + (index + 1));
+    const path = await f.read();
+    expect(path?.objectIds).toEqual(f.route.segmentIds);
+    expect(path?.points).toEqual([[1,2,3],[4,5,6],[7,8,9]]);
+  });
+  it.each(['too many', 'oversized identity'] as const)('declines %s foreground without returning a partial line', async kind => {
+    const f = fixture();
+    f.route.segmentIds = kind === 'too many'
+      ? Array.from({ length: 200001 }, (_, index) => 'dbid:' + (index + 1)) : ['x'.repeat(257)];
+    expect(await f.read()).toBeNull();
   });
   it.each(['missing receipt','other model','changed fingerprint','changed transform','wrong recorded frame','wrong artifact',
     'changed route','changed length','invalid point','no frame'] as const)('declines %s without returning a partial path', async kind => {

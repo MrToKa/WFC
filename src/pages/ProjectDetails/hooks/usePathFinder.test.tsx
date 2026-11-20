@@ -7,6 +7,7 @@ import { requalifyStaleCableEndpoints, hasPendingEndpointRequalification } from 
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 import { fetchHistoricalSavedPath } from '@/api/pathfinderCableWorkflow';
+import { MAX_PATH_OBJECT_IDS } from '../../../../viewer-runtime/protocol.mjs';
 import { createPublishedCadDisplay } from '@/viewer/publishedCadDisplay';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
@@ -70,7 +71,8 @@ describe('published Routings builder geometry in Path Finder', () => {
     vi.mocked(fetchHistoricalSavedPath).mockResolvedValue({projectId,cableId:locationId,cableWriteRevision:scenario==='changed-cable'?'8':'7',
       routing:'/RECORDED',designLength:'18',proposalId:locationId,current:{...preparationModelScope,aggregateId:locationId,artifactId:locationId,
         modelVersionId:scenario==='different-model'?locationId:modelId,projectionSha256:(scenario==='different-frame'?'c':'b').repeat(64),
-        captureFrameId:locationId,geometryRevision:'1',traceId:locationId},points:[[1,2,3],[4,5,6],[7,8,9]]});
+        captureFrameId:locationId,geometryRevision:'1',traceId:locationId},points:[[1,2,3],[4,5,6],[7,8,9]],
+        objectIds:['dbid:101','cad:section','dbid:102','dbid:101','dbid:27']});
     const view=mount();await waitFor(()=>expect(facts.instances).toBe(1));
     act(()=>facts.events[0]({type:'MODEL_LOADED',payload:{}}));
     facts.showComputedPath.mockResolvedValue(locationId);
@@ -78,7 +80,20 @@ describe('published Routings builder geometry in Path Finder', () => {
       endpointObjectIds:['dbid:27','dbid:53','dbid:27']});
     if(scenario==='verified'){
       await expect(show()).resolves.toEqual({status:'historical'});
-      expect(facts.showComputedPath).toHaveBeenCalledExactlyOnceWith({pathId:locationId,objectIds:[27,53],points:[[1,2,3],[4,5,6],[7,8,9]]});
+      expect(facts.showComputedPath).toHaveBeenCalledExactlyOnceWith({pathId:locationId,objectIds:[101,102,27,53],points:[[1,2,3],[4,5,6],[7,8,9]],routeNames:['RECORDED']});
+      // A → B → A must replace both native foreground and manual route focus,
+      // without reusing the first cable's equipment or redrawing its points.
+      const original = await vi.mocked(fetchHistoricalSavedPath).mock.results[0].value;
+      vi.mocked(fetchHistoricalSavedPath).mockResolvedValueOnce({...original!,cableId:modelId,proposalId:modelId,
+        routing:'/SECONDARY/BC044/BC075',objectIds:['dbid:201','dbid:202'],points:[[9,8,7],[6,5,4]]});
+      await expect(view.result.current.showStoredRoute('/SECONDARY/BC044/BC075',modelId,{cableWriteRevision:'7',designLength:'18',endpointObjectIds:['dbid:88']})).resolves.toEqual({status:'historical'});
+      expect(facts.showComputedPath).toHaveBeenLastCalledWith({pathId:modelId,objectIds:[201,202,88],points:[[9,8,7],[6,5,4]],routeNames:['BC044','BC075']});
+      await expect(show()).resolves.toEqual({status:'historical'});
+      expect(facts.showComputedPath).toHaveBeenLastCalledWith({pathId:locationId,objectIds:[101,102,27,53],points:[[1,2,3],[4,5,6],[7,8,9]],routeNames:['RECORDED']});
+      vi.mocked(fetchHistoricalSavedPath).mockResolvedValueOnce({...original!,
+        objectIds:Array.from({length:MAX_PATH_OBJECT_IDS+1},(_,index)=>`dbid:${index+1}`)});
+      await expect(show()).rejects.toThrow('saved route and assigned locations exceed the viewer object limit');
+      expect(facts.showComputedPath).toHaveBeenCalledTimes(3);
     }else{
       await expect(show()).rejects.toThrow('saved route or model changed');
       expect(facts.showComputedPath).not.toHaveBeenCalled();

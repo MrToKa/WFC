@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, parsePathFinderProposal, pathFinderRequest, submitPathFinderCalculation, PathFinderApiError, type PathFinderCalculationSubmission, type PathFinderState, type PathFinderProposal, type PathFinderPreferences, type PathFinderPreviewInput } from '@/api/pathfinder';
 import { fetchPreparationContext } from '@/api/pathfinderPreparation';
 import { computedPathObjectIds } from '../pathFinderEndpointVisibility';
+import { parseRouting } from '../../../../viewer-runtime/protocol.mjs';
 import { trayAssignmentSnapshot } from '@/viewer/trayAssignmentSnapshot';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
@@ -555,7 +556,8 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       return Promise.resolve(null);
     if (!run.storedRoute || !run.viewer || !projectId || !token) return Promise.resolve(null);
     const viewer = run.viewer;
-    const objectIds = computedPathObjectIds([], options.endpointObjectIds ?? []);
+    const endpointObjectIds = [...(options.endpointObjectIds ?? [])];
+    const objectIds = computedPathObjectIds([], endpointObjectIds);
     if (!objectIds) return Promise.reject(new Error('The assigned locations exceed the viewer object limit.'));
     const preview = { signal: options.signal, endpoints: options.endpoints, endpointObjectIds: objectIds };
     if (!options.cableWriteRevision || options.designLength == null) return run.storedRoute.show(rawRouting, cableId, preview);
@@ -574,7 +576,12 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         || active.contentFingerprint !== scope.contentFingerprint || artifact.modelVersionId !== scope.modelVersionId
         || artifact.id !== scope.artifactId || artifact.snapshotSha256 !== scope.projectionSha256)
         throw new Error('The saved route or model changed. Refresh the cable before showing its path.');
-      return { pathId: saved.proposalId, points: saved.points, objectIds };
+      // A recorded line still needs its own tray foreground. Endpoint-only
+      // isolation hides the native trays when switching from another cable.
+      const savedObjectIds = computedPathObjectIds(saved.objectIds ?? [], endpointObjectIds);
+      if (!savedObjectIds) throw new Error('The saved route and assigned locations exceed the viewer object limit.');
+      const routeNames = [...new Set(parseRouting(saved.routing).segments.map(segment => segment.key))];
+      return { pathId: saved.proposalId, points: saved.points, objectIds: savedObjectIds, routeNames };
     }, path => viewer.showComputedPath(path), preview);
   }, [accessFailure, isAdmin, live, projectId, token]);
   const clearStoredRoute = useCallback(() => { runRef.current?.storedRoute?.clear(); }, []);

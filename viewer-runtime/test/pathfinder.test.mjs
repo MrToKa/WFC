@@ -816,6 +816,70 @@ test('appearance preflight refuses foreign shared materials, unsupported APIs an
   }
 });
 
+test('twenty cable switches replace tray and endpoint foreground without accumulating appearance or overlays', async () => {
+  const f = fixture(), visibility = f.model.visibilityManager;
+  f.model.getUnitScale = () => 1; f.model.getGlobalOffset = () => [0, 0, 0];
+  visibility.states = [[99, false]];
+  f.viewer.preference = false;
+  f.viewer.isolate = ids => {
+    f.viewer.isolated = [...ids];
+    visibility.defaultVisible = false; visibility.states = ids.map(id => [id, true]);
+  };
+  const roots = new Map([[20, [0]], [21, [1]], [30, [2]], [22, [3]], [23, [4]], [31, [5]]]);
+  f.fragmentMaterials.clear();
+  for (let id = 0; id < 6; id++) f.fragmentMaterials.set(id, f.originalMaterial);
+  f.fragments.getCount = () => 6;
+  f.tree.enumNodeFragments = (id, visit, recursive) => {
+    if (recursive) for (const fragmentId of roots.get(id) ?? []) visit(fragmentId);
+  };
+  const scenes = new Set();
+  f.viewer.overlays.addScene = name => scenes.add(name);
+  f.viewer.overlays.removeScene = name => scenes.delete(name);
+  const baseline = { defaultVisible: visibility.defaultVisible, states: visibility.getVisibility() };
+  const pathA = { points: [[1, 2, 3], [4, 5, 6], [7, 9, 8]], objectIds: [20, 21, 30] };
+  const pathB = { points: [[15, 14, 13], [12, 10, 11], [9, 8, 7]], objectIds: [22, 23, 31] };
+  const assertDrawnPoints = points => {
+    assert.equal(f.meshes.length, 1);
+    const mesh = f.meshes[0], positions = mesh.geometry.position.array;
+    // Every cylinder stores its two axis centres after its sixteen ring vertices.
+    for (let segment = 0; segment < points.length - 1; segment++) {
+      for (let end = 0; end < 2; end++) {
+        const centre = (segment * 18 + 16 + end) * 3;
+        for (const [axis, name] of ['x', 'y', 'z'].entries())
+          assert.ok(Math.abs(positions[centre + axis] + mesh.position[name] - points[segment + end][axis]) < 1e-6);
+      }
+    }
+  };
+  for (let cycle = 0; cycle < 20; cycle++) {
+    f.controller.showPath(pathA);
+    assert.deepEqual(f.viewer.isolated, pathA.objectIds); assertDrawnPoints(pathA.points);
+    await f.controller.setTransparency(35);
+    assert.equal(f.registered.size, 1); assert.equal(scenes.size, 1);
+    const meshA = f.meshes[0], clonesA = f.clones.slice(-1);
+    f.controller.showPath(pathB);
+    assert.deepEqual(f.viewer.isolated, pathB.objectIds); assertDrawnPoints(pathB.points);
+    assert.equal(meshA.geometry.disposed, true); assert.equal(meshA.material.disposeCount, 1);
+    assert.ok(clonesA.every(material => material.disposeCount === 1));
+    assert.equal(f.registered.size, 0); assert.equal(scenes.size, 1);
+    assert.equal(f.viewer.preference, true); assert.equal(f.viewer.impl.showGhosting, true);
+    await f.controller.setTransparency(70);
+    assert.equal(f.registered.size, 1);
+    const meshB = f.meshes[0];
+    f.controller.clear();
+    assert.deepEqual({ defaultVisible: visibility.defaultVisible, states: visibility.getVisibility() }, baseline);
+    assert.deepEqual(f.viewer.isolated, []);
+    assert.equal(f.viewer.preference, false); assert.equal(f.viewer.impl.showGhosting, false);
+    assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.3);
+    assert.equal(f.meshes.length, 0); assert.equal(scenes.size, 0); assert.equal(f.registered.size, 0);
+    assert.equal(meshB.geometry.disposed, true); assert.equal(meshB.material.disposeCount, 1);
+    assert.ok(f.clones.every(material => material.disposeCount === 1));
+    assert.ok([...f.fragmentMaterials.values()].every(material => material === f.originalMaterial));
+    assert.deepEqual({ opacity: f.originalMaterial.opacity, transparent: f.originalMaterial.transparent, depthWrite: f.originalMaterial.depthWrite },
+      { opacity: 0.8, transparent: true, depthWrite: false });
+  }
+  f.controller.dispose();
+});
+
 test('Clear, model replacement and newer concurrent percentages fence preflight without leaking allocated materials', async () => {
   for (const supersede of [f => f.controller.clear(), f => { f.viewer.model = {}; }]) {
     const f = fixture(); f.controller.showPath({ points: [[0, 0, 0]], objectIds: [2] });

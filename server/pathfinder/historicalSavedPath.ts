@@ -40,6 +40,7 @@ export async function readHistoricalSavedPath(client: PoolClient, projectId: str
   }
   const path = historicalSavedPathSchema.safeParse({ projectId, cableId: cable.id, cableWriteRevision: cable.cableWriteRevision,
     routing: cable.routing, designLength: cable.designLength, proposalId: raw.id, current,
+    objectIds: [...new Set(result.route.segmentIds)],
     points: result.route.pathPoints.map(point => [point.x, point.y, point.z]) });
   return path.success ? path.data : null;
 }

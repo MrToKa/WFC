@@ -36,6 +36,20 @@ describe('bounded read-only cable workflow transport', () => {
     expect(await get()).toEqual(path);expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/'+cable+'/saved-path'),expect.objectContaining({method:'GET'}));
     expect(await get()).toBeNull();await expect(get()).rejects.toMatchObject({code:'INVALID_RESPONSE'});
   });
+  it('retains complete recorded foreground identities while accepting earlier responses without them', async () => {
+    const legacy = { projectId: project, cableId: cable, cableWriteRevision: '2', routing: '/BC044/BC075', designLength: '18', proposalId: id(9),
+      current: { modelVersionId: id(2), selectionRevision: '1', contentFingerprint: hash, aggregateId: id(3), artifactId: id(4), projectionSha256: hash,
+        captureFrameId: id(5), geometryRevision: '6', traceId: id(7) }, points: [[1,2,3],[4,5,6]] };
+    const complete = { ...legacy, objectIds: ['dbid:44', 'cad:' + id(20), 'dbid:75'] };
+    const get = () => fetchHistoricalSavedPath(project, 'token', cable, new AbortController().signal);
+    vi.mocked(fetch).mockResolvedValueOnce(response(complete)).mockResolvedValueOnce(response(legacy));
+    expect(await get()).toEqual(complete);
+    expect(await get()).toEqual(legacy);
+    for (const objectIds of [null, 'dbid:44', [44], ['x'.repeat(257)], Array(200001).fill('dbid:44')]) {
+      vi.mocked(fetch).mockResolvedValueOnce(response({ ...legacy, objectIds }));
+      await expect(get()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    }
+  });
   it.each([false, true])('retains exact barrier JSON and hashes for list/detail requests (drill=%s)', async drillThroughWalls => {
     const input = { barrierRouting: barrierIntent(drillThroughWalls) }, page = fixture(input);
     const detail = { schemaVersion: 'wfc.pf.cable-workflow-detail.v1', projectId: project, cableId: cable, contextSha256: hash,
