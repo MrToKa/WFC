@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { ApiError, Project, fetchProject } from '@/api/client';
+import { ApiError, Project, fetchProject, updateProject } from '@/api/client';
 
 type UseProjectDetailsDataParams = {
   projectId?: string;
@@ -13,6 +13,7 @@ type UseProjectDetailsDataResult = {
   projectError: string | null;
   formattedDates: { created: string; updated: string } | null;
   reloadProject: (options?: { showSpinner?: boolean }) => Promise<void>;
+  saveSecondaryTriggerDistance: (distance: number) => Promise<void>;
 };
 
 export const useProjectDetailsData = ({
@@ -24,6 +25,8 @@ export const useProjectDetailsData = ({
   const [error, setError] = useState<string | null>(null);
   const latestRequest = useRef(0);
   const identity = useMemo(() => ({ projectId, token }), [projectId, token]);
+  const currentIdentity = useRef(identity);
+  currentIdentity.current = identity;
   const [settledIdentity, setSettledIdentity] = useState<typeof identity | null>(null);
 
   const loadProject = useCallback(async (options?: { showSpinner?: boolean }) => {
@@ -71,6 +74,17 @@ export const useProjectDetailsData = ({
   }, [loadProject]);
 
   const currentProject = settledIdentity === identity ? project : null;
+  const saveSecondaryTriggerDistance = useCallback(async (distance: number) => {
+    if (!projectId || !token) throw new Error('Sign in to update the project.');
+    const response = await updateProject(token, projectId, { secondaryTriggerDistance: distance });
+    if (currentIdentity.current !== identity) return;
+    latestRequest.current += 1;
+    setProject(response.project);
+    setError(null);
+    setIsLoading(false);
+    setSettledIdentity(identity);
+  }, [projectId, token, identity]);
+
   const formattedDates = useMemo(() => {
     if (!currentProject) {
       return null;
@@ -94,5 +108,6 @@ export const useProjectDetailsData = ({
     projectError: settledIdentity === identity ? error : null,
     formattedDates,
     reloadProject: loadProject,
+    saveSecondaryTriggerDistance,
   };
 };

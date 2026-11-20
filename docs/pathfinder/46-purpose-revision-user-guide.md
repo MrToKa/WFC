@@ -129,9 +129,10 @@ The original calculator's validation and clamp tolerance still apply; an invalid
 geometry result is not made acceptable by this explanatory `max(0, …)`. Connection
 gaps are already included in geometric length and are not added a second time.
 
-The **SECONDARY trigger distance (m)** in the **Path** tool is a different value:
-it determines when an approach is flagged. It does not supply the replacement
-length. That replacement always comes from Details.
+The **SECONDARY trigger distance (m)** in **Path** determines when an approach
+is flagged. Enter the new threshold and choose **Save SECONDARY trigger distance**
+to share it across project users. **Saved project value** displays the current
+threshold. The replacement length comes from Project Details.
 
 ## 3. Choose routing permissions by tray purpose
 

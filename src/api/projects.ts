@@ -67,6 +67,7 @@ export async function updateProject(
     description?: string;
     connectionGap?: number;
     secondaryTrayLength?: number | null;
+    secondaryTriggerDistance?: number;
     supportDistance?: number | null;
     supportWeight?: number | null;
     additionalBendingPercent?: number;

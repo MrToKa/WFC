@@ -137,6 +137,32 @@ describe('project mutations', () => {
     expect(statements.at(-2)).toContain('SET change_log = change_log');
     expect(statements.at(-1)).toBe('COMMIT');
   });
+  it('stores the project SECONDARY trigger and logs the editor without the values', async () => {
+    let distance = '2';
+    client.query.mockImplementation(async (sql: string, params?: unknown[]) => {
+      statements.push(sql.trim());
+      if (sql.includes('FROM projects p')) {
+        return { rowCount: 1, rows: [{ ...projectRow, secondary_trigger_distance: distance }] };
+      }
+      if (sql.includes('FROM users')) return { rows: [{ name: 'Editor' }] };
+      if (sql.includes('secondary_trigger_distance = $1')) distance = String(params?.[0]);
+      return { rowCount: 1, rows: [{ id: projectId }] };
+    });
+    const response = responseStub();
+    await handlerFor('patch', '/:projectId')(
+      { params: { projectId }, userId: 'actor-id', body: { secondaryTriggerDistance: 1.5 } } as unknown as Request,
+      response,
+    );
+    expect(response.status).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('secondary_trigger_distance = $1'), [1.5, projectId]);
+    expect(response.json).toHaveBeenCalledWith({ project: expect.objectContaining({
+      secondaryTriggerDistance: 1.5,
+      changeLog: [expect.objectContaining({
+        userId: 'actor-id', userName: 'Editor', changes: ['SECONDARY trigger distance changed'],
+      })],
+    }) });
+    expect(statements.at(-1)).toBe('COMMIT');
+  });
   it('rolls back all project edits and support settings when a template belongs to another project', async () => {
     const response = responseStub();
     await handlerFor('patch', '/:projectId')(

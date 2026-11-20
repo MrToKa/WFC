@@ -92,6 +92,10 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS secondary_tray_length NUMERIC;
+
+    ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS secondary_trigger_distance NUMERIC NOT NULL DEFAULT 2
+      CHECK (secondary_trigger_distance BETWEEN 0 AND 1000000);
   `);
 
   // Explicit project routing default, including projects created before this feature.

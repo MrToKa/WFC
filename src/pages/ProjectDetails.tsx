@@ -94,7 +94,7 @@ export const ProjectDetails = () => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
 
-  const { project, projectLoading, projectError, formattedDates, reloadProject } =
+  const { project, projectLoading, projectError, formattedDates, reloadProject, saveSecondaryTriggerDistance } =
     useProjectDetailsData({ projectId, token });
   const canEdit = canEditProject(user, project, projectId);
   const trayPurposes = useProjectTrayPurposes(projectId, token);
@@ -1425,7 +1425,10 @@ export const ProjectDetails = () => {
         <RoutingsViewerTab controlsVisible={selectedTab === 'routings-viewer'} projectId={projectId ?? null} loadedProjectId={project.id} token={token} canDrawTrays={canEdit} onTraysChanged={() => reloadTrays({ showSpinner: false })} />
       ) : null}
       {modelTab === 'pathfinder' && user?.isAdmin ? (
-        <PathFinderTab obstacleRequest={obstacleRequest} controlsVisible={selectedTab === 'pathfinder'} key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} accountId={user.id} />
+        <PathFinderTab obstacleRequest={obstacleRequest} controlsVisible={selectedTab === 'pathfinder'} key={projectId}
+          projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} accountId={user.id}
+          secondaryTriggerDistance={project.secondaryTriggerDistance} onSaveSecondaryTriggerDistance={saveSecondaryTriggerDistance}
+          onRefreshProject={() => reloadProject({ showSpinner: false })} />
       ) : null}
 
       <ControlPanelPart order={2}>

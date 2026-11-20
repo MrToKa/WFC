@@ -251,7 +251,8 @@ export const DetailsTab = ({
           bending / 100))
         </Body1>
         <Body1>
-            Current Path Finder values: SECONDARY {project.secondaryTrayLength === null ? 'Not specified' : `${formatNumeric(project.secondaryTrayLength)} m`};
+          Current Path Finder values: SECONDARY trigger distance {project.secondaryTriggerDistance ?? 2} m;
+          {' '}SECONDARY length {project.secondaryTrayLength === null ? 'Not specified' : `${formatNumeric(project.secondaryTrayLength)} m`};
           {' '}end connection reserve {formatNumeric(project.endConnectionLength)} m;
           {' '}bending allowance {formatNumeric(project.additionalBendingPercent)}%.
         </Body1>

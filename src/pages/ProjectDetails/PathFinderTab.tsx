@@ -38,7 +38,8 @@ const useStyles = makeStyles({
   candidate: { padding: '0.5rem', border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: tokens.borderRadiusMedium },
   panel: { flexDirection: 'column', gap: '0.75rem', minWidth: 0 },
 });
-type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; accountId?: string | null; controlsVisible?: boolean; obstacleRequest?: PathfinderObstacleRequest | null };
+type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; accountId?: string | null; controlsVisible?: boolean; obstacleRequest?: PathfinderObstacleRequest | null;
+  secondaryTriggerDistance?: number; onSaveSecondaryTriggerDistance?: (distance: number) => Promise<void>; onRefreshProject?: () => Promise<void> };
 type Draft = { locationId: string | null; name: string };
 const emptyDraft = (): Draft => ({locationId: null, name: ''});
 const normalized = (value: string) => value.normalize('NFC').trim().toUpperCase();
@@ -57,9 +58,11 @@ const pointLabels: Record<CalculationAvailability['status'], string> = {
 
 /** Keep all hooks and the protected frame unmounted when administrator access is absent. */
 export function PathFinderTab(props: Props) {
-  return props.isAdmin ? <AdminPathFinderTab {...props} /> : <Body1>Path Finder is available only to administrators.</Body1>;
+  return props.isAdmin ? <AdminPathFinderTab key={JSON.stringify([props.projectId, props.accountId])} {...props} />
+    : <Body1>Path Finder is available only to administrators.</Body1>;
 }
-function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accountId, controlsVisible = true, obstacleRequest }: Props) {
+function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accountId, controlsVisible = true, obstacleRequest,
+  secondaryTriggerDistance: secondaryValue = 2, onSaveSecondaryTriggerDistance, onRefreshProject }: Props) {
   const detached = useControlPanelDetached();
   const cablePurposes = useProjectCablePurposes({ projectId, loadedProjectId, token, isAdmin });
   const styles = useRoutingsViewerStyles(), extra = useStyles();
@@ -84,10 +87,20 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const [barrierRefreshKey, setBarrierRefreshKey] = useState<string | null>(null);
   const [barrierRefreshRevision, setBarrierRefreshRevision] = useState(0);
   const barrierReadKey = JSON.stringify([barrierRefreshKey, barrierRefreshRevision]);
-  const refreshPathFinder = () => { pf.refresh(); setBarrierRefreshRevision(value => value + 1); };
+  const refreshPathFinder = () => {
+    pf.refresh();
+    setBarrierRefreshRevision(value => value + 1);
+    if (onRefreshProject) {
+      setSecondaryError(null);
+      void onRefreshProject().catch(() => setSecondaryError('Could not refresh the project settings.'));
+    }
+  };
   const [lookupBusy, setLookupBusy] = useState(false);
   const displayGeneration = useRef(0), [displayOwner, setDisplayOwner] = useState<'none' | 'proposal' | 'lookup' | 'standalone' | 'obstacle' | 'barrier'>('none');
-  const [secondaryDistance, setSecondaryDistance] = useState('2'), [preferVertical, setPreferVertical] = useState(true), [transparency, setTransparency] = useState('75');
+  const [secondaryDraft, setSecondaryDraft] = useState<string | null>(null);
+  const [savingSecondary, setSavingSecondary] = useState(false);
+  const [secondaryError, setSecondaryError] = useState<string | null>(null);
+  const [preferVertical, setPreferVertical] = useState(true), [transparency, setTransparency] = useState('75');
   const [barrierAuthoring, setBarrierAuthoring] = useState<{ registry: BarrierRegistry | null; dirty: boolean; pending: boolean }>({ registry: null, dirty: false, pending: false });
   const latestBarrierAuthoring = useRef(barrierAuthoring);
   latestBarrierAuthoring.current = barrierAuthoring;
@@ -101,8 +114,11 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const drillThroughWalls = drillDraft?.owner === barrierOwner && drillDraft.checked;
   useEffect(() => { setDrillDraft(previous => previous && previous.owner !== barrierOwner ? null : previous); }, [barrierOwner]);
   const barrierRouting = createBarrierAdmissionIntent(currentBarrierRegistry, drillThroughWalls);
-  const secondaryValue = secondaryDistance.trim() ? Number(secondaryDistance) : NaN;
-  const validSecondary = Number.isFinite(secondaryValue) && secondaryValue >= 0 && secondaryValue <= 1_000_000;
+  const secondaryDistance = secondaryDraft ?? String(secondaryValue);
+  const draftSecondaryValue = secondaryDistance.trim() ? Number(secondaryDistance) : NaN;
+  const validSecondaryInput = Number.isFinite(draftSecondaryValue) && draftSecondaryValue >= 0 && draftSecondaryValue <= 1_000_000;
+  const secondaryChanged = draftSecondaryValue !== secondaryValue;
+  const validSecondary = validSecondaryInput && !secondaryChanged && !savingSecondary;
   const readPreferences = validSecondary ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical } : null;
   const preferences: PathFinderPreferences | null = validSecondary && barrierRouting && !barrierAuthoring.dirty && !barrierAuthoring.pending
     ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical, barrierRouting } : null;
@@ -133,7 +149,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     }
     return { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical, barrierRouting: barriers };
   }, [projectId, token, validSecondary, secondaryValue, preferVertical]);
-  const calculationBlocker = !validSecondary ? 'Enter a SECONDARY trigger distance from 0 to 1,000,000 metres in Path.'
+  const calculationBlocker = !validSecondaryInput ? 'Enter a SECONDARY trigger distance from 0 to 1,000,000 metres in Path.'
+    : !validSecondary ? 'Save the SECONDARY trigger distance in Path before calculating.'
     : barrierAuthoring.pending ? 'A barrier change is awaiting confirmation. In Barriers, choose Inspect saved outcome; if no terminal outcome is recorded, choose Close this exact command, then check and save the intended barrier set before calculating.'
       : barrierAuthoring.dirty ? 'Save the obstacle selection in Barriers before calculating.'
         : !currentBarrierRegistry ? 'Check the current model and saved selection in Barriers before calculating.'
@@ -150,6 +167,19 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     return () => displayGeneration.current === current;
   };
   const clearView = () => { claimViewer('none'); pf.cancelOperation(); setNotice(null); };
+  const saveSecondaryDistance = async () => {
+    if (!onSaveSecondaryTriggerDistance || !validSecondaryInput || !secondaryChanged || savingSecondary || pf.busy) return;
+    setSavingSecondary(true);
+    setSecondaryError(null);
+    try {
+      await onSaveSecondaryTriggerDistance(draftSecondaryValue);
+      setSecondaryDraft(null);
+    } catch (error) {
+      setSecondaryError(error instanceof Error ? error.message : 'Could not save the SECONDARY trigger distance.');
+    } finally {
+      setSavingSecondary(false);
+    }
+  };
   const restoreView = () => { clearView(); pf.clear({ preserveCamera: false }); };
   const obstacleDisplay = usePathfinderObstacleDisplay({ request: obstacleRequest, pf,
     enabled: Boolean(isAdmin && token && projectId && projectId === loadedProjectId && (controlsVisible || detached)),
@@ -217,7 +247,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const data = pf.data, active = Boolean(data?.activeModel.modelVersionId), selected = data?.cables.find(cable => cable.id === selectedCableId);
   useEffect(() => { setDraft(emptyDraft()); setNotice(null); }, [data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
   useEffect(() => { setWorkflowSelection(null); }, [projectId, accountId, token, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
-  useEffect(() => { setWorkflowCalculationPreferences(null); }, [projectId, accountId, token, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, pf.preparationViewerGeneration]);
+  useEffect(() => { setWorkflowCalculationPreferences(null); }, [projectId, accountId, token, secondaryValue, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, pf.preparationViewerGeneration]);
   const changeMode = (next: 'routes' | 'path' | 'lookup') => {
     if (next === mode) return;
     clearView(); setLocalError(null); setMode(next);
@@ -300,8 +330,22 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           calculationNetworkRef={calculationNetwork} />
         </div>
         <div id={`${panelId}-path-panel`} role="tabpanel" aria-labelledby={`${panelId}-path-tab`} className={extra.panel} style={{ display: mode === 'path' ? 'flex' : 'none' }}>
-        <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { clearView(); setSecondaryDistance(value.value); }} /></Field>
-        {!validSecondary ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
+        <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details.">
+          <Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} disabled={savingSecondary || pf.busy}
+            onBlur={() => { if (!secondaryChanged) setSecondaryDraft(null); }} onChange={(_, { value }) => {
+            clearView();
+            setSecondaryDraft(value);
+            setSecondaryError(null);
+          }} />
+        </Field>
+        <Caption1>Saved project value: {secondaryValue} m</Caption1>
+        <div className={styles.actions}>
+          <Button disabled={!onSaveSecondaryTriggerDistance || !validSecondaryInput || !secondaryChanged || savingSecondary || pf.busy}
+            onClick={() => void saveSecondaryDistance()}>Save SECONDARY trigger distance</Button>
+          {secondaryChanged ? <Button disabled={savingSecondary} onClick={() => { setSecondaryDraft(null); setSecondaryError(null); }}>Discard change</Button> : null}
+        </div>
+        {!validSecondaryInput ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
+        {secondaryError ? <Body1 role="alert">{secondaryError}</Body1> : null}
         <label><input type="checkbox" checked={preferVertical} onChange={event => { clearView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
         <PathFinderRecalculateAll projectId={projectId} accountId={accountId ?? null} token={token}
           modelKey={JSON.stringify(data?.activeModel)} preferences={backgroundPreferences}

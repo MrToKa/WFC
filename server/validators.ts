@@ -168,6 +168,7 @@ export const updateProjectSchema = z
     manager: projectFieldSchema.manager,
     description: projectFieldSchema.description.optional(),
     secondaryTrayLength: projectFieldSchema.secondaryTrayLength,
+    secondaryTriggerDistance: z.number().finite().min(0).max(1_000_000).optional(),
     connectionGap: projectFieldSchema.connectionGap,
     supportDistance: projectFieldSchema.supportDistance,
     supportWeight: projectFieldSchema.supportWeight,
@@ -187,6 +188,7 @@ export const updateProjectSchema = z
       value.manager !== undefined ||
       value.description !== undefined ||
       value.secondaryTrayLength !== undefined ||
+      value.secondaryTriggerDistance !== undefined ||
       value.connectionGap !== undefined ||
       value.supportDistance !== undefined ||
       value.supportWeight !== undefined ||

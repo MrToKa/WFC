@@ -507,6 +507,7 @@ projectsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
             p.manager,
             p.description,
             p.secondary_tray_length,
+            p.secondary_trigger_distance,
             p.connection_gap,
             p.support_distance,
             p.support_weight,
@@ -766,6 +767,11 @@ projectsRouter.patch(
     if (parseResult.data.secondaryTrayLength !== undefined) {
       fields.push(`secondary_tray_length = $${index++}`);
       values.push(parseResult.data.secondaryTrayLength);
+    }
+
+    if (parseResult.data.secondaryTriggerDistance !== undefined) {
+      fields.push(`secondary_trigger_distance = $${index++}`);
+      values.push(parseResult.data.secondaryTriggerDistance);
     }
 
     if (parseResult.data.connectionGap !== undefined) {

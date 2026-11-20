@@ -125,7 +125,7 @@ beforeEach(() => { vi.clearAllMocks(); barrierComposition.mode = 'ready'; sessio
   vi.mocked(fetchEndpointBindingHistory).mockResolvedValue({ schemaVersion: 'wfc.pf.endpoint-binding-history.v1', projectId, locationId, bindings: [], nextBeforeRevision: null });
   vi.mocked(saveEndpointBinding).mockImplementation(async (_project, _token, selectedId) => { const f = endpointBindingFixture(); return { ...f.receipt, projectId, locationId: selectedId, binding: { ...f.binding, projectId, locationId: selectedId } }; });
 });
-const mount = (isAdmin = true) => { const view = render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin={isAdmin} />); if (isAdmin) {
+const mount = (isAdmin = true, secondaryTriggerDistance = 2) => { const view = render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin={isAdmin} secondaryTriggerDistance={secondaryTriggerDistance} />); if (isAdmin) {
   for (const label of ['Advanced standalone path', 'Advanced project cables and shared locations']) {
     const summary = screen.getByText(label); (summary.parentElement as HTMLDetailsElement).open = true;
   }
@@ -157,6 +157,31 @@ function preview(id: string, reverse = false): PathFinderPreview { return { id, 
 
 // Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
 describe('admin PathFinder interface', { timeout: 60_000 }, () => {
+  it('shows the shared project trigger and updates calculation preferences only after saving', async () => {
+    const save = vi.fn(async () => {});
+    const props = { projectId, loadedProjectId: projectId, token: 'isolated-test-token', accountId, isAdmin: true,
+      secondaryTriggerDistance: 2, onSaveSecondaryTriggerDistance: save };
+    const trigger = () => screen.getByRole('textbox', { name: 'SECONDARY trigger distance in metres' });
+    const saveButton = () => screen.getByRole('button', { name: 'Save SECONDARY trigger distance' });
+    const view = render(<PathFinderTab {...props} />);
+    expect(trigger()).toHaveValue('2');
+    fireEvent.change(trigger(), { target: { value: 'invalid' } });
+    expect(saveButton()).toBeDisabled();
+    fireEvent.change(trigger(), { target: { value: '1.5' } });
+    expect(screen.getByText('Saved project value: 2 m')).toBeVisible();
+    expect(save).not.toHaveBeenCalled();
+    expect(workspaceCapture.render.mock.lastCall?.[0].preferences).toBeNull();
+    await act(async () => fireEvent.click(saveButton()));
+    expect(save).toHaveBeenCalledExactlyOnceWith(1.5);
+
+    await act(async () => view.rerender(<PathFinderTab {...props} secondaryTriggerDistance={1.5} />));
+    expect(trigger()).toHaveValue('1.5');
+    expect(workspaceCapture.render.mock.lastCall?.[0].preferences).toMatchObject({ secondaryDistanceMeters: 1.5 });
+    await act(async () => view.rerender(<PathFinderTab {...props} secondaryTriggerDistance={1.5} accountId="cccccccc-cccc-4ccc-8ccc-cccccccccccc" />));
+    expect(trigger()).toHaveValue('1.5');
+    expect(screen.getByText('Saved project value: 1.5 m')).toBeVisible();
+  });
+
   it('shows a scoped obstacle navigation in 3D and restores with Hide obstacle', async () => {
     const focus = vi.spyOn(window, 'focus').mockImplementation(() => {}); onTestFinished(() => focus.mockRestore());
     const request = createObstacleNavigation({ projectId, modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64),
@@ -667,7 +692,8 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
   it('calculates and reverses a standalone path using original endpoint names and current Path preferences', async () => {
     const user = userEvent.setup(), forwardId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', reverseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
     const startPreview = vi.fn().mockResolvedValueOnce(forwardId).mockResolvedValueOnce(reverseId), readPreview = vi.fn(async (id: string) => preview(id, id === reverseId)), showPath = vi.fn(async () => 'displayed');
-    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview, readPreview, showPath }); mount();
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview, readPreview, showPath });
+    mount();
     await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'EQ-001'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'EQ-002'); await user.selectOptions(screen.getByRole('combobox', { name: 'Path cable purpose' }), 'Power'); await user.click(screen.getByRole('button', { name: 'Calculate path' }));
     expect(startPreview).toHaveBeenNthCalledWith(1, expect.objectContaining({ from: { name: 'EQ-001' }, to: { name: 'EQ-002' }, category: 'LV', reverse: false, secondaryDistanceMeters: 2, preferVerticalApproach: true, barrierRouting: expect.objectContaining({ drillThroughWalls: false }) }));
     await screen.findByText('Path calculation complete'); await waitFor(() => expect(showPath).toHaveBeenCalledWith({ pathId: forwardId, points: [[1, 2, 3], [4, 5, 6]], objectIds: [23], routeNames: ['/BC1'] }));
@@ -679,10 +705,10 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
   it('shared Clear removes the displayed standalone notice and result while preserving drafts and preferences without requests', async () => {
     const user = userEvent.setup(), id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     const startPreview = vi.fn(async () => id), readPreview = vi.fn(async () => preview(id)), showPath = vi.fn(async () => 'displayed');
-    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview, readPreview, showPath }); mount();
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview, readPreview, showPath }); mount(true, 3);
     await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'EQ-001'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'EQ-002');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Path cable type' }), 'Control');
-    const trigger = screen.getByRole('textbox', { name: 'SECONDARY trigger distance in metres' }); await user.clear(trigger); await user.type(trigger, '3');
+    const trigger = screen.getByRole('textbox', { name: 'SECONDARY trigger distance in metres' });
     await user.click(screen.getByRole('checkbox', { name: 'Prefer vertical approach' })); await user.selectOptions(screen.getByRole('combobox', { name: 'Path cable purpose' }), 'Power'); await user.click(screen.getByRole('button', { name: 'Calculate path' }));
     expect(await screen.findByText('The exact standalone path is displayed. Review its route and length.')).toBeVisible();
     const beforeClear = { start: startPreview.mock.calls.length, read: readPreview.mock.calls.length, calculate: pf.calculate.mock.calls.length, clear: pf.clear.mock.calls.length };
@@ -728,9 +754,8 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     await user.click(screen.getByRole('tab', { name: 'Path' })); expect(screen.getByRole('textbox', { name: 'Path From location' })).toHaveValue('EQ-001'); expect(screen.queryByRole('region', { name: 'Standalone path result' })).toBeNull();
   });
   it('forwards changed Path preferences and blocks both calculation tools for invalid trigger values', async () => {
-    const user = userEvent.setup(); vi.mocked(usePathFinder).mockReturnValue({ ...proposalModel(), data: { ...pf.data, artifacts: [artifact()] } }); mount();
+    const user = userEvent.setup(); vi.mocked(usePathFinder).mockReturnValue({ ...proposalModel(), data: { ...pf.data, artifacts: [artifact()] } }); mount(true, 3);
     const trigger = screen.getByRole('textbox', { name: 'SECONDARY trigger distance in metres' });
-    await user.clear(trigger); await user.type(trigger, '3');
     expect(workspaceCapture.render.mock.calls.at(-1)?.[0].readPreferences).toMatchObject({ secondaryDistanceMeters: 3 });
     expect(resultCapture.render.mock.calls.at(-1)?.[0].options).toMatchObject({ secondaryDistanceMeters: 3 });
     await user.clear(trigger); await user.type(trigger, '-1');

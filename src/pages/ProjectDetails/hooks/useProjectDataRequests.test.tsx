@@ -10,6 +10,7 @@ import type { TrayDrawingResponse } from '@/api/trayDrawing';
 
 const mocks = vi.hoisted(() => ({
   project: vi.fn(),
+  updateProject: vi.fn(),
   tray: vi.fn(),
   trays: vi.fn(),
   cables: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('@/api/trayDrawing', () => ({ fetchTrayDrawingSnapshot: mocks.drawing })
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
   fetchProject: mocks.project,
+  updateProject: mocks.updateProject,
   fetchTray: mocks.tray,
   fetchTrays: mocks.trays,
   fetchCables: mocks.cables,
@@ -94,6 +96,23 @@ beforeEach(() => {
 });
 
 describe('project data loading', () => {
+  it('keeps the confirmed project trigger and its change log when an older refresh resolves', async () => {
+    const original = { ...project('same'), secondaryTriggerDistance: 2 };
+    const updated = { ...original, secondaryTriggerDistance: 1.5,
+      changeLog: [{ id: 'entry', userId: 'editor', userName: 'Editor', changedAt: '2026-01-01',
+        changes: ['SECONDARY trigger distance changed'] }] };
+    const pending = deferred<{ project: Project }>();
+    mocks.project.mockResolvedValueOnce({ project: original }).mockReturnValueOnce(pending.promise);
+    mocks.updateProject.mockResolvedValue({ project: updated });
+    const { result } = renderHook(() => useProjectDetailsData({ projectId: 'same', token: 'login' }));
+    await waitFor(() => expect(result.current.project).toEqual(original));
+    act(() => { void result.current.reloadProject({ showSpinner: false }); });
+    await act(async () => result.current.saveSecondaryTriggerDistance(1.5));
+    expect(mocks.updateProject).toHaveBeenCalledExactlyOnceWith('login', 'same', { secondaryTriggerDistance: 1.5 });
+    await act(async () => pending.resolve({ project: original }));
+    expect(result.current.project).toEqual(updated);
+  });
+
   it('hides the old login grant until the same project is loaded for the new token', async () => {
     const pending = deferred<{ project: Project }>();
     mocks.project.mockResolvedValueOnce({ project: { ...project('same'), canEdit: true } });

@@ -186,11 +186,11 @@ describe('DetailsTab tray report templates', () => {
     rerender(<NumericDetails numericFields={numericFields} isAdmin={false} />); expect(screen.getByText('Connection gap')).toBeVisible(); expect(screen.queryByRole('spinbutton', { name: 'Update value [m]' })).toBeNull();
   });
   it('explains the checked Path Finder Auto field, exact allowance order and separate Design approval', () => {
-    render(<NumericDetails project={{ ...fixture.project, connectionGap: 1, secondaryTrayLength: 4, endConnectionLength: 6, additionalBendingPercent: 10 }} />);
+    render(<NumericDetails project={{ ...fixture.project, connectionGap: 1, secondaryTrayLength: 4, secondaryTriggerDistance: 1.5, endConnectionLength: 6, additionalBendingPercent: 10 }} />);
     expect(screen.queryByText('Tray-list estimate')).toBeNull(); expect(screen.getByText('Path Finder calculated length')).toBeVisible();
     expect(screen.getByText(/Auto calculated length \[m\] shows the latest successful checked Path Finder result/)).toBeVisible();
     expect(screen.getByText('ceil((max(0, Geometric length − flagged From/To approach lengths) + Secondary tray length × number of flagged approaches + For end connection) × (1 + Additional % for bending / 100))')).toBeVisible();
-    expect(screen.getByText('Current Path Finder values: SECONDARY 4 m; end connection reserve 6 m; bending allowance 10%.')).toBeVisible(); expect(screen.getByText(/Measured connection gaps are already included in geometric length and are not added again/)).toBeVisible();
+    expect(screen.getByText('Current Path Finder values: SECONDARY trigger distance 1.5 m; SECONDARY length 4 m; end connection reserve 6 m; bending allowance 10%.')).toBeVisible(); expect(screen.getByText(/Measured connection gaps are already included in geometric length and are not added again/)).toBeVisible();
     expect(screen.getByText(/direct SECONDARY connection uses the actual 3D From\/To distance/)).toBeVisible();
     expect(screen.getByText(/Existing Design length remains manually editable/)).toBeVisible();
   });

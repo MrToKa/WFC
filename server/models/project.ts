@@ -17,6 +17,7 @@ export type ProjectRow = {
   manager: string | null;
   description: string | null;
   secondary_tray_length: string | number | null;
+  secondary_trigger_distance: string | number;
   connection_gap: string | number;
   support_distance: string | number | null;
   support_weight: string | number | null;
@@ -39,6 +40,7 @@ export type PublicProject = {
   manager: string | null;
   description: string | null;
   secondaryTrayLength: number | null;
+  secondaryTriggerDistance: number;
   connectionGap: number;
   supportDistance: number | null;
   supportWeight: number | null;
@@ -427,6 +429,7 @@ export const mapProjectRow = (row: ProjectRow): PublicProject => ({
   manager: row.manager ?? null,
   description: row.description ?? null,
   secondaryTrayLength: toNumberOrNull(row.secondary_tray_length),
+  secondaryTriggerDistance: toNumberOrNull(row.secondary_trigger_distance) ?? 2,
   connectionGap: toNumberOrNull(row.connection_gap) ?? 1,
   supportDistance: toNumberOrNull(row.support_distance),
   supportWeight: toNumberOrNull(row.support_weight),

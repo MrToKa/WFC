@@ -74,6 +74,10 @@ export const describeProjectChanges = (before: PublicProject, after: PublicProje
   };
   for (const key of Object.keys(before) as (keyof PublicProject)[]) {
     if (['id', 'createdAt', 'updatedAt', 'changeLog'].includes(key)) continue;
+    if (key === 'secondaryTriggerDistance') {
+      if (before[key] !== after[key]) changes.push('SECONDARY trigger distance changed');
+      continue;
+    }
     visit(before[key], after[key], labels[key] ?? key);
   }
   return changes;
