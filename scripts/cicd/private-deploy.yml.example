@@ -1,0 +1,23 @@
+# Install ONLY as .github/workflows/deploy.yml in a PRIVATE operations repo.
+# Register the Windows runner exclusively to that repository (not public repos).
+name: Deploy tested LAN applications
+on:
+  repository_dispatch:
+    types: [deploy-tested-applications]
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: lan-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event.repository.private == true && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, wfc-lan-deploy]
+    timeout-minutes: 4320
+    steps:
+      # No checkout, builds, downloaded scripts, or event-supplied commands.
+      # Review/install these local files once using the Docker Desktop account.
+      - name: Apply complete tested releases using the trusted local updater
+        shell: pwsh
+        run: |
+          & 'D:\WFC-Deploy\trusted\Update-Deployment.ps1' -ConfigPath 'D:\WFC-Deploy\deployment.json' -Apply -FailIfBusy
