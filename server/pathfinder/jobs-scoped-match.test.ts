@@ -88,6 +88,7 @@ describe('manual calculation uses the same exact cable scope for matching and ad
     expect(await f.jobs.create(projectId,who,input)).toEqual({jobId:submissionId,duplicate:false,registryRevision:'8'});
     expect(f.match).toHaveBeenCalledExactlyOnceWith(projectId,who,'7',cableIds,f.client,expect.any(Function));
     expect(seams.collect).toHaveBeenCalledExactlyOnceWith(f.client,expect.objectContaining({projectId,cableIds,options}));
+    expect(seams.automatic.mock.calls[0][1].source).toEqual({kind:'explicit-job',bulkSubmission:true});
     expect(seams.automatic.mock.calls[0][1].items.map((item:{cableId:string})=>item.cableId)).toEqual(cableIds);
     expect(seams.requalify).toHaveBeenCalledExactlyOnceWith(f.client,projectId,who,expect.any(AbortSignal),{cableIds});
     expect(seams.requalify.mock.invocationCallOrder[0]).toBeLessThan(seams.collect.mock.invocationCallOrder[0]);

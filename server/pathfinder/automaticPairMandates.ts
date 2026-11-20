@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import { canonicalPurposeJson, policyHashSchema, policyRevisionSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
-import { AUTOMATIC_PAIR_LIMITS, automaticPairPolicySchema, automaticPairSourceSchema, automaticPairMandateSchema, automaticPairMandateHashInput,
+import { AUTOMATIC_PAIR_LIMITS, automaticPairAuthorityMilliseconds, automaticPairPolicySchema, automaticPairSourceSchema, automaticPairMandateSchema, automaticPairMandateHashInput,
   type AutomaticPairMandate, type AutomaticPairPolicy, type AutomaticPairSource } from '../../shared/pathfinderAutomaticPair.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
@@ -81,7 +81,7 @@ export async function appendAutomaticPairMandatesInTransaction(client: PoolClien
   const impact = await originalImpact(client, input), now = new Date();
   const generationOutput = input.source.kind === 'automatic-generation' ? await requireAutomaticGenerationOutput(client,input.source,
     {projectId:input.projectId,actorId:who.userId,loginId:who.loginId,jobId:input.jobId,admission:true}) : null;
-  const expiry = Math.min(who.loginExpiresAt, generationOutput?.runUntil === 'login-expiry' ? Infinity : now.getTime() + AUTOMATIC_PAIR_LIMITS.authorityMilliseconds,
+  const expiry = Math.min(who.loginExpiresAt, generationOutput?.runUntil === 'login-expiry' ? Infinity : now.getTime() + automaticPairAuthorityMilliseconds(input.source),
     impact ? Date.parse(impact.authorityExpiresAt) : Infinity,generationOutput ? Date.parse(generationOutput.authorityExpiresAt) : Infinity);
   if (impact && (impact.actorAdminRevision !== principal.admin_revision || impact.installationEpoch !== principal.installation_epoch)
     || expiry <= now.getTime()) return fail('AUTOMATIC_PAIR_AUTHORITY_EXPIRED');

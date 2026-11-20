@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { canonicalPurposeJson, policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
 
 export const AUTOMATIC_PAIR_LIMITS = Object.freeze({ cables: 10000, recordBytes: 65536, receiptBytes: 262144,
-  proofBytes: 32 * 1024 * 1024, lineage: 512, authorityMilliseconds: 1800000, attempts: 3, leaseMilliseconds: 60000 });
+  proofBytes: 32 * 1024 * 1024, lineage: 512, authorityMilliseconds: 1800000,
+  bulkAuthorityMilliseconds: 48 * 60 * 60 * 1000, attempts: 3, leaseMilliseconds: 60000 });
 const timestamp = z.string().datetime().refine(value => value.endsWith('Z'));
 export const automaticPairPolicySchema = z.object({ schemaVersion: z.literal('wfc.pf.automatic-pair-policy.v1'),
   mode: z.literal('when-both-empty-or-unchanged-automatic') }).strict();
@@ -40,12 +41,16 @@ export const automaticPairBaselinePolicySchema = z.object({ schemaVersion: z.lit
 export const automaticPairMaterialObservationSchema = z.object({ schemaVersion: z.literal('wfc.pf.automatic-pair-material-observation.v1'),
   before: automaticPairMaterialStateSchema, after: automaticPairMaterialStateSchema }).strict();
 export const automaticPairSourceSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('explicit-job') }).strict(),
+  z.object({ kind: z.literal('explicit-job'), bulkSubmission: z.literal(true).optional() }).strict(),
   z.object({ kind: z.literal('location-impact'), impactId: uuid, createdAt: timestamp, authorityExpiresAt: timestamp }).strict(),
   z.object({ kind: z.literal('automatic-generation'), generation: revision, controlRevision: revision, authorityEpoch: revision,
     authorization: automaticGenerationAuthorizationSchema }).strict(),
 ]);
 export type AutomaticPairSource = z.infer<typeof automaticPairSourceSchema>;
+export function automaticPairAuthorityMilliseconds(source: AutomaticPairSource): number {
+  return source.kind === 'explicit-job' && source.bulkSubmission
+    ? AUTOMATIC_PAIR_LIMITS.bulkAuthorityMilliseconds : AUTOMATIC_PAIR_LIMITS.authorityMilliseconds;
+}
 export const automaticPairMandateSchema = z.object({ schemaVersion: z.literal('wfc.pf.automatic-pair-mandate.v1'),
   id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, actorId: uuid, actorAdminRevision: revision, loginId: uuid,
   loginExpiresAt: timestamp, authorityExpiresAt: timestamp, installationEpoch: uuid, createdAt: timestamp,
@@ -56,7 +61,7 @@ export const automaticPairMandateSchema = z.object({ schemaVersion: z.literal('w
   const created = Date.parse(value.createdAt), expiry = Date.parse(value.authorityExpiresAt);
   const sessionBound = value.source.kind === 'automatic-generation' && value.source.authorization.runUntil === 'login-expiry';
   if (expiry <= created || expiry > Date.parse(value.loginExpiresAt)
-    || !sessionBound && expiry - created > AUTOMATIC_PAIR_LIMITS.authorityMilliseconds
+    || !sessionBound && expiry - created > automaticPairAuthorityMilliseconds(value.source)
     || value.source.kind === 'location-impact' && (expiry > Date.parse(value.source.authorityExpiresAt) || created < Date.parse(value.source.createdAt))
     || value.source.kind === 'automatic-generation' && (expiry > Date.parse(value.source.authorization.authorityExpiresAt)
       || created < Date.parse(value.source.authorization.createdAt) || value.source.authorization.projectId !== value.projectId

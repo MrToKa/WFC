@@ -18,6 +18,15 @@ describe('explicit versioned automatic pair policy', () => {
     const m = mandate(); m.authorityExpiresAt = iso(kind === 'expired' ? 0 : kind === 'over login' ? 3600001 : 1800001);
     expect(automaticPairMandateSchema.safeParse(m).success).toBe(false);
   });
+  it('accepts 48 hours only for bulk submissions within the current login', () => {
+    const hours = 60 * 60 * 1000;
+    const m = { ...mandate(), source: { kind: 'explicit-job', bulkSubmission: true },
+      loginExpiresAt: iso(72 * hours), authorityExpiresAt: iso(48 * hours) };
+    expect(automaticPairMandateSchema.safeParse(m).success).toBe(true);
+    expect(automaticPairMandateSchema.safeParse({ ...m, authorityExpiresAt: iso(48 * hours + 1) }).success).toBe(false);
+    expect(automaticPairMandateSchema.safeParse({ ...m, loginExpiresAt: iso(47 * hours) }).success).toBe(false);
+    expect(automaticPairMandateSchema.safeParse({ ...m, source: { kind: 'explicit-job' } }).success).toBe(false);
+  });
   it('never extends an earlier Save deadline', () => {
     const m = { ...mandate(), source: { kind: 'location-impact', impactId: id(8), createdAt: iso(-60000), authorityExpiresAt: iso(30000) } };
     expect(automaticPairMandateSchema.safeParse(m).success).toBe(false);

@@ -7,8 +7,8 @@ import { automaticPairHash } from './automaticPairReceiptProof.js';
 import { automaticPairBaselineSnapshot } from './automaticPairSnapshot.js';
 
 const id = (n: number) => `ba000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-function fixture() {
-  const expires = Date.now() + 3600000, principal = { userId: id(3), loginId: id(4), loginExpiresAt: expires };
+function fixture(loginDuration = 3600000) {
+  const expires = Date.now() + loginDuration, principal = { userId: id(3), loginId: id(4), loginExpiresAt: expires };
   const before = { id: id(2), project_id: id(1), cable_write_revision: '7', mto: 'LV', routing: null, design_length: null,
     materials_initialized: false, materials_customized: false, updated_at: new Date(Date.now() - 1000).toISOString() };
   const dependencies = { schemaVersion: 'pathfinder.dependencies.v8', projectId: id(1), cableId: id(2), cableWriteRevision: '7' };
@@ -78,6 +78,26 @@ describe('fresh exact automatic pair mandate admission', () => {
     expect(Date.parse(m.authorityExpiresAt) - Date.parse(m.createdAt)).toBe(1800000); expect(m.ownership).toEqual({ kind: 'empty' });
     expect(f.state.decisions).toHaveLength(0);
   });
+  it.each([['48-hour window', 72, 48], ['earlier login expiry', 12, 12]] as const)(
+    'bounds bulk automatic saves by the %s', async (_case, loginHours, expectedHours) => {
+      const hour = 60 * 60 * 1000;
+      const f = fixture(loginHours * hour);
+      f.input.source = { kind: 'explicit-job', bulkSubmission: true };
+      expect(await f.run()).toBe(1);
+      const mandate = f.state.inserted[0];
+      expect(mandate.authorityExpiresAt).toBe(new Date(
+        Math.min(f.input.principal.loginExpiresAt, Date.parse(mandate.createdAt) + expectedHours * hour),
+      ).toISOString());
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse(mandate.createdAt) + hour);
+      try {
+        await expect(f.current()).resolves.toEqual(mandate);
+        clock.mockReturnValue(Date.parse(mandate.authorityExpiresAt));
+        await expect(f.current()).rejects.toMatchObject({
+          code: loginHours > expectedHours ? 'AUTOMATIC_PAIR_AUTHORITY_EXPIRED' : 'LOGIN_EXPIRED',
+        });
+      } finally { clock.mockRestore(); }
+    },
+  );
   it('does not authorize a calculation-grant job', async () => { const f = fixture(); f.state.authorityKind = 'calculation-grant';
     await expect(f.run()).rejects.toMatchObject({ code: 'AUTOMATIC_PAIR_JOB_AUTHORITY_REQUIRED' }); expect(f.state.inserted).toHaveLength(0); });
   it('retains the original Save deadline instead of starting another thirty minutes', async () => { const f = fixture(); const { record } = f.impact();

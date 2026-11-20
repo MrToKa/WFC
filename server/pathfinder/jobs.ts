@@ -261,7 +261,8 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         const jobId=await insertCalculationBatch(client,projectId,who,batch,input.timeoutMilliseconds??60000,requestHash,{deadline},
           {kind:'manual',generation:null,bulkSubmission});
         if(input.automaticPairPolicy&&batch.items.some(item=>item.dependencies))await appendAutomaticPairMandatesInTransaction(client,{projectId,jobId,principal:who,
-          policy:input.automaticPairPolicy,requestSha256:requestHash,source:{kind:'explicit-job'},
+          policy:input.automaticPairPolicy,requestSha256:requestHash,
+          source:bulkSubmission ? {kind:'explicit-job',bulkSubmission:true} : {kind:'explicit-job'},
           items:batch.items.flatMap(item=>item.dependencies?[{cableId:item.id,cableWriteRevision:item.cable.cable_write_revision,
             dependencyHash:hash(item.dependencies)}]:[]).sort((a,b)=>a.cableId<b.cableId?-1:1)},()=>{if(Date.now()>deadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);});
         return {jobId,duplicate:false,registryRevision:batch.registryRevision};
