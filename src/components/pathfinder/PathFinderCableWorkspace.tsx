@@ -420,20 +420,19 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   }, [backgroundStateRefresh, refreshSelected]);
   useEffect(() => () => { manualRefresh.current?.abort(); }, []);
   const refreshDiagnostics = useCallback((forceSelected = false) => {
-    // Owned calculations already have a bounded selected-item watcher. Progress
-    // notifications must not race it with expensive full cable/list reads while
-    // the engine is still running. Explicit Refresh remains available below.
+    if (!alive.current) return;
+    setRevision(value => value + 1);
+    // The list has its own reader. Only selected-cable reads defer to the
+    // active watcher and to verified results from the current calculation.
     const selectedId = selectedRef.current?.cable.id;
     const protectedResult = protectedDiagnostics.current, row = selectedRef.current;
-    if (!forceSelected && alive.current && row && protectedResult?.cableId === row.cable.id
+    if (!forceSelected && row && protectedResult?.cableId === row.cable.id
       && protectedResult.owner === calculationWatchOwner(callbacks.current) && protectedResult.model === modelScope(callbacks.current)
       && protectedResult.jobId === row.calculation.jobId && protectedResult.proposalId === row.calculation.proposalId
-      && protectedResult.proposalHash === row.calculation.proposalHash) {
-      setRevision(value => value + 1); return;
-    }
-    if (alive.current && (!selectedId || submittedRef.current?.cableId !== selectedId && savedCalculationRef.current?.cableId !== selectedId
-      && settledDiagnosticsRef.current?.cableId !== selectedId)) {
-      setRevision(value => value + 1); void refreshSelected();
+      && protectedResult.proposalHash === row.calculation.proposalHash) return;
+    if (selectedId && submittedRef.current?.cableId !== selectedId && savedCalculationRef.current?.cableId !== selectedId
+      && settledDiagnosticsRef.current?.cableId !== selectedId) {
+      void refreshSelected();
     }
   }, [refreshSelected]);
   useEffect(() => { alive.current = true; return () => { alive.current = false; read.current?.abort(); historyRead.current?.abort(); stopTimers();
@@ -563,10 +562,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     // The acknowledged impact already owns its exact GET watcher. A global
     // history refresh must not delay learning the selected cable's new job.
     if (watch && savedCalculationRef.current === watch) { const ready = { ...watch, reading: true }; savedCalculationRef.current = ready; setSavedCalculation(ready); }
-    // The list must see the just-saved location even while the selected
-    // cable's recalculation watcher owns its independent detail reads.
-    if (watch) setRevision(value => value + 1);
-    else refreshDiagnostics();
+    refreshDiagnostics();
   }, [refreshDiagnostics, rememberFeedback, backgroundStateRefresh]);
   const selectedStatus = selected ? classifyCableWorkflow(selected) : null;
   const selectedAutomaticUpdatePending = Boolean(selected && automaticUpdatePending(selected.calculation));

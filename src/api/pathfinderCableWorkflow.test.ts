@@ -141,6 +141,14 @@ describe('bounded read-only cable workflow transport', () => {
     vi.mocked(fetch).mockResolvedValueOnce(response({ code: 'CONTEXT_CHANGED', error: '<private business values>' }, 409));
     await expect(fetchPathFinderCableWorkflowPage(project, 'token')).rejects.toMatchObject({ status: 409, code: 'CONTEXT_CHANGED', message: 'The project changed. Refresh the cable list before continuing.' });
   });
+  it.each([
+    ['WORKFLOW_DATABASE_BUSY', 'The database was busy while loading cable diagnostics. Try refreshing the list.'],
+    ['WORKFLOW_DEADLINE_EXCEEDED', 'Loading cable diagnostics took too long. Try refreshing the list.'],
+    ['WORKFLOW_READ_UNAVAILABLE', 'Cable diagnostics are unavailable. Try refreshing the list.'],
+  ])('describes the known diagnostics failure %s without exposing server text', async (code, message) => {
+    vi.mocked(fetch).mockResolvedValueOnce(response({ code, error: '<private business values>' }, 503));
+    await expect(fetchPathFinderCableWorkflowPage(project, 'token')).rejects.toMatchObject({ status: 503, code, message });
+  });
   it('bounds fetch and body reads even when the underlying request ignores cancellation', async () => {
     vi.useFakeTimers(); vi.mocked(fetch).mockImplementationOnce(() => new Promise(() => {}));
     const pending = expect(fetchPathFinderCableWorkflowPage(project, 'token')).rejects.toMatchObject({ code: 'REQUEST_TIMEOUT' });

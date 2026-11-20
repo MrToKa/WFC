@@ -23,6 +23,12 @@ const invalidRequest = (): never => { throw new PathFinderCableWorkflowApiError(
 function refusal(status: number, value: unknown): never {
   const candidate = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>).code : null;
   const code = typeof candidate === 'string' && /^[A-Z][A-Z0-9_]{0,95}$/.exec(candidate)?.[0] === candidate ? candidate : 'CABLE_WORKFLOW_UNAVAILABLE';
+  if (status === 503 && code === 'WORKFLOW_DATABASE_BUSY') {
+    throw new PathFinderCableWorkflowApiError(code, status, 'The database was busy while loading cable diagnostics. Try refreshing the list.');
+  }
+  if (status === 503 && code === 'WORKFLOW_DEADLINE_EXCEEDED') {
+    throw new PathFinderCableWorkflowApiError(code, status, 'Loading cable diagnostics took too long. Try refreshing the list.');
+  }
   throw new PathFinderCableWorkflowApiError(code, status, status === 401 || status === 403
     ? 'Administrator access is required. Sign in again before continuing.'
     : status === 409 ? 'The project changed. Refresh the cable list before continuing.'

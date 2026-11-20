@@ -8,6 +8,7 @@ import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
 
 export const CABLE_WORKFLOW_SEARCH_PAGE_LIMIT = 51;
 export const CABLE_WORKFLOW_SEARCH_MILLISECONDS = 30_000;
+const AUTOMATIC_REFRESH_RETRY_DELAYS = [400, 1200];
 
 export type PathFinderCableWorkflowAccess = {
   projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null;
@@ -34,6 +35,7 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
   const callbacks = useRef(access); callbacks.current = access;
   const selection = useRef(selected(identity)), inFlight = useRef<AbortController | null>(null);
   const previousAccount = useRef(account), deniedAccount = useRef<string | null>(null);
+  const previousRefreshKey = useRef(access.refreshKey);
   const canRead = useCallback(() => allowed && latest.current === identity && selection.current.identity === identity && deniedAccount.current !== account,
     [allowed, identity, account]);
   const failure = useCallback((error: unknown) => {
@@ -45,7 +47,7 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
     } else setState(value => ({ ...value, loading: false, detailLoading: false,
       error: error instanceof PathFinderCableWorkflowApiError ? error.message : 'Cable diagnostics could not be read. Refresh the list to try again.' }));
   }, [account, identity]);
-  const load = useCallback(async (cursor: string | null, history: Array<string | null>, reset = false) => {
+  const load = useCallback(async (cursor: string | null, history: Array<string | null>, reset = false, automaticRefresh = false) => {
     if (!canRead() || inFlight.current || queryKey === null) return;
     const abort = new AbortController(); inFlight.current = abort;
     const before = selection.current;
@@ -56,6 +58,23 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
     setState(value => ({ ...value, loading: true, detailLoading: false, error: null }));
     try {
       const query: CableWorkflowQuery = JSON.parse(queryKey);
+      let retries = 0;
+      const readPage = async (cursor: string | null): Promise<CableWorkflowPage> => {
+        for (;;) {
+          try {
+            return await deadline.wait(() => fetchPathFinderCableWorkflowPage(access.projectId!, access.token!,
+              { ...query, ...(cursor ? { cursor } : {}) }, deadline.signal));
+          } catch (error) {
+            const delay = AUTOMATIC_REFRESH_RETRY_DELAYS[retries];
+            if (!automaticRefresh || delay === undefined || deadline.signal.aborted
+              || !(error instanceof PathFinderCableWorkflowApiError) || ![502, 503, 504].includes(error.status ?? 0)) throw error;
+            retries++;
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            try { await deadline.wait(() => new Promise<void>(resolve => { timer = setTimeout(resolve, delay); })); }
+            finally { clearTimeout(timer); }
+          }
+        }
+      };
       let next = cursor, previousPage = before.page, context = reset ? null : before.context, queryHash = reset ? null : before.queryHash;
       let pageHistory = history, restarted = false;
       const visited = new Set(history);
@@ -63,8 +82,7 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
         visited.add(next);
         let page: CableWorkflowPage;
         try {
-          page = await deadline.wait(() => fetchPathFinderCableWorkflowPage(access.projectId!, access.token!,
-            { ...query, ...(next ? { cursor: next } : {}) }, deadline.signal));
+          page = await readPage(next);
         } catch (error) {
           // A shared-location save invalidates cursors without changing the
           // user's filters. Restart once, within the same read budget.
@@ -98,10 +116,12 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
     inFlight.current?.abort(); inFlight.current = null;
     if (previousAccount.current !== account) deniedAccount.current = null;
     previousAccount.current = account;
+    const automaticRefresh = previousRefreshKey.current !== access.refreshKey;
+    previousRefreshKey.current = access.refreshKey;
     if (selection.current.identity !== identity) {
       selection.current = selected(identity); setState(initial(identity));
     }
-    if (allowed && deniedAccount.current !== account) void load(null, [], true);
+    if (allowed && deniedAccount.current !== account) void load(null, [], true, automaticRefresh);
     return () => { inFlight.current?.abort(); inFlight.current = null; };
   }, [identity, account, allowed, load, access.refreshKey]);
   const readDetail = useCallback(async (cableId: string): Promise<CableWorkflowDetail | null> => {

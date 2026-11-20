@@ -122,6 +122,29 @@ describe('direct text search across bounded workflow portions', () => {
 });
 
 describe('owned cable workflow reads', () => {
+  it('retries a busy automatic refresh with the current filter and replaces the stale rows', async () => {
+    vi.useFakeTimers();
+    const before = page(), after = { ...before, rows: [] };
+    const read = vi.mocked(fetchPathFinderCableWorkflowPage);
+    read.mockResolvedValueOnce(before)
+      .mockRejectedValueOnce(new PathFinderCableWorkflowApiError('WORKFLOW_DATABASE_BUSY', 503, 'Diagnostics unavailable.'))
+      .mockResolvedValueOnce(after);
+    const query = { filter: 'needs-routing', search: 'JB_Tank04_02' } as const;
+    const view = renderHook(({ refreshKey }) => usePathFinderCableWorkflow({ ...access(), query, refreshKey }),
+      { initialProps: { refreshKey: 0 } });
+    await act(async () => {});
+    view.rerender({ refreshKey: 1 });
+    await act(async () => {});
+    expect(view.result.current.page).toEqual(before);
+    expect(view.result.current.loading).toBe(true);
+    expect(view.result.current.error).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(read).toHaveBeenLastCalledWith(project, 'token', expect.objectContaining(query), expect.any(AbortSignal));
+    expect(view.result.current.page).toEqual(after);
+    expect(view.result.current.error).toBeNull();
+  });
+
   it('keeps the owned rows visible while a confirmed local update refreshes the list from the first page', async () => {
     const before = { ...page(), nextCursor: 'before_save' };
     const after = { ...page(), contextSha256: 'b'.repeat(64) };

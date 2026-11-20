@@ -1513,6 +1513,13 @@ describe('fresh initial selection and current proof handoff', () => {
       endpointBindingFixture().context.current!, { preferences: p.preferences!, timeoutMilliseconds: 120000 }); });
     expect(p.pf.refreshState).toHaveBeenCalledTimes(2); // A later acknowledged command never reuses the earlier unresolved refresh.
     expect(panelProps.calculationPending).toBe(true); expect(panelProps.pathReady).toBe(false);
+    const listRevision = listProps.refreshKey;
+    const detailReads = vi.mocked(fetchPathFinderCableWorkflowDetail).mock.calls.length;
+    await act(async () => {
+      vi.mocked(usePathfinderInitialFillProgress).mock.calls.at(-1)?.[0].onChanged?.({ ...writeProgress(), impactId: id(9) });
+    });
+    expect(listProps.refreshKey).toBe(listRevision! + 1);
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(detailReads);
     expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
   });
 });

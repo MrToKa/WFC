@@ -137,6 +137,17 @@ describe('read-only Needs routing list', () => {
     fireEvent.change(screen.getByLabelText('Cable state'), { target: { value: 'all' } });
     expect(screen.getByText('No non-MV cables match this search.')).toBeVisible();
   });
+  it('labels retained search results after a failed refresh', () => {
+    const error = 'Cable diagnostics are unavailable. Try refreshing the list.';
+    vi.mocked(usePathFinderCableWorkflow).mockReturnValue({ ...state(), error });
+    mount();
+    fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: 'C-001' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(error);
+    expect(screen.getByRole('status')).toHaveTextContent('Showing the last successfully loaded results.');
+    expect(screen.getByRole('status')).not.toHaveTextContent('Search complete.');
+    expect(screen.getByRole('button', { name: '<b>C-001</b>' })).toBeVisible();
+  });
   it('keeps previous search results distinguishable from a globally empty search', () => {
     vi.mocked(usePathFinderCableWorkflow).mockReturnValue({ ...state(), hasPrevious: true, page: { ...page(), rows: [] } }); mount();
     fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: 'C-001' } });

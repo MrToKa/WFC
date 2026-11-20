@@ -110,9 +110,10 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
     {workflow.error ? <p role="alert">{workflow.error}</p> : null}
     {page ? <>
       <p role="status">{page.rows.length} matching {page.rows.length === 1 ? 'cable' : 'cables'} on this page; {page.scannedCount} checked.
-        {searching ? page.nextCursor !== null ? ' More matching results may be available.' : ' Search complete.'
+        {workflow.error ? ' Showing the last successfully loaded results.'
+          : searching ? page.nextCursor !== null ? ' More matching results may be available.' : ' Search complete.'
           : page.nextCursor !== null ? ' More cables remain to be checked.' : ' End of this scan.'}</p>
-      {!page.rows.length ? <p>{searching ? page.nextCursor !== null
+      {!page.rows.length && !workflow.error ? <p>{searching ? page.nextCursor !== null
         ? 'The search is incomplete. Refresh cables to try again.'
         : workflow.hasPrevious ? 'No further matching cables. Previous results are still available.'
           : filter === 'all' ? 'No non-MV cables match this search.'
