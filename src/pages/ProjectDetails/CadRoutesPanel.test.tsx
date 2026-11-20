@@ -171,6 +171,50 @@ describe('published route revisions', { timeout: 20000 }, () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: /TRAY-01.*revision draft/ })).toBeNull());
     expect(screen.getByRole('button', { name: /TRAY-01.*published/ })).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('recalculates connection points on the draft and uses the updated revision for review', async () => {
+    let routes = [published, revision];
+    const refreshConnections = vi.fn(async () => {});
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith(`/${revision.id}/auto-connect`)) {
+        routes = [published, { ...revision, revision: 2 }];
+        return {
+          ok: true,
+          json: async () => ({
+            connectionsCreated: 1,
+            routingTransitionsCreated: 0,
+            routingTransitionsReplaced: 1,
+            connected: true,
+          }),
+        };
+      }
+      if (url.endsWith(`/${revision.id}/revision/preview`)) {
+        return { ok: true, json: async () => ({ reviewToken: 'review-token', cables: [] }) };
+      }
+      return { ok: true, json: async () => ({ routes }) };
+    });
+    show(undefined, refreshConnections);
+    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01.*revision draft/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review revision' }));
+    await screen.findByRole('region', { name: 'Review route revision' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recalculate connection points' }));
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Connection points recalculated' })),
+    );
+    expect(refreshConnections).toHaveBeenCalledOnce();
+    const repair = writes().find(([url]) => url.endsWith(`/${revision.id}/auto-connect`));
+    expect(JSON.parse(repair?.[1].body)).toEqual({
+      expectedRevision: revision.revision,
+      repairTransitions: true,
+    });
+    expect(screen.queryByRole('region', { name: 'Review route revision' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review revision' }));
+    await screen.findByRole('region', { name: 'Review route revision' });
+    const latestReview = writes().filter(([url]) => url.endsWith('/revision/preview')).at(-1);
+    expect(JSON.parse(latestReview?.[1].body)).toEqual({ expectedRevision: 2 });
+  });
 });
 
 describe('automatic Trays display updates after membership changes', () => {

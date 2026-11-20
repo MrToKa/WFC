@@ -136,7 +136,9 @@ export function buildCadChain(instances:PublicationInstance[],connections:Public
     if(connection.kind==='routing-transition'){
       const gapMm=distance(metres(a.world.position),metres(b.world.position))*1000;
       if(gapMm>MAX_CAD_TRANSITION_GAP_MM+1e-6)
-        return refuse('CAD_ROUTE_TRANSITION_TOO_LONG','A logical routing transition exceeds the verified profile installation zone.',409,{gapMm,maximumGapMm:MAX_CAD_TRANSITION_GAP_MM});
+        return refuse('CAD_ROUTE_TRANSITION_TOO_LONG',
+          `The saved transition between component ${instances.indexOf(source)+1} (${source.part_number}, ${a.id}) and component ${instances.indexOf(target)+1} (${target.part_number}, ${b.id}) is ${gapMm.toFixed(1)} mm. The limit is ${MAX_CAD_TRANSITION_GAP_MM} mm.`,
+          409,{gapMm,maximumGapMm:MAX_CAD_TRANSITION_GAP_MM});
     } else if (!connectorAlignmentIsValid(world(source),a.local,world(target),b.local,MATE_OPPOSING_FACE))
       return refuse('CAD_ROUTE_CONNECTION_NOT_ALIGNED','Saved component ports are no longer aligned. Reconnect them before publishing.');
     for (const key of [`${source.id}:${a.id}`,`${target.id}:${b.id}`]) {if(used.has(key))return refuse('CAD_ROUTE_NOT_CHAIN','A route port cannot have multiple connections.');used.add(key);}

@@ -12,7 +12,7 @@ import {
 } from './routePublication.js';
 
 export const cadRouteAutoConnectionsRouter=Router({mergeParams:true});
-const input=z.object({expectedRevision:z.number().int().positive()}).strict();
+const input=z.object({expectedRevision:z.number().int().positive(),repairTransitions:z.literal(true).optional()}).strict();
 type PortName=PocPort['id'];
 type Endpoint={instanceId:string;portName:PortName;pointMetres:[number,number,number]};
 type Connection=PublicationConnection;
@@ -24,7 +24,7 @@ const world=(row:PublicationInstance):RigidTransform=>({position:{x:row.x_mm,y:r
 
 /** Preserve physical mates and separately describe bounded logical installation joins.
  * Neither kind translates or rotates a member or invents a manufacturer fitting. */
-export function inferCadConnections(instances:PublicationInstance[],existing:Connection[],transitions:PublicationTransition[]=[],externalConnections:Connection[]=[]) {
+export function inferCadConnections(instances:PublicationInstance[],existing:Connection[],transitions:PublicationTransition[]=[],externalConnections:Connection[]=[],repairTransitions=false) {
   if(instances.length<1||instances.length>32)fail('CAD_ROUTE_PART_LIMIT','Choose 1–32 verified components for automatic connection.');
   const rows=new Map(instances.map(row=>[row.id,row]));
   if(rows.size!==instances.length)fail('CAD_ROUTE_INVALID_MEMBERS','The route contains duplicate component identities.');
@@ -42,13 +42,20 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
     Math.abs(first.frame.heightMetres-last.frame.heightMetres)<.000001&&
     connectorAlignmentIsValid(world(first.row),first.local,world(last.row),last.local,MATE_OPPOSING_FACE,gap,.1);
   const gapBetween=(first:typeof ports[number],last:typeof ports[number])=>Math.hypot(...first.frame.pointMetres.map((value,index)=>(value-last.frame.pointMetres[index])*1000));
+  const describePort=(port:typeof ports[number])=>`component ${instances.indexOf(port.row)+1} (${port.row.part_number}, ${port.portName})`;
+  const staleTransitions=new Map<string,{ connection:PublicationTransition; first:typeof ports[number]; last:typeof ports[number]; gapMm:number }>();
   for(const connection of [...existing.map(edge=>({...edge,kind:'physical' as const})),...transitions]){
     if(!rows.has(connection.source_instance_id)||!rows.has(connection.target_instance_id))
       fail('CAD_ROUTE_CROSS_GROUP_CONNECTION','A component connects outside this group. Group all connected components together first.');
     const first=byKey.get(key(connection.source_instance_id,connection.source_name)),last=byKey.get(key(connection.target_instance_id,connection.target_name));
     if(!first||!last)return fail('CAD_ROUTE_INVALID_PORT','A saved route link has an unsupported endpoint.');
     if(connection.kind==='routing-transition'){
-      if(gapBetween(first,last)>MAX_CAD_TRANSITION_GAP_MM+1e-6)return fail('CAD_ROUTE_TRANSITION_TOO_LONG','A logical installation transition is longer than the permitted 300 mm profile zone.');
+      const gapMm=gapBetween(first,last);
+      if(gapMm>MAX_CAD_TRANSITION_GAP_MM+1e-6){
+        if(!repairTransitions||!connection.id)return fail('CAD_ROUTE_TRANSITION_TOO_LONG','A logical installation transition is longer than the permitted 300 mm profile zone.');
+        staleTransitions.set(connection.id,{connection,first,last,gapMm});
+        continue;
+      }
     }else if(!aligned(first,last))return fail('CAD_ROUTE_CONNECTION_NOT_ALIGNED','An existing physical connection is no longer aligned. No automatic changes were made.');
     for(const port of [first,last]){const id=key(port.row.id,port.portName);if(used.has(id))fail('CAD_ROUTE_AUTO_CONNECT_AMBIGUOUS','A component port already has multiple connections.');used.add(id);}
     unite(first.row.id,last.row.id);
@@ -68,7 +75,10 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
     const id=key(first.row.id,first.portName),matches=candidates.get(id)??[];matches.push(last);candidates.set(id,matches);
   }
   for(const [port,matches] of candidates)if(matches.length>1)
-    fail('CAD_ROUTE_AUTO_CONNECT_AMBIGUOUS','More than one component port fits the same open end. Move the intended parts apart before connecting.',{port,candidateCount:matches.length});
+    fail('CAD_ROUTE_AUTO_CONNECT_AMBIGUOUS',repairTransitions
+      ? `More than one component port fits ${describePort(byKey.get(port)!)}. Separate the competing ends before recalculating.`
+      : 'More than one component port fits the same open end. Move the intended parts apart before connecting.',
+    {port,candidateCount:matches.length});
   const missing:Connection[]=[];
   for(const first of open){
     const firstKey=key(first.row.id,first.portName),last=candidates.get(firstKey)?.[0];
@@ -102,8 +112,16 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
   const components=new Map<string,string[]>();
   for(const row of instances){const id=find(row.id),members=components.get(id)??[];members.push(row.id);components.set(id,members);}
   const connected=components.size===1;
+  for(const {connection,first,last,gapMm} of staleTransitions.values()){
+    if(find(first.row.id)===find(last.row.id))continue;
+    return fail('CAD_ROUTE_TRANSITION_UNRESOLVED',
+      `No replacement was found for the saved transition between ${describePort(first)} and ${describePort(last)}. Its measured gap is ${gapMm.toFixed(1)} mm (limit ${MAX_CAD_TRANSITION_GAP_MM} mm).`,
+      {sourceInstanceId:connection.source_instance_id,sourcePortName:connection.source_name,
+        targetInstanceId:connection.target_instance_id,targetPortName:connection.target_name,gapMm,maximumGapMm:MAX_CAD_TRANSITION_GAP_MM});
+  }
+  const keptTransitions=transitions.filter(link=>!link.id||!staleTransitions.has(link.id));
   // A complete result must satisfy the identical publication network validator.
-  if(connected)buildCadChain(instances,[...existing,...missing],[...transitions,...missingTransitions]);
+  if(connected)buildCadChain(instances,[...existing,...missing],[...keptTransitions,...missingTransitions]);
   const endpoints:Endpoint[]=ports.filter(port=>!used.has(key(port.row.id,port.portName))).map(port=>({instanceId:port.row.id,portName:port.portName,pointMetres:port.frame.pointMetres}));
   const free=ports.filter(available);
   const nearestGaps=[];
@@ -118,13 +136,13 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
   }
   nearestGaps.sort((a,b)=>a.gapMm-b.gapMm||a.sourceInstanceId.localeCompare(b.sourceInstanceId));
   const diagnostics={componentCount:components.size,unconnectedComponents:[...components.values()].map(ids=>ids.sort()),nearestGaps:nearestGaps.slice(0,12),
-    ambiguousPorts:[...ambiguousPorts],logicalTransitions:[...transitions,...missingTransitions].map(edge=>({sourceInstanceId:edge.source_instance_id,sourcePortName:edge.source_name,targetInstanceId:edge.target_instance_id,targetPortName:edge.target_name,
+    ambiguousPorts:[...ambiguousPorts],logicalTransitions:[...keptTransitions,...missingTransitions].map(edge=>({sourceInstanceId:edge.source_instance_id,sourcePortName:edge.source_name,targetInstanceId:edge.target_instance_id,targetPortName:edge.target_name,
       kind:'routing-transition',sourceIndex:instances.findIndex(row=>row.id===edge.source_instance_id)+1,targetIndex:instances.findIndex(row=>row.id===edge.target_instance_id)+1,
       sourcePartNumber:rows.get(edge.source_instance_id)!.part_number,targetPartNumber:rows.get(edge.target_instance_id)!.part_number,
       gapMm:gapBetween(byKey.get(key(edge.source_instance_id,edge.source_name))!,byKey.get(key(edge.target_instance_id,edge.target_name))!)})),
-    message:connected?`The components form one route with ${transitions.length+missingTransitions.length} logical installation transitions. Component geometry was preserved.`:
+    message:connected?`The components form one route with ${keptTransitions.length+missingTransitions.length} logical installation transitions. Component geometry was preserved.`:
       `${components.size} separate component groups remain. ${ambiguousPorts.size?'Some nearby ends are equally close and cannot be selected safely.':`The nearest remaining open ends are ${nearestGaps[0]?.gapMm.toFixed(1)??'unknown'} mm apart.`} Automatic connection does not move or rotate components.`};
-  return {missing,missingTransitions,connected,endpoints,diagnostics};
+  return {missing,missingTransitions,staleTransitionIds:[...staleTransitions.keys()],connected,endpoints,diagnostics};
 }
 
 /** Suggest actual retained network ports, never invented points or SVF identities. */
@@ -182,9 +200,14 @@ cadRouteAutoConnectionsRouter.post(`${prefix}/auto-connect`,requireAdmin,safe(as
     const {group,instances,connections,transitions=[],externalConnections=[]}=await groupRawInputs(client,projectId,designId,routeId);
     if(group.revision!==parsed.data.expectedRevision)fail('STALE_CAD_ROUTE','The route changed. Refresh before connecting.');
     if(group.status!=='draft')fail('CAD_ROUTE_PUBLISHED','Withdraw the published route before changing connections.');
+    if(parsed.data.repairTransitions&&!group.revision_of_route_id)
+      fail('CAD_ROUTE_REVISION_REQUIRED','Recalculate saved transition points from an open route revision draft.');
     const members=(await client.query<{instance_id:string}>('SELECT instance_id FROM cad_route_group_members WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3',[projectId,designId,routeId])).rows;
     if(members.length!==instances.length)fail('CAD_ROUTE_UNSUPPORTED_GEOMETRY','Some group members have no verified Materials CAD reference. No automatic changes were made.');
-    const inferred=inferCadConnections(instances,connections,transitions,externalConnections);
+    const inferred=inferCadConnections(instances,connections,transitions,externalConnections,parsed.data.repairTransitions);
+    if(inferred.staleTransitionIds.length)await client.query(`DELETE FROM cad_route_transition_links
+      WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 AND id=ANY($4::uuid[])`,
+    [projectId,designId,routeId,inferred.staleTransitionIds]);
     if(inferred.missing.length){
       const portRows=(await client.query<{id:string;catalog_item_id:string;name:string;port_type:string}>(`SELECT id,catalog_item_id,name,port_type FROM cad_catalog_ports
         WHERE project_id=$1 AND catalog_item_id=ANY($2::uuid[]) AND name IN('start','end','branch') FOR SHARE`,[projectId,[...new Set(instances.map(row=>row.catalog_item_id))]])).rows;
@@ -200,10 +223,11 @@ cadRouteAutoConnectionsRouter.post(`${prefix}/auto-connect`,requireAdmin,safe(as
     }
     for(const link of inferred.missingTransitions)await client.query(`INSERT INTO cad_route_transition_links(id,project_id,design_id,route_group_id,source_instance_id,source_port_name,
       target_instance_id,target_port_name,kind) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'routing-transition')`,[randomUUID(),projectId,designId,routeId,link.source_instance_id,link.source_name,link.target_instance_id,link.target_name]);
-    const changed=Boolean(inferred.missing.length||inferred.missingTransitions.length);
+    const changed=Boolean(inferred.missing.length||inferred.missingTransitions.length||inferred.staleTransitionIds.length);
     if(changed)await client.query('UPDATE cad_route_groups SET revision=revision+1,updated_at=now() WHERE project_id=$1 AND design_id=$2 AND id=$3',[projectId,designId,routeId]);
     const network=(await client.query<{current_artifact_id:string|null}>('SELECT current_artifact_id FROM pf_project_preparations WHERE project_id=$1',[projectId])).rows[0];
     return {routeId,revision:group.revision+(changed?1:0),connectionsCreated:inferred.missing.length,routingTransitionsCreated:inferred.missingTransitions.length,connected:inferred.connected,
+      routingTransitionsReplaced:inferred.staleTransitionIds.length,
       endpoints:inferred.endpoints,diagnostics:{...inferred.diagnostics,networkRequired:!network?.current_artifact_id}};
   });res.setHeader('Cache-Control','private, no-store');res.json(result);
 }));

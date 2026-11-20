@@ -643,14 +643,38 @@ export function CadRoutesPanel({
     if (!selected || busy || externalBusy || unsavedChanges) return;
     setBusy(true);
     setMessage('');
+    if (isRevision) setRevisionReview(null);
     try {
       const result = await (
         await request(`/${selected.id}/auto-connect`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expectedRevision: selected.revision }),
+          body: JSON.stringify({
+            expectedRevision: selected.revision,
+            ...(isRevision ? { repairTransitions: true } : {}),
+          }),
         })
       ).json();
+      if (isRevision) {
+        try {
+          await Promise.all([onConnectionsChanged?.(), reload()]);
+        } catch {
+          reportCommand(
+            'Connection points recalculated',
+            'The check completed. Reopen the route panel to refresh the draft.',
+            'warning',
+          );
+          return;
+        }
+        const replaced = result.routingTransitionsReplaced ?? 0;
+        const created = (result.connectionsCreated ?? 0) + (result.routingTransitionsCreated ?? 0);
+        reportCommand(
+          'Connection points recalculated',
+          `${replaced} outdated routing transitions replaced. ${created} connections saved. ${result.connected ? 'Review the revision to continue.' : result.diagnostics?.message ?? 'Some ends still need review.'}`,
+          result.connected ? 'success' : 'warning',
+        );
+        return;
+      }
       await onConnectionsChanged?.();
       await reload();
       reportCommand(
@@ -660,7 +684,7 @@ export function CadRoutesPanel({
       );
     } catch (error) {
       reportCommand(
-        'Cannot find connection points',
+        isRevision ? 'Cannot recalculate connection points' : 'Cannot find connection points',
         error instanceof Error ? error.message : 'Cannot find automatic connections.',
         'error',
       );
@@ -1181,6 +1205,12 @@ export function CadRoutesPanel({
         {isRevision ? (
           <>
             <Caption1 block>The published route stays active while you edit this draft.</Caption1>
+            <Button
+              disabled={busy || externalBusy || unsavedChanges}
+              onClick={() => void autoConnect()}
+            >
+              Recalculate connection points
+            </Button>
             <Button
               appearance="primary"
               disabled={busy || externalBusy || unsavedChanges}

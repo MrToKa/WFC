@@ -218,6 +218,37 @@ beforeEach(()=>{
 const connect=(body:unknown={expectedRevision:3},admin=true)=>fetch(`${base}/auto-connect`,{method:'POST',headers:{'Content-Type':'application/json','x-test-admin':admin?'yes':'no'},body:JSON.stringify(body)});
 const writes=()=>mocks.query.mock.calls.filter(([sql])=>/^INSERT|^UPDATE|^DELETE/.test(String(sql)));
 describe('automatic connection endpoints',()=>{
+  const repairBody={expectedRevision:3,repairTransitions:true};
+  const draftGroup={id:routeId,revision:3,status:'draft',revision_of_route_id:id(60)};
+  const staleLink={...pair(),target_name:'end',id:id(61),kind:'routing-transition'};
+  it('replaces the wrong saved port with the touching physical port in a revision draft',async()=>{
+    mocks.raw.mockResolvedValue({group:draftGroup,instances:[row(10),row(11,1500)],connections:[],transitions:[staleLink]});
+    const response=await connect(repairBody);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({routingTransitionsReplaced:1,connectionsCreated:1,routingTransitionsCreated:0,revision:4});
+    expect(writes()[0]).toEqual([expect.stringContaining('DELETE FROM cad_route_transition_links'),[projectId,designId,routeId,[staleLink.id]]]);
+    expect(writes()[1][1].slice(1)).toEqual([projectId,designId,id(10),catalogId,id(31),id(11),catalogId,id(30)]);
+    expect(mocks.query).toHaveBeenLastCalledWith('COMMIT');
+  });
+  it('keeps draft links intact and identifies the measured gap if none can replace it',async()=>{
+    mocks.raw.mockResolvedValue({group:draftGroup,instances:[row(10),row(11,1900)],connections:[],transitions:[{...staleLink,target_name:'start'}]});
+    const response=await connect(repairBody);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({code:'CAD_ROUTE_TRANSITION_UNRESOLVED',
+      message:expect.stringContaining('component 1 (KL 60.303 F, end)'),
+      diagnostics:{sourcePortName:'end',targetPortName:'start',gapMm:expect.closeTo(400),maximumGapMm:300}});
+    expect(writes()).toEqual([]);
+    expect(mocks.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+  it('leaves a valid saved transition unchanged on repeat recalculation',async()=>{
+    mocks.raw.mockResolvedValue({group:draftGroup,instances:[row(10),row(11,1671)],connections:[],transitions:[{...staleLink,target_name:'start'}]});
+    expect(await (await connect(repairBody)).json()).toMatchObject({routingTransitionsReplaced:0,revision:3});
+    expect(writes()).toEqual([]);
+  });
+  it('restricts repair mode to revision drafts',async()=>{
+    expect(await (await connect(repairBody)).json()).toMatchObject({code:'CAD_ROUTE_REVISION_REQUIRED'});
+    expect(writes()).toEqual([]);
+  });
   it('accepts auto-connect and attachment reads after a single connected member moves to another route',async()=>{
     mocks.raw.mockResolvedValue({group:{id:routeId,revision:3,status:'draft'},instances:[row(10)],connections:[],externalConnections:[pair(10,99)]});
     const fallback=mocks.query.getMockImplementation()!;
