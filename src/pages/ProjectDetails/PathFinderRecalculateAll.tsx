@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Button, Caption1, Link, ProgressBar, Spinner, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, makeStyles, tokens } from '@fluentui/react-components';
+import { Button, Caption1, ProgressBar, Spinner, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, makeStyles, tokens } from '@fluentui/react-components';
 import { bulkCalculationRequestSchema, fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCalculationSubmission, type PathFinderCable, type PathFinderJob, type PathFinderPreferences, type PathFinderState } from '@/api/pathfinder';
+import { missingCalculationLocationsMessage, type CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../../shared/pathfinderCalculationSubmission';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
@@ -11,6 +12,7 @@ type Credentials = { projectId: string; accountId: string; token: string };
 type Props = Credentials & {
   modelKey: string;
   preferences: PathFinderPreferences | null; disabled: boolean; blocker: string | null;
+  endpointState?: Pick<PathFinderState, 'cables' | 'locations'> | null;
   refreshState: () => Promise<PathFinderState | null>; onChanged: () => void;
   onReviewReady?: (jobId: string) => void;
   children?: ReactNode;
@@ -77,11 +79,35 @@ function savingBreakdown(items: PathFinderJob['items']) {
   return [...groups.entries()].sort(([, first], [, second]) => second.cableIds.length - first.cableIds.length);
 }
 
-function blockedCalculationBreakdown(items: PathFinderJob['items']) {
+const locationIssueMessages = new Set((['From', 'To', 'From and To'] as const).map(missingCalculationLocationsMessage));
+const noIssueCables: readonly string[] = [];
+
+function endpointReady(match: PathFinderCable['fromMatch'], locations: ReadonlyMap<string, CalculationAvailability | undefined>) {
+  if (!match.locationId) return match.status === 'missing' || match.status === 'ambiguous' ? false : undefined;
+  const availability = locations.get(match.locationId);
+  if (!availability || ['not-evaluated', 'preparation-required'].includes(availability.status)) return undefined;
+  return availability.pointAvailable;
+}
+
+function blockedCalculationBreakdown(items: PathFinderJob['items'], endpointState: Props['endpointState']) {
+  if (!items?.length) return [];
+  const cables = new Map(endpointState?.cables.map(cable => [cable.id, cable]));
+  const locations = new Map(endpointState?.locations.map(location => [location.id, location.calculationAvailability]));
   const groups = new Map<string, { cableIds: string[] }>();
-  for (const item of items ?? []) {
+  for (const item of items) {
     if (!isBlockedCalculation(item)) continue;
-    const reason = item.message?.trim() || 'No calculation reason was recorded.';
+    let reason = item.message?.trim() || 'No calculation reason was recorded.';
+    // Use current endpoint availability only for the matching recorded blocker.
+    if (item.status === 'locations_required' && locationIssueMessages.has(reason)) {
+      const cable = cables.get(item.cableId);
+      if (cable) {
+        const from = endpointReady(cable.fromMatch, locations);
+        const to = endpointReady(cable.toMatch, locations);
+        if (from === true && to === true) continue;
+        if (from !== undefined && to !== undefined)
+          reason = missingCalculationLocationsMessage(!from && !to ? 'From and To' : !from ? 'From' : 'To');
+      }
+    }
     const group = groups.get(reason) ?? { cableIds: [] };
     group.cableIds.push(item.cableId);
     groups.set(reason, group);
@@ -114,7 +140,7 @@ function pendingRequest(value: string | null, projectId: string): BulkRequest | 
   } catch { return 'legacy'; }
 }
 
-function BackgroundPass({ projectId, accountId, token, preferences, disabled, blocker, refreshState, onChanged, onReviewReady, children }: Props) {
+function BackgroundPass({ projectId, accountId, token, preferences, disabled, blocker, endpointState, refreshState, onChanged, onReviewReady, children }: Props) {
   const storageKey = `wfc.recalculate-all:${projectId}:${accountId}`;
   const [stored] = useState(() => {
     try { return localStorage.getItem(storageKey); } catch { return null; }
@@ -141,10 +167,10 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
   const counts = job ? backgroundCalculationCounts(job) : null;
   const items = job?.items;
   const saveReasons = useMemo(() => savingBreakdown(items), [items]);
-  const blockedReasons = useMemo(() => blockedCalculationBreakdown(items), [items]);
+  const blockedReasons = useMemo(() => blockedCalculationBreakdown(items, endpointState), [items, endpointState]);
   const selectedGroup = issueSelection && (issueSelection.kind === 'calculation' ? blockedReasons : saveReasons)
     .find(([reason]) => reason === issueSelection.reason)?.[1];
-  const issue = issueSelection && selectedGroup ? { selection: issueSelection, cableIds: selectedGroup.cableIds } : null;
+  const issue = issueSelection ? { selection: issueSelection, cableIds: selectedGroup?.cableIds ?? noIssueCables } : null;
   const closeIssue = () => {
     issueSelection?.trigger.focus();
     setIssueSelection(null);
@@ -308,12 +334,12 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       {!submitting && !pending && job && counts ? <>
         <ProgressBar value={job.total ? job.completed / job.total : 1} />
         <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}.</Caption1>
-        {blockedReasons.length > 0 ? <ul aria-label="Skipped or failed calculations">
+        {blockedReasons.length > 0 ? <><Caption1 block>Current calculation issues</Caption1><ul aria-label="Skipped or failed calculations">
           {blockedReasons.map(([reason, { cableIds }]) => <li key={reason}>
             <span>{cableIds.length} {cableIds.length === 1 ? 'cable' : 'cables'} · {reason}</span>
             {showCables('calculation', reason)}
           </li>)}
-        </ul> : null}
+        </ul></> : null}
         {saveReasons.length > 0 ? <ul aria-label="Calculated routes requiring attention">
           {saveReasons.map(([reason, { cableIds, routes }]) => <li key={reason}>
             <span>{reason} ({cableIds.length} {cableIds.length === 1 ? 'cable' : 'cables'}). {[...routes].map(([route, count]) => `${count} ${retainedRouteLabels[route]}`).join(', ')}.</span>
@@ -343,9 +369,14 @@ const useIssueStyles = makeStyles({
   heading: { margin: 0 },
   controls: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: tokens.spacingHorizontalS },
   table: { tableLayout: 'fixed' },
+  cableButton: { width: '100%', minWidth: 0, paddingInline: 0, justifyContent: 'flex-start',
+    textAlign: 'start', whiteSpace: 'normal', overflowWrap: 'anywhere' },
 });
 
-type IssueListProps = { projectId: string | null; cables: readonly PathFinderCable[] | undefined };
+type IssueListProps = {
+  cables: readonly PathFinderCable[] | undefined;
+  onOpenCable: (cable: PathFinderCable) => boolean;
+};
 
 export function PathFinderRecalculationIssueList(props: IssueListProps) {
   const recalculation = useFilteredCableRecalculation();
@@ -355,11 +386,12 @@ export function PathFinderRecalculationIssueList(props: IssueListProps) {
     {...props} issue={issue} onClose={recalculation.closeIssue} />;
 }
 
-function IssueList({ projectId, cables, issue, onClose }: IssueListProps & { issue: SelectedIssue; onClose: () => void }) {
+function IssueList({ cables, issue, onOpenCable, onClose }: IssueListProps & { issue: SelectedIssue; onClose: () => void }) {
   const styles = useIssueStyles();
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const [page, setPage] = useState(0);
+  const [openFailed, setOpenFailed] = useState(false);
   const { selection, cableIds } = issue;
   useEffect(() => {
     heading.current?.scrollIntoView?.({ block: 'start' });
@@ -376,21 +408,24 @@ function IssueList({ projectId, cables, issue, onClose }: IssueListProps & { iss
     <h3 className={styles.heading} id={headingId} ref={heading} tabIndex={-1}>Cables by recalculation result</h3>
     <div>{selection.reason}</div>
     <div className={styles.controls}>
-      <Caption1 role="status">Showing {first + 1}–{end} of {orderedIds.length} {orderedIds.length === 1 ? 'cable' : 'cables'}</Caption1>
+      <Caption1 role="status">{orderedIds.length === 0 ? 'No cables remain in this group.'
+        : `Showing ${first + 1}–${end} of ${orderedIds.length} ${orderedIds.length === 1 ? 'cable' : 'cables'}`}</Caption1>
       <Button size="small" type="button" onClick={onClose}>Close cable list</Button>
     </div>
-    <Table size="small" className={styles.table} aria-label="Cables in the selected result group">
+    {openFailed && orderedIds.length > 0 ? <Caption1 role="alert">The cable routing window is currently unavailable for this cable.</Caption1> : null}
+    {orderedIds.length > 0 ? <Table size="small" className={styles.table} aria-label="Cables in the selected result group">
       <TableHeader><TableRow><TableHeaderCell>Cable</TableHeaderCell><TableHeaderCell>From</TableHeaderCell><TableHeaderCell>To</TableHeaderCell></TableRow></TableHeader>
       <TableBody>{orderedIds.slice(first, end).map(id => {
         const cable = cableIndex.get(id);
         const label = cable?.tag || (cable?.cableId ?? id);
         return <TableRow key={id}>
-          <TableCell>{cable && projectId ? <Link href={`/projects/${projectId}/cables/${id}`}>{label}</Link> : label}</TableCell>
+          <TableCell>{cable ? <Button type="button" size="small" appearance="subtle" className={styles.cableButton}
+            aria-haspopup="dialog" onClick={() => setOpenFailed(!onOpenCable(cable))}>{label}</Button> : label}</TableCell>
           <TableCell>{cable?.fromLocation || '—'}</TableCell>
           <TableCell>{cable?.toLocation || '—'}</TableCell>
         </TableRow>;
       })}</TableBody>
-    </Table>
+    </Table> : null}
     {lastPage > 0 ? <div className={styles.controls}>
       <Button size="small" type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous cables</Button>
       <Button size="small" type="button" disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)}>Next cables</Button>

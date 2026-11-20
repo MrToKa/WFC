@@ -23,6 +23,10 @@ export const calculationAvailabilitySchema = z.object({
     context.addIssue({ code: 'custom', message: 'Calculation-point availability must agree with its evidence source and status.' });
 });
 export type CalculationAvailability = z.infer<typeof calculationAvailabilitySchema>;
+
+export function missingCalculationLocationsMessage(side: 'From' | 'To' | 'From and To'): string {
+  return `Resolve ${side} locations. Missing, ambiguous or stale locations cannot be calculated.`;
+}
 export function notEvaluatedCalculationAvailability(reasonCode = 'AVAILABILITY_NOT_EVALUATED'): CalculationAvailability {
   return calculationAvailabilitySchema.parse({ status: 'not-evaluated', pointAvailable: false,
     source: null, approximate: false, candidateObjectIds: [], reasonCode, engineeringAccepted: false });

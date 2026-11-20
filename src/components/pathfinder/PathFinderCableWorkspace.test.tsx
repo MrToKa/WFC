@@ -1,10 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { useState } from 'react';
+import { createRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PathFinderCableWorkspace, type PathFinderCableWorkspaceProps } from './PathFinderCableWorkspace';
+import { PathFinderCableWorkspace, type PathFinderCableWorkspaceHandle, type PathFinderCableWorkspaceProps } from './PathFinderCableWorkspace';
 import type { PathFinderNeedsRoutingListProps } from './PathFinderNeedsRoutingList';
 import type { PathFinderCableRoutingPanelProps } from './PathFinderCableRoutingPanel';
-import { fetchPathFinderCableWorkflowDetail } from '@/api/pathfinderCableWorkflow';
+import { fetchPathFinderCableWorkflowDetail, type CableWorkflowDetail } from '@/api/pathfinderCableWorkflow';
 import { fetchPathFinderJob } from '@/api/pathfinder';
 import { fetchLocationImpacts } from '@/api/pathfinderLocationImpacts';
 import { fetchCableRows } from '@/api/cables';
@@ -1518,6 +1518,47 @@ describe('fresh initial selection and current proof handoff', () => {
 });
 
 describe('Path Finder cable popup and read-only hover', () => {
+  it('opens the From/To editor for a project cable outside the workflow list after verifying its details', async () => {
+    const p = props(), workspaceRef = createRef<PathFinderCableWorkspaceHandle>();
+    const selected = { ...row(), cable: { ...row().cable, id: id(44), tag: 'Project cable', fromLocation: 'Source', toLocation: 'Destination' } };
+    const detail: CableWorkflowDetail = { schemaVersion: 'wfc.pf.cable-workflow-detail.v1',
+      projectId: id(1), cableId: id(44), row: selected, querySha256: 'a'.repeat(64), contextSha256: 'b'.repeat(64) };
+    let finish!: (value: CableWorkflowDetail) => void;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockImplementation(() => {
+      expect(window.open).toHaveBeenCalledOnce();
+      return new Promise(resolve => { finish = resolve; });
+    });
+    render(<PathFinderCableWorkspace {...p} workspaceRef={workspaceRef} />);
+
+    act(() => { expect(workspaceRef.current?.openProjectCable({ id: id(44), tag: 'Project cable', mto: null })).toBe(true); });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await act(async () => { finish(detail); });
+
+    expect(screen.getByRole('dialog')).toBeVisible();
+    expect(panelProps.cable).toEqual(selected);
+    expect(panelProps.access.active).toBe(true);
+    expect(p.onSelect).toHaveBeenCalledExactlyOnceWith(selected);
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledExactlyOnceWith(p.projectId, p.token, id(44), p.preferences, expect.any(AbortSignal));
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
+
+  it('discards a pending project cable open when the user leaves Path', async () => {
+    const p = props(), workspaceRef = createRef<PathFinderCableWorkspaceHandle>(), close = vi.fn();
+    vi.mocked(window.open).mockReturnValue({ closed: false, close, document: { title: '' } } as unknown as Window);
+    const detail: CableWorkflowDetail = { schemaVersion: 'wfc.pf.cable-workflow-detail.v1',
+      projectId: id(1), cableId: id(3), row: row(), querySha256: 'a'.repeat(64), contextSha256: 'b'.repeat(64) };
+    let finish!: (value: CableWorkflowDetail) => void;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<PathFinderCableWorkspace {...p} workspaceRef={workspaceRef} />);
+    act(() => { workspaceRef.current?.openProjectCable({ id: id(3), tag: 'C-001', mto: null }); });
+    view.rerender(<PathFinderCableWorkspace {...p} workspaceRef={workspaceRef} active={false} />);
+    await act(async () => { finish(detail); });
+
+    expect(close).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(p.onSelect).not.toHaveBeenCalled();
+  });
+
   it.each([null, '', 'Power', 'Plastic tubing', 'Unknown'])('opens and submits a cable with optional MTO %s without modifying its metadata', async mto => {
     const p = props(); listRow = { ...row(), mto };
     render(<PathFinderCableWorkspace {...p} />); await openListCable(true);

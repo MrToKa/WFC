@@ -18,7 +18,7 @@ import { useProjectCablePurposes } from './hooks/useProjectCablePurposes';
 import { EndpointBindingPanel } from './EndpointBindingPanel';
 import { PathFinderCalculationGrantPanel } from './PathFinderCalculationGrantPanel';
 import { notEvaluatedCalculationAvailability, type CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
-import { PathFinderCableWorkspace } from '@/components/pathfinder/PathFinderCableWorkspace';
+import { PathFinderCableWorkspace, type PathFinderCableWorkspaceHandle } from '@/components/pathfinder/PathFinderCableWorkspace';
 import type { CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowDisplayRequest, PathFinderWorkflowReview, PathFinderWorkflowCalculationPreferences } from './PathFinderResults';
 import { PathFinderBarriersPanel } from './PathFinderBarriersPanel';
@@ -192,6 +192,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
       return owned;
     } });
   const [search, setSearch] = useState(''), [onlyProblems, setOnlyProblems] = useState(false), [selectedCableId, setSelectedCableId] = useState<string | null>(null);
+  const cableWorkspace = useRef<PathFinderCableWorkspaceHandle>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft), [notice, setNotice] = useState<string | null>(null), [localError, setLocalError] = useState<string | null>(null);
   const [endpointPending, setEndpointPending] = useState(false);
   const [workflowSelection, setWorkflowSelection] = useState<CableWorkflowRow | null>(null);
@@ -351,7 +352,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           modelKey={JSON.stringify(data?.activeModel)} preferences={backgroundPreferences}
           blocker={calculationBlocker ?? (!data?.artifacts.length ? 'Prepare the tray network in Routes before recalculating all cables.' : null)}
           disabled={pf.busy || locationCheckBusy || networkCheckBusy || !data?.artifacts.length}
-          refreshState={pf.refreshState} onChanged={cableValuesChanged} onReviewReady={showReviewQueue}>
+          endpointState={data} refreshState={pf.refreshState} onChanged={cableValuesChanged} onReviewReady={showReviewQueue}>
         {/* Keep command recovery active across viewer tool changes; its busy state stays local. */}
         <PathFinderRecalculationPanel projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           active={active} contextKey={JSON.stringify([data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, data?.activeModel.contentFingerprint])}
@@ -360,7 +361,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           preparationAvailable={mode !== 'lookup' && pf.viewerPhase === 'ready' && !pf.busy && !networkCheckBusy && !locationCheckBusy}
           onChanged={cableValuesChanged} onAuthorityLost={cableValuesChanged} onReviewReady={showReviewQueue} />
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
-          pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh}
+          pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} workspaceRef={cableWorkspace}
           reviewRunId={reviewRun?.owner === reviewOwner ? reviewRun.jobId : null}
           preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation} onResultRefresh={workflowResultRefreshed}
           calculationBlocker={calculationBlocker} getCalculationPreferences={getCableCalculationPreferences} onCalculationPreferences={setWorkflowCalculationPreferences}
@@ -414,7 +415,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           workflowDisplayRequest={workflowDisplayRequest} onWorkflowDisplayChange={workflowDisplayChanged} onWorkflowReviewChange={workflowReviewChanged}
           endpointForegroundContexts={endpointForegroundContexts}
           onCalculationCommitted={calculationCommitted} />
-        <PathFinderRecalculationIssueList projectId={projectId} cables={data?.cables} />
+        <PathFinderRecalculationIssueList cables={data?.cables} onOpenCable={cable => cableWorkspace.current?.openProjectCable(cable) ?? false} />
         </PathFinderRecalculateAll>
         </div>
         <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>

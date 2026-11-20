@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { PathFinderError } from './errors.js';
 import { normalizeLocation } from './matching.js';
+import { missingCalculationLocationsMessage } from '../../shared/pathfinderCalculationAvailability.js';
 import { activeModel, latestArtifact } from './repository.js';
 import { optionsSchema, type DependencySnapshot, type EngineOptions, type CurrentDependencySnapshot, type AutomaticDependencySnapshot, type ScopedDependencySnapshot, type BarrierDependencySnapshot } from './jobContracts.js';
 import { projectRoutingSettings } from './settings.js';
@@ -150,7 +151,7 @@ export function freezeCableDependencies(common:CommonCalculationInputs,cable:Row
   from:CurrentEndpointCalculationPoint|null,to:CurrentEndpointCalculationPoint|null):CollectedDependencies {
   const blocked=(status:string,message:string):CollectedDependencies=>({dependencies:null,status,message,cable});
   if(!['MV','LV','Control','Instrumentation'].includes(cable.mto))return blocked('category_required','Resolve the cable category before calculation.');
-  if(!from||!to)return blocked('locations_required',`Resolve ${!from&&!to?'From and To':!from?'From':'To'} locations. Missing, ambiguous or stale locations cannot be calculated.`);
+  if(!from||!to)return blocked('locations_required',missingCalculationLocationsMessage(!from && !to ? 'From and To' : !from ? 'From' : 'To'));
   const base = {...common,cableId:cable.id,cableWriteRevision:cable.cable_write_revision,
     cableInputs:{fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,cableTypeId:cable.cable_type_id}};
   if (isAutomaticEndpointCalculationPoint(from) || isAutomaticEndpointCalculationPoint(to))
@@ -177,7 +178,7 @@ export function freezeBarrierCableDependencies(common:BarrierCommonCalculationIn
   from:CurrentEndpointCalculationPoint|null,to:CurrentEndpointCalculationPoint|null):CollectedDependencies {
   const blocked=(status:string,message:string):CollectedDependencies=>({dependencies:null,status,message,cable});
   if (!isPathFinderCableEligible(cable.mto)) return blocked('category_required','MV cables are excluded from Path Finder calculations.');
-  if (!from || !to) return blocked('locations_required',`Resolve ${!from&&!to?'From and To':!from?'From':'To'} locations. Missing, ambiguous or stale locations cannot be calculated.`);
+  if (!from || !to) return blocked('locations_required',missingCalculationLocationsMessage(!from && !to ? 'From and To' : !from ? 'From' : 'To'));
   const endpointResolution = scopedEndpointResolutionSchema.safeParse({schemaVersion:'pathfinder.endpoint-resolution.v1',matchingPolicy:'nfc-trim-uppercase-v1',
     from:{logicalKey:typeof cable.from_location==='string'?normalizeLocation(cable.from_location):'',locationId:from.locationId},
     to:{logicalKey:typeof cable.to_location==='string'?normalizeLocation(cable.to_location):'',locationId:to.locationId}});

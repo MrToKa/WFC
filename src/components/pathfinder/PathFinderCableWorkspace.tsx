@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { Button, Portal } from '@fluentui/react-components';
 import { requestFloatingCableWindow, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
 import { useCableInformationPanelStyles } from '@/pages/ProjectDetails/CableInformationPanel.styles';
-import { fetchPathFinderJob, type PathFinderPreferences, type PathFinderJob } from '@/api/pathfinder';
+import { fetchPathFinderJob, type PathFinderCable, type PathFinderPreferences, type PathFinderJob } from '@/api/pathfinder';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
 import { calculationSubmissionRefusalMessage } from '../../../shared/pathfinderCalculationSubmission';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
@@ -37,7 +37,11 @@ const calculationFinished = (calculation: CableWorkflowRow['calculation']) => !a
 // has a sealed current result. Only this item's outstanding work blocks it.
 const selectedCalculationPending = (calculation: CableWorkflowRow['calculation']) => automaticUpdatePending(calculation)
   || ['queued', 'running'].includes(calculation.jobStatus ?? '') && !calculationFinished(calculation);
+export type PathFinderCableWorkspaceHandle = {
+  openProjectCable: (cable: Pick<PathFinderCable, 'id' | 'tag' | 'mto'>) => boolean;
+};
 export type PathFinderCableWorkspaceProps = Access & { pf: ReturnType<typeof usePathFinder>; active: boolean;
+  workspaceRef?: Ref<PathFinderCableWorkspaceHandle>;
   preferences: PathFinderPreferences | null; selectedCableId?: string | null; refreshKey?: number; onSelect: (row: CableWorkflowRow) => void;
   readPreferences?: CableWorkflowDetailQuery | null;
   calculationBlocker?: string | null;
@@ -183,6 +187,11 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     if (selectedRef.current?.cable.id === value.cableId) setCalculationFeedback(value);
   }, []);
   const [popup, setPopup] = useState<FloatingCableWindowRequest | null>(null), popupRef = useRef<FloatingCableWindowRequest | null>(null);
+  const pendingOpen = useRef<(() => void) | null>(null);
+  const cancelPendingOpen = useCallback(() => {
+    pendingOpen.current?.();
+    pendingOpen.current = null;
+  }, []);
   const [preview, setPreview] = useState<{ row: CableWorkflowRow; anchor: HTMLElement } | null>(null);
   const dwell = useRef<ReturnType<typeof setTimeout> | null>(null), leave = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopTimers = useCallback(() => { if (dwell.current) clearTimeout(dwell.current); if (leave.current) clearTimeout(leave.current); dwell.current = null; leave.current = null; }, []);
@@ -194,10 +203,11 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     stopTimers(); if (open || !enabled) return;
     dwell.current = setTimeout(() => { dwell.current = null; if (callbacks.current.active && anchor.isConnected) setPreview({ row, anchor }); }, 1000);
   };
-  const openCable = (row: CableWorkflowRow) => {
+  const openCable = (row: CableWorkflowRow, verifiedPopup?: FloatingCableWindowRequest) => {
+    cancelPendingOpen();
     if (!enabled || row.projectId !== props.projectId || !isPathFinderCableEligible(row.mto)) return;
     // User activation belongs to this click, before the editor is mounted.
-    const request = requestFloatingCableWindow({ title: row.cable.tag || 'Cable routing' }, popupRef.current);
+    const request = verifiedPopup ?? requestFloatingCableWindow({ title: row.cable.tag || 'Cable routing' }, popupRef.current);
     popupRef.current = request; setPopup(request); dismissPreview();
     manualRefresh.current?.abort(); manualRefresh.current = null; setRefreshingState(false);
     diagnosticsEpoch.current++; settledDiagnosticsRef.current = null; protectedDiagnostics.current = null; setSettledDiagnostics(null);
@@ -215,7 +225,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     props.onSelect(row);
     // The list is a bounded observation, not the current selected result. Keep
     // window activation synchronous, then inspect this cable by a fresh GET.
-    void refreshSelected();
+    if (!verifiedPopup) void refreshSelected();
   };
   const callbacks = useRef(props); callbacks.current = props;
   const alive = useRef(false), read = useRef<AbortController | null>(null), historyRead = useRef<AbortController | null>(null);
@@ -243,6 +253,43 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     setSelectedReadError(null);
   }, []);
   const authorityLost = useCallback(() => callbacks.current.pf.refresh(), []);
+  useImperativeHandle(props.workspaceRef, () => ({
+    openProjectCable(cable) {
+      cancelPendingOpen();
+      const current = callbacks.current, { projectId, token } = current;
+      if (!enabled || !projectId || !token || !readPreferences || !isPathFinderCableEligible(cable.mto)) return false;
+
+      const ticket = new AbortController();
+      const existing = popupRef.current;
+      const request = requestFloatingCableWindow({ title: cable.tag || 'Cable routing' }, existing);
+      const cancel = () => {
+        ticket.abort();
+        if (request !== existing && request.window && !request.window.closed) request.window.close();
+      };
+      pendingOpen.current = cancel;
+      dismissPreview();
+      setNotice(null);
+      const live = () => pendingOpen.current === cancel && callbacks.current.active && callbacks.current.pf.viewerPhase === 'ready'
+        && workspaceReadScope(callbacks.current) === selectedReadScope;
+      void fetchPathFinderCableWorkflowDetail(projectId, token, cable.id, readPreferences, ticket.signal).then(detail => {
+        if (!live()) return;
+        verifyDetailScope(detail, projectId, cable.id);
+        const state = callbacks.current.pf.data;
+        if (!state || !isPathFinderCableEligible(detail.row.mto)) throw readFailure('CALCULATION_SCOPE_CHANGED');
+        pendingOpen.current = null;
+        acceptVerifiedRefresh(detail.row, state);
+        openCable(detail.row, request);
+      }).catch(error => {
+        if (!live()) return;
+        setNotice('The cable window could not be opened. Click the cable again to retry.');
+        if (error && typeof error === 'object' && 'status' in error && [401, 403].includes(Number(error.status))) authorityLost();
+      }).finally(() => {
+        if (pendingOpen.current === cancel) cancelPendingOpen();
+      });
+      return true;
+    },
+  }));
+  useEffect(() => () => cancelPendingOpen(), [cancelPendingOpen, enabled, selectedReadScope]);
   const retainCalculationDiagnostics = useCallback((job: PathFinderJob, cableId: string, jobId: string) => {
     const current = callbacks.current;
     if (job.projectId !== current.projectId || job.id !== jobId) throw readFailure('CALCULATION_SCOPE_CHANGED');

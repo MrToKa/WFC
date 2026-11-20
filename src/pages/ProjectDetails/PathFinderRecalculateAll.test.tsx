@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCable, type PathFinderJob, type PathFinderState } from '@/api/pathfinder';
 import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
+import { calculationAvailabilitySchema, missingCalculationLocationsMessage, notEvaluatedCalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 import { collectFilteredCableIds } from '@/api/pathfinderCableWorkflow';
 import { backgroundCalculationCounts, PathFinderRecalculateAll, PathFinderRecalculationIssueList, useFilteredCableRecalculation } from './PathFinderRecalculateAll';
@@ -153,7 +154,7 @@ describe('whole-project background pass', () => {
     expect(onReviewReady).not.toHaveBeenCalled();
   });
   it('opens each result group with its own paginated cables even when diagnostics are unavailable', async () => {
-    const props = setup();
+    const props = setup(), openCable = vi.fn(() => true);
     localStorage.setItem(storageKey, id(20));
     const cables = Array.from({ length: 54 }, (_, index) => ({
       id: id(100 + index), cableId: index + 1, tag: `C-${index + 1}`, fromLocation: 'Panel A', toLocation: 'Panel B',
@@ -170,27 +171,82 @@ describe('whole-project background pass', () => {
     vi.mocked(fetchPathFinderJob).mockResolvedValue({ ...job, total: cables.length });
     render(<PathFinderRecalculateAll {...props}>
       <p role="alert">Cable diagnostics are unavailable.</p>
-      <PathFinderRecalculationIssueList projectId={props.projectId} cables={cables} />
+      <PathFinderRecalculationIssueList cables={cables} onOpenCable={openCable} />
     </PathFinderRecalculateAll>);
 
     const from = await screen.findByRole('button', { name: 'Show cables: Resolve From locations.' });
     fireEvent.click(from);
     expect(screen.getByRole('heading', { name: 'Cables by recalculation result' })).toHaveFocus();
     const table = screen.getByRole('table', { name: 'Cables in the selected result group' });
-    expect(within(table).getAllByRole('link')).toHaveLength(50);
-    expect(within(table).getByRole('link', { name: 'C-1' })).toHaveAttribute('href', `/projects/${id(1)}/cables/${id(100)}`);
-    expect(within(table).queryByRole('link', { name: 'C-51' })).toBeNull();
+    expect(within(table).getAllByRole('button')).toHaveLength(50);
+    expect(within(table).queryByRole('link')).toBeNull();
+    fireEvent.click(within(table).getByRole('button', { name: 'C-1' }));
+    expect(openCable).toHaveBeenCalledExactlyOnceWith(cables[0]);
+    expect(within(table).queryByRole('button', { name: 'C-51' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Next cables' }));
-    expect(within(table).getAllByRole('link').map(link => link.textContent)).toEqual(['C-51']);
+    expect(within(table).getAllByRole('button').map(button => button.textContent)).toEqual(['C-51']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Show cables: Resolve To locations.' }));
-    expect(within(screen.getByRole('table')).getAllByRole('link').map(link => link.textContent)).toEqual(['C-52']);
+    expect(within(screen.getByRole('table')).getAllByRole('button').map(button => button.textContent)).toEqual(['C-52']);
     const expired = screen.getByRole('button', { name: 'Show cables: Permission to save automatically expired' });
     fireEvent.click(expired);
-    expect(within(screen.getByRole('table')).getAllByRole('link').map(link => link.textContent)).toEqual(['C-53']);
+    expect(within(screen.getByRole('table')).getAllByRole('button').map(button => button.textContent)).toEqual(['C-53']);
     fireEvent.click(screen.getByRole('button', { name: 'Close cable list' }));
     expect(screen.queryByRole('table')).toBeNull();
     expect(expired).toHaveFocus();
+    expect(submitAllPathFinderCalculations).not.toHaveBeenCalled();
+  });
+  it('updates every cable sharing an assigned From point and retains unresolved routing issues', async () => {
+    const props = setup();
+    localStorage.setItem(storageKey, id(20));
+    const ready = calculationAvailabilitySchema.parse({
+      status: 'confirmed-ready', pointAvailable: true, source: 'confirmed-shared-location',
+      approximate: false, candidateObjectIds: [], reasonCode: null, engineeringAccepted: false,
+    });
+    const location = (n: number, calculationAvailability: typeof ready) => ({
+      id: id(n), name: String(n), aliases: [], revision: '1', binding: null, calculationAvailability,
+    });
+    const matched = (n: number) => ({ status: 'matched' as const, locationId: id(n), candidates: [id(n)] });
+    const missing = { status: 'missing' as const, locationId: null, candidates: [] };
+    const shared: PathFinderCable[] = Array.from({ length: 10 }, (_, index) => ({
+      id: id(100 + index), cableId: index + 1, tag: 'Shared cable ' + (index + 1),
+      fromLocation: 'Shared source', toLocation: 'Destination', fromMatch: missing, toMatch: matched(81),
+      mto: 'Control', routing: null, designLength: null, installLength: null, cableWriteRevision: '0',
+    }));
+    const partial = { ...shared[0], id: id(110), cableId: 11, tag: 'Still missing To', toLocation: null, toMatch: missing };
+    const noPath = { ...shared[0], id: id(111), cableId: 12, tag: 'Blocked route' };
+    const blocked = (cable: PathFinderCable, side: 'From' | 'From and To') => ({
+      ...item('locations_required'), state: 'blocked', cableId: cable.id, message: missingCalculationLocationsMessage(side),
+    });
+    const job = makeJob('complete', [
+      ...shared.map(cable => blocked(cable, 'From')),
+      blocked(partial, 'From and To'),
+      { ...item('no_path'), cableId: noPath.id, message: 'No connected path was found.' },
+    ]);
+    vi.mocked(fetchPathFinderJob).mockResolvedValue({ ...job, total: job.completed });
+
+    const show = (cables: PathFinderCable[], fromAvailability?: typeof ready) => <PathFinderRecalculateAll {...props}
+      endpointState={{ cables, locations: [location(81, ready), ...(fromAvailability ? [location(80, fromAvailability)] : [])] }}>
+      <PathFinderRecalculationIssueList cables={cables} onOpenCable={() => true} />
+    </PathFinderRecalculateAll>;
+    const view = render(show([...shared, partial, noPath]));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show cables: ' + missingCalculationLocationsMessage('From') }));
+    const result = screen.getByRole('region', { name: 'Cables by recalculation result' });
+    expect(within(result).getByText('Showing 1–10 of 10 cables')).toBeVisible();
+
+    const updated = [...shared, partial, noPath].map(cable => ({ ...cable, fromMatch: matched(80) }));
+    view.rerender(show(updated, notEvaluatedCalculationAvailability()));
+    expect(within(result).getByText('Showing 1–10 of 10 cables')).toBeVisible();
+    view.rerender(show(updated, ready));
+    expect(within(result).getByText('No cables remain in this group.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Show cables: ' + missingCalculationLocationsMessage('From') })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show cables: ' + missingCalculationLocationsMessage('From and To') })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show cables: ' + missingCalculationLocationsMessage('To') }));
+    expect(within(screen.getByRole('table')).getByRole('button', { name: partial.tag! })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Show cables: No connected path was found.' }));
+    expect(within(screen.getByRole('table')).getByRole('button', { name: noPath.tag! })).toBeVisible();
+    expect(fetchPathFinderJob).toHaveBeenCalledOnce();
     expect(submitAllPathFinderCalculations).not.toHaveBeenCalled();
   });
   it('retries the identical command after reopening with uncertain admission', async () => {
