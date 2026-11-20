@@ -73,6 +73,7 @@ const safe=(work:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Re
 export async function writeCadTrayExport(client:PoolClient,projectId:string,designId:string,routeId:string,userId:string,expectedRevision?:number) {
     const {group,instances,chain,transitions}=await groupInputs(client,projectId,designId,routeId);
     if(expectedRevision!==undefined&&group.revision!==expectedRevision)return fail('STALE_CAD_ROUTE','The route changed. Refresh before adding it to the Trays list.');
+    if(group.revision_of_route_id)return fail('CAD_ROUTE_REVISION_REVIEW_REQUIRED','The Trays entry updates when this route revision is published.');
     const desired=deriveCadTrayExport(projectId,designId,group,instances,chain,transitions);
     let saved=await readCadTrayExport(client,projectId,designId,routeId);
     let adoptedPublishedRow=false;

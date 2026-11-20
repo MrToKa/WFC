@@ -48,6 +48,7 @@ type Props = {
   memberScopeIds?: string[];
   newDraftInstanceIds?: string[];
   externalBusy?: boolean;
+  connectionKey?: string;
   creationActive?: boolean;
   updatedRoute?: CadRouteGroup;
   onSectionVisibility?: (id: string, visible: boolean) => Promise<void>;
@@ -92,6 +93,12 @@ type AutomaticPoints = {
   };
 };
 const empty = { name: '', color: '#3B82F6', purpose: '' };
+const routeLabel = (route: CadRouteGroup) => route.revisionOfRouteName ?? route.name;
+
+type RevisionReview = {
+  reviewToken: string;
+  cables: { id: string; tag: string; needsRecalculation: boolean; reason: string }[];
+};
 
 export function CadRoutesPanel({
   projectId,
@@ -113,6 +120,7 @@ export function CadRoutesPanel({
   memberScopeIds,
   newDraftInstanceIds,
   externalBusy = false,
+  connectionKey,
   creationActive = false,
   updatedRoute,
   onSectionVisibility,
@@ -144,14 +152,26 @@ export function CadRoutesPanel({
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [removeCandidate, setRemoveCandidate] = useState<CadRouteGroup | null>(null);
+  const [discardRevisionOpen, setDiscardRevisionOpen] = useState(false);
+  const [revisionReview, setRevisionReview] = useState<RevisionReview | null>(null);
+  const revisionReviewSection = useRef<HTMLElement>(null);
   const [automaticPoints, setAutomaticPoints] = useState<AutomaticPoints | null>(null);
   const [automaticLoading, setAutomaticLoading] = useState(false);
   const [attachmentMessage, setAttachmentMessage] = useState('');
   const colors = useRef(new Map<string, string>());
   const selected = routes.find((route) => route.id === selectedId);
-  const availableSections = instances.filter(
-    (instance) => !selected?.instanceIds.includes(instance.id),
-  );
+  const isRevision = Boolean(selected?.revisionOfRouteId);
+  const openRevision = selected && routes.find((route) => route.revisionOfRouteId === selected.id);
+  const availableSections = instances.filter((instance) => {
+    if (selected?.instanceIds.includes(instance.id)) return false;
+    const source = routes.find((route) => route.instanceIds.includes(instance.id));
+    const reserved = routes.find((route) => route.revisionInstanceIds?.includes(instance.id));
+    return (
+      (!reserved || reserved.id === selected?.id) &&
+      (!source?.revisionOfRouteId || source.id === selected?.id) &&
+      (!isRevision || !source)
+    );
+  });
   useEffect(() => {
     if (!updatedRoute) return;
     setRoutes((old) => old.map((route) => (route.id === updatedRoute.id ? updatedRoute : route)));
@@ -169,6 +189,12 @@ export function CadRoutesPanel({
     .filter((instance) => selected?.instanceIds.includes(instance.id))
     .map((instance) => `${instance.id}:${instance.revision}`)
     .join(',');
+  useEffect(() => {
+    setRevisionReview(null);
+  }, [selectedId, selected?.revision, geometryKey, connectionKey]);
+  useEffect(() => {
+    if (revisionReview) revisionReviewSection.current?.focus();
+  }, [revisionReview]);
   const pointsReady = Boolean(
     automaticPoints?.attachments.length &&
       ['aligned', 'alignment-required'].includes(automaticPoints.status),
@@ -198,6 +224,8 @@ export function CadRoutesPanel({
     setFields(empty);
     setMembers([]);
     setMessage('');
+    setRevisionReview(null);
+    setDiscardRevisionOpen(false);
   }, [resetKey]);
   useEffect(() => {
     if (!selectedId && newDraftInstanceIds) {
@@ -237,7 +265,9 @@ export function CadRoutesPanel({
     async (signal?: AbortSignal) => {
       const data = await (await request('', { signal })).json();
       if (!Array.isArray(data.routes)) throw new Error('Cannot read saved routes.');
-      if (!signal?.aborted) setRoutes(data.routes);
+      const savedRoutes: CadRouteGroup[] = data.routes;
+      if (!signal?.aborted) setRoutes(savedRoutes);
+      return savedRoutes;
     },
     [request],
   );
@@ -249,6 +279,8 @@ export function CadRoutesPanel({
     setSelectedId('');
     setFields(empty);
     setMembers([]);
+    setRevisionReview(null);
+    setDiscardRevisionOpen(false);
     setLoading(true);
     colors.current.clear();
     void reload(controller.signal)
@@ -264,7 +296,7 @@ export function CadRoutesPanel({
     setAutomaticPoints(null);
     setAttachmentMessage('');
     setAutomaticLoading(false);
-    if (!selected || selected.status !== 'draft') return;
+    if (!selected || selected.status !== 'draft' || selected.revisionOfRouteId) return;
     const controller = new AbortController();
     setAutomaticLoading(true);
     void request(`/${selected.id}/auto-attachments`, { signal: controller.signal })
@@ -315,6 +347,7 @@ export function CadRoutesPanel({
     setFields({ name: route.name, color: route.color, purpose: route.purpose });
     setMembers(route.instanceIds);
     setMessage('');
+    setRevisionReview(null);
     onSelectionChange?.(route);
   };
   const toggleRoute = (route: CadRouteGroup) => {
@@ -330,6 +363,7 @@ export function CadRoutesPanel({
     setAddingExisting(false);
     setExistingId('');
     setMessage('');
+    setRevisionReview(null);
     onSelectionChange?.(null);
   };
   const save = async (event: FormEvent) => {
@@ -419,7 +453,7 @@ export function CadRoutesPanel({
     )
       return;
     const source = routes.find((route) => route.instanceIds.includes(existingId));
-    if (source?.status === 'published') return;
+    if (source?.status === 'published' || source?.revisionOfRouteId || (isRevision && source)) return;
     setBusy(true);
     try {
       await onSectionVisibility?.(existingId, true);
@@ -464,8 +498,8 @@ export function CadRoutesPanel({
       reportCommand(
         'Section added',
         source
-          ? `Section moved from ${source.name} to ${data.route.name}.`
-          : `Section added to ${data.route.name}.`,
+          ? `Section moved from ${routeLabel(source)} to ${routeLabel(data.route)}.`
+          : `Section added to ${routeLabel(data.route)}.`,
       );
     } catch (error) {
       reportCommand(
@@ -529,6 +563,76 @@ export function CadRoutesPanel({
       reportCommand(
         'Routing network command failed',
         error instanceof Error ? error.message : 'Network publication failed.',
+        'error',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const revisionAction = async (action: 'start' | 'review' | 'publish' | 'discard') => {
+    if (!selected || busy || externalBusy || (action !== 'discard' && unsavedChanges)) return;
+    if (action === 'start' && openRevision) {
+      edit(openRevision);
+      return;
+    }
+    if (action === 'publish' && !revisionReview) return;
+    const parentId = selected.revisionOfRouteId;
+    const path =
+      action === 'review' ? '/revision/preview' :
+      action === 'publish' ? '/revision/publish' : '/revision';
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await request(`/${selected.id}${path}`, {
+        method: action === 'discard' ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expectedRevision: selected.revision,
+          ...(action === 'publish' ? { reviewToken: revisionReview?.reviewToken } : {}),
+        }),
+      });
+      if (action === 'review') {
+        const result: RevisionReview = await response.json();
+        if (typeof result.reviewToken !== 'string' || !Array.isArray(result.cables))
+          throw new Error('Cannot read the cable impact review.');
+        setRevisionReview(result);
+        return;
+      }
+      const started: CadRouteGroup | undefined =
+        action === 'start' ? (await response.json()).route : undefined;
+      setRevisionReview(null);
+      setDiscardRevisionOpen(false);
+      try {
+        const savedRoutes = await reload();
+        const next = started ?? savedRoutes.find((route) => route.id === parentId);
+        if (next) edit(next);
+        await onGeometryChanged?.();
+        if (action === 'publish') await onTraysChanged?.();
+      } catch {
+        const saved =
+          action === 'start' ? 'Revision draft saved' :
+          action === 'discard' ? 'Revision draft discarded' : 'Route revision published';
+        reportCommand(
+          saved,
+          'The change was saved. Reopen the route panel to refresh the display.',
+          'warning',
+        );
+        return;
+      }
+      if (action === 'start') {
+        reportCommand(
+          'Revision draft opened',
+          'Edit the draft sections. The published route stays active during editing.',
+        );
+      } else if (action === 'publish') {
+        reportCommand('Route revision published', 'The new geometry is active in the routing network.');
+      } else {
+        reportCommand('Revision draft discarded', 'The published route is still active.');
+      }
+    } catch (error) {
+      reportCommand(
+        'Route revision command failed',
+        error instanceof Error ? error.message : 'Cannot update the route revision.',
         'error',
       );
     } finally {
@@ -679,7 +783,8 @@ export function CadRoutesPanel({
                 aria-pressed={selectedId === route.id}
                 onClick={() => toggleRoute(route)}
               >
-                {route.name} · {route.instanceIds.length} components · {route.status}
+                {routeLabel(route)} · {route.instanceIds.length} components ·{' '}
+                {route.revisionOfRouteId ? 'revision draft' : route.status}
               </Button>
               <span
                 aria-label={`Route colour ${route.color}`}
@@ -727,7 +832,7 @@ export function CadRoutesPanel({
         ) : null}
         {addingExisting ? (
           <section aria-label="Add existing section">
-            <Caption1 block>Add existing section to {selected?.name}</Caption1>
+            <Caption1 block>Add existing section to {selected && routeLabel(selected)}</Caption1>
             <div>
               <Caption1>
                 Toggle Show/Hide to identify a section in the 3D model. Sections assigned to another
@@ -752,7 +857,7 @@ export function CadRoutesPanel({
                         {instance.lengthMm != null ? ` · ${instance.lengthMm} mm` : ''} · X{' '}
                         {instance.xMm}, Y {instance.yMm}, Z {instance.zMm} mm
                         {source
-                          ? ` · ${source.name}${source.status === 'published' ? ' (withdraw from routing network before moving)' : ' → move to ' + selected?.name}`
+                          ? ` · ${routeLabel(source)}${source.status === 'published' ? ' (withdraw from routing network before moving)' : selected ? ' → move to ' + routeLabel(selected) : ''}`
                           : ' · Unassigned'}
                       </label>
                       {onSectionVisibility ? (
@@ -817,9 +922,9 @@ export function CadRoutesPanel({
             <Field label="Route name">
               <Input
                 aria-label="Route name"
-                value={fields.name}
+                value={isRevision && selected ? routeLabel(selected) : fields.name}
                 maxLength={200}
-                disabled={busy || selected?.status === 'published'}
+                disabled={busy || selected?.status === 'published' || isRevision}
                 onChange={(_, data) =>
                   setFields((old) => ({ ...old, name: data.value.toUpperCase() }))
                 }
@@ -845,7 +950,8 @@ export function CadRoutesPanel({
                   busy ||
                   projectPurposes.loading ||
                   Boolean(projectPurposes.error) ||
-                  selected?.status === 'published'
+                  selected?.status === 'published' ||
+                  isRevision
                 }
                 onChange={(event) => setFields((old) => ({ ...old, purpose: event.target.value }))}
               >
@@ -867,7 +973,7 @@ export function CadRoutesPanel({
                 aria-label="Route colour"
                 type="color"
                 value={fields.color}
-                disabled={busy}
+                disabled={busy || Boolean(openRevision)}
                 onInput={(event) => {
                   const value = event.currentTarget.value.toUpperCase();
                   setFields((old) => ({ ...old, color: value }));
@@ -881,7 +987,7 @@ export function CadRoutesPanel({
                 value={fields.color}
                 maxLength={7}
                 placeholder="#3B82F6"
-                disabled={busy}
+                disabled={busy || Boolean(openRevision)}
                 onChange={(_, data) =>
                   setFields((old) => ({ ...old, color: data.value.toUpperCase() }))
                 }
@@ -912,7 +1018,7 @@ export function CadRoutesPanel({
                       />
                       Component {index + 1}: {instance.partNumber} · X {Math.round(instance.xMm)}, Y{' '}
                       {Math.round(instance.yMm)}, Z {Math.round(instance.zMm)} mm
-                      {other ? ` (${other.name})` : ''}
+                      {other ? ` (${routeLabel(other)})` : ''}
                     </label>
                   );
                 })}
@@ -923,6 +1029,7 @@ export function CadRoutesPanel({
               disabled={
                 busy ||
                 loading ||
+                Boolean(openRevision) ||
                 (selected?.status !== 'published' &&
                   (projectPurposes.loading ||
                     Boolean(projectPurposes.error) ||
@@ -952,7 +1059,7 @@ export function CadRoutesPanel({
             ) : null}
           </form>
         ) : null}
-        {selected ? (
+        {selected && !isRevision ? (
           <Button
             disabled={busy || unsavedChanges}
             onClick={() => {
@@ -962,20 +1069,20 @@ export function CadRoutesPanel({
             Add to trays list
           </Button>
         ) : null}
-        {selected ? (
+        {selected && !isRevision ? (
           <Caption1>
             Routes can be separate or connect to nearby trays using the project connection gap.
             Sections within one route can also be separate. Empty gaps are not included in the saved
             tray length. Cable routing checks the current purposes and registered barriers.
           </Caption1>
         ) : null}
-        {selected?.status === 'draft' ? (
+        {selected?.status === 'draft' && !isRevision ? (
           <Caption1>
             Add to trays list saves this route in the project Trays list. Use Add to routing network
             to make the saved route available for cable calculations.
           </Caption1>
         ) : null}
-        {selected?.status === 'draft' ? (
+        {selected?.status === 'draft' && !isRevision ? (
           <fieldset disabled={busy}>
             <legend>Optional alignment with the existing routing network</legend>
             <Caption1>
@@ -1046,7 +1153,15 @@ export function CadRoutesPanel({
           </fieldset>
         ) : null}
         {unsavedChanges ? <Caption1>Save route changes before continuing.</Caption1> : null}
-        {selected ? (
+        {selected?.status === 'published' ? (
+          <Button
+            disabled={busy || externalBusy || unsavedChanges}
+            onClick={() => void revisionAction('start')}
+          >
+            {openRevision ? 'Open revision draft' : 'Start revision'}
+          </Button>
+        ) : null}
+        {selected && !isRevision && !openRevision ? (
           <Button
             disabled={busy || (selected.status === 'draft' && unsavedChanges)}
             onClick={() => {
@@ -1058,11 +1173,74 @@ export function CadRoutesPanel({
               : 'Add to routing network'}
           </Button>
         ) : null}
-        {selected?.status === 'draft' ? (
+        {selected?.status === 'draft' && !isRevision ? (
           <Button disabled={busy} onClick={() => setRemoveCandidate(selected)}>
             Remove route group
           </Button>
         ) : null}
+        {isRevision ? (
+          <>
+            <Caption1 block>The published route stays active while you edit this draft.</Caption1>
+            <Button
+              appearance="primary"
+              disabled={busy || externalBusy || unsavedChanges}
+              onClick={() => void revisionAction('review')}
+            >
+              Review revision
+            </Button>
+            <Button disabled={busy || externalBusy} onClick={() => setDiscardRevisionOpen(true)}>
+              Discard revision
+            </Button>
+          </>
+        ) : null}
+        {isRevision && revisionReview ? (
+          <section aria-label="Review route revision" ref={revisionReviewSection} tabIndex={-1}>
+            <Title3>Review route revision</Title3>
+            {revisionReview.cables.length ? (
+              <>
+                <p>
+                  {revisionReview.cables.filter((cable) => cable.needsRecalculation).length} of{' '}
+                  {revisionReview.cables.length} affected cables need recalculation.
+                </p>
+                <ul aria-label="Affected cables" style={{ maxHeight: '50vh', overflowY: 'auto' }}>
+                  {revisionReview.cables.map((cable) => (
+                    <li key={cable.id}>
+                      <strong>{cable.tag}</strong> ·{' '}
+                      {cable.needsRecalculation ? 'Needs recalculation' : 'Can keep its saved route'}
+                      {cable.reason ? ` · ${cable.reason}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : <p>No saved cables use this route.</p>}
+            <Button disabled={busy} onClick={() => setRevisionReview(null)}>
+              Back to editing
+            </Button>
+            <Button
+              appearance="primary"
+              disabled={busy || externalBusy || unsavedChanges}
+              onClick={() => void revisionAction('publish')}
+            >
+              Publish revision
+            </Button>
+          </section>
+        ) : null}
+        <Dialog open={discardRevisionOpen} onOpenChange={(_, data) => {
+          if (!data.open && !busy) setDiscardRevisionOpen(false);
+        }}>
+          <DialogSurface>
+            <DialogBody>
+              <DialogTitle>Discard revision draft?</DialogTitle>
+              <DialogContent>Draft changes will be removed. The published route stays active.</DialogContent>
+              <DialogActions>
+                <Button disabled={busy} onClick={() => setDiscardRevisionOpen(false)}>Cancel</Button>
+                <Button appearance="primary" disabled={busy || externalBusy} onClick={() => void revisionAction('discard')}>
+                  Discard draft
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
         <Dialog
           open={Boolean(removeCandidate)}
           onOpenChange={(_, data) => {

@@ -66,6 +66,48 @@ export async function initializeCadRouteGroupsSchema(pool: Pool): Promise<void> 
         ON DELETE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
       CREATE INDEX IF NOT EXISTS cad_route_groups_design ON cad_route_groups(project_id,design_id,created_at,id);
 
+      ALTER TABLE cad_route_groups ADD COLUMN IF NOT EXISTS revision_of_route_id UUID;
+      ALTER TABLE cad_route_groups ADD COLUMN IF NOT EXISTS revision_base_number INTEGER;
+      ALTER TABLE cad_route_groups DROP CONSTRAINT IF EXISTS cad_route_groups_revision_parent_fk;
+      ALTER TABLE cad_route_groups ADD CONSTRAINT cad_route_groups_revision_parent_fk
+        FOREIGN KEY (project_id,design_id,revision_of_route_id)
+        REFERENCES cad_route_groups(project_id,design_id,id) DEFERRABLE INITIALLY DEFERRED;
+      ALTER TABLE cad_route_groups DROP CONSTRAINT IF EXISTS cad_route_groups_revision_draft_check;
+      ALTER TABLE cad_route_groups ADD CONSTRAINT cad_route_groups_revision_draft_check CHECK (
+        (revision_of_route_id IS NULL AND revision_base_number IS NULL) OR
+        (revision_of_route_id IS NOT NULL AND revision_of_route_id<>id AND revision_base_number IS NOT NULL
+          AND revision_base_number>0 AND status='draft' AND publication IS NULL)
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS cad_route_groups_one_revision_draft
+        ON cad_route_groups(revision_of_route_id) WHERE revision_of_route_id IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS cad_route_revision_instances (
+        project_id UUID NOT NULL,
+        design_id UUID NOT NULL,
+        route_group_id UUID NOT NULL,
+        instance_id UUID NOT NULL PRIMARY KEY,
+        original_instance_id UUID NOT NULL,
+        UNIQUE (route_group_id,original_instance_id),
+        FOREIGN KEY (project_id,design_id,route_group_id)
+          REFERENCES cad_route_groups(project_id,design_id,id) ON DELETE CASCADE,
+        FOREIGN KEY (project_id,design_id,instance_id)
+          REFERENCES cad_design_instances(project_id,design_id,id) ON DELETE CASCADE
+      );
+
+      CREATE OR REPLACE FUNCTION cad_protect_revision_clone_membership() RETURNS TRIGGER
+      LANGUAGE plpgsql AS $guard$ BEGIN
+        IF EXISTS (SELECT 1 FROM cad_route_revision_instances r
+          WHERE r.project_id=NEW.project_id AND r.design_id=NEW.design_id
+            AND r.instance_id=NEW.instance_id AND r.route_group_id<>NEW.route_group_id) THEN
+        RAISE EXCEPTION 'A cloned section belongs to its route revision draft'
+          USING ERRCODE='23514', CONSTRAINT='cad_revision_clone_membership';
+        END IF;
+        RETURN NEW;
+      END; $guard$;
+      DROP TRIGGER IF EXISTS cad_protect_revision_clone_membership ON cad_route_group_members;
+      CREATE TRIGGER cad_protect_revision_clone_membership BEFORE INSERT OR UPDATE ON cad_route_group_members
+        FOR EACH ROW EXECUTE FUNCTION cad_protect_revision_clone_membership();
+
       -- An instance published into routing is immutable until explicit withdrawal.
       CREATE OR REPLACE FUNCTION cad_protect_published_route_instance() RETURNS TRIGGER
       LANGUAGE plpgsql AS $guard$ BEGIN

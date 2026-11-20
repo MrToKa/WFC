@@ -63,6 +63,84 @@ const configurePublished = (instanceIds = [instanceId],identity = {name:route.na
     return fallback(sql,values);
   });
 };
+describe('published route revision drafts', () => {
+  const revisionId = '00000000-0000-4000-8000-000000000006';
+  const cloneId = '00000000-0000-4000-8000-000000000007';
+
+  it('clones a published route under the design lock and resumes it on retry', async () => {
+    let draft = { ...route,id:revisionId,revisionOfRouteId:groupId,revisionOfRouteName:route.name,revisionInstanceIds:[cloneId],instanceIds:[cloneId] };
+    let created = false;
+    const fallback = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      if (sql.startsWith('SELECT revision,status')) return { rows:[{revision:2,status:'published'}] };
+      if (sql.startsWith('SELECT id FROM cad_route_groups')) return { rows:created ? [{id:draft.id}] : [] };
+      if (sql.startsWith('INSERT INTO cad_route_groups')) {
+        draft = {...draft,id:values![3] as string,name:values![4] as string,tag:values![4] as string};
+        created = true;
+      }
+      if (sql.startsWith('SELECT g.id')) return { rows: [draft] };
+      return fallback(sql,values);
+    });
+    const base = await start();
+    const path = `/${groupId}/revision`;
+    const response = await mutate(base,'POST',{expectedRevision:2},path);
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({route:draft});
+    const retry = await mutate(base,'POST',{expectedRevision:2},path);
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toEqual({route:draft});
+    const queries = mocks.query.mock.calls.map(([sql]) => sql as string);
+    expect(queries.filter(sql => sql.startsWith('INSERT INTO cad_route_groups'))).toHaveLength(1);
+    expect(queries.some(sql => sql.startsWith('INSERT INTO cad_design_connections'))).toBe(true);
+    expect(queries.some(sql => sql.startsWith('INSERT INTO cad_route_transition_links'))).toBe(true);
+    expect(queries.some(sql => sql.startsWith('UPDATE cad_route_groups'))).toBe(false);
+    expect(queries.filter(sql => sql === 'COMMIT')).toHaveLength(2);
+  });
+
+  it('leaves a published route with external physical mates untouched', async () => {
+    const fallback = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      if (sql.startsWith('SELECT revision,status')) return { rows:[{revision:2,status:'published'}] };
+      if (sql.startsWith('WITH members AS')) return { rows:[{exists:1}] };
+      return fallback(sql,values);
+    });
+    const base = await start();
+    const response = await mutate(base,'POST',{expectedRevision:2},`/${groupId}/revision`);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({code:'CAD_ROUTE_REVISION_EXTERNAL_MATES'});
+    expect(mocks.query.mock.calls.some(([sql]) => sql.startsWith('INSERT'))).toBe(false);
+    expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+  });
+
+  it('leaves a published route with explicit network attachments untouched', async () => {
+    const fallback = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      if (sql.startsWith('SELECT revision,status')) return { rows:[{revision:2,status:'published',publication:{attachments:[{}]}}] };
+      return fallback(sql,values);
+    });
+    const base = await start();
+    const response = await mutate(base,'POST',{expectedRevision:2},`/${groupId}/revision`);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({code:'CAD_ROUTE_REVISION_ATTACHMENTS'});
+    expect(mocks.query.mock.calls.some(([sql]) => sql.startsWith('INSERT'))).toBe(false);
+  });
+
+  it('discards only the revision group and the instances it cloned', async () => {
+    const fallback = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      if (sql.startsWith('SELECT revision FROM cad_route_groups')) return { rows:[{revision:3}] };
+      if (sql.startsWith('SELECT instance_id FROM cad_route_revision_instances')) return { rows:[{instance_id:cloneId}] };
+      return fallback(sql,values);
+    });
+    const base = await start();
+    const stale = await mutate(base,'DELETE',{expectedRevision:2},`/${revisionId}/revision`);
+    expect(stale.status).toBe(409);
+    const response = await mutate(base,'DELETE',{expectedRevision:3},`/${revisionId}/revision`);
+    expect(response.status).toBe(204);
+    const writes = mocks.query.mock.calls.filter(([sql]) => sql.startsWith('DELETE'));
+    expect(writes.map(([, values]) => values)).toEqual([[projectId,designId,revisionId],[projectId,designId,[cloneId]]]);
+  });
+});
 describe('atomic section assignment', () => {
   const sourceId = '00000000-0000-4000-8000-000000000010';
   const targetMemberId = '00000000-0000-4000-8000-000000000011';

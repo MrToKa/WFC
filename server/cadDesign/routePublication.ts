@@ -41,7 +41,8 @@ export type PublicationInstance = {id:string;catalog_item_id:string;material_ass
 export type PublicationConnection = {source_instance_id:string;target_instance_id:string;source_name:string;target_name:string};
 export type PublicationTransition = PublicationConnection & {id?:string;kind:'routing-transition'};
 export const MAX_CAD_TRANSITION_GAP_MM=300;
-type Group = {id:string;name:string;tag:string;purpose:string;status:string;revision:number;project_tray_id:string|null;publication:unknown};
+type Group = {id:string;name:string;tag:string;purpose:string;color?:string;status:string;revision:number;project_tray_id:string|null;publication:unknown;
+  revision_of_route_id?:string|null;revision_base_number?:number|null};
 export class PublicationError extends Error {
   constructor(readonly code:string, message:string, readonly status=409, readonly diagnostics?:unknown) {super(message);}
 }
@@ -289,6 +290,7 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     const {group,chain,instances,transitions}=await groupInputs(client,projectId,designId,routeId);
     if(group.revision!==parsed.data.expectedRevision)return refuse('STALE_CAD_ROUTE','The route changed. Refresh and retry.');
     if(group.status!=='draft')return refuse('CAD_ROUTE_PUBLISHED','Withdraw the route before publishing another revision.');
+    if(group.revision_of_route_id)return refuse('CAD_ROUTE_REVISION_REVIEW_REQUIRED','Review this revision and publish it through the route revision workflow.');
     const material=resolveCadRouteMaterial(instances);
     const {compatibleCadTrayExport}=await import('./routeTrayExports.js');
     const trayExport=await compatibleCadTrayExport(client,projectId,designId,group,instances,chain,transitions);
@@ -373,6 +375,9 @@ cadRoutePublicationRouter.post(`${prefix}/withdraw`,requireAdmin,safe(async(req,
     if ((await client.query(`SELECT c.id FROM cables c WHERE c.project_id=$1 AND EXISTS(
       SELECT 1 FROM regexp_split_to_table(upper(COALESCE(c.routing,'')),'/') AS part(value) WHERE btrim(part.value)=$2) LIMIT 1`,[projectId,group.tag])).rows.length)
       return refuse('CAD_ROUTE_IN_USE','Cables currently use this route. Reassign or recalculate their routing before withdrawing it.');
+    if ((await client.query(`SELECT id FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND revision_of_route_id=$3`,
+      [projectId,designId,routeId])).rows.length)
+      return refuse('CAD_ROUTE_REVISION_IN_PROGRESS','Publish or discard the open revision before withdrawing this route.');
     const trayExport=(await client.query<{tray_id:string}>('SELECT tray_id FROM cad_route_tray_exports WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 FOR SHARE',[projectId,designId,routeId])).rows[0];
     if(trayExport&&trayExport.tray_id!==group.project_tray_id)return refuse('CAD_ROUTE_TRAY_EXPORT_INTEGRITY','The saved Trays link differs from this publication. Refresh before withdrawing.');
     await client.query(`UPDATE cad_route_groups SET status='draft',project_tray_id=NULL,publication=publication || jsonb_build_object('withdrawnAt',now()),revision=revision+1,updated_at=now()

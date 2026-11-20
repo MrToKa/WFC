@@ -21,6 +21,7 @@ import { cadRouteAlignmentRouter } from './routeAlignment.js';
 import { cadRouteAutoConnectionsRouter } from './routeAutoConnections.js';
 import { cadRouteTrayExportsRouter } from './routeTrayExports.js';
 import { cadNetworkPreparationRouter } from './networkPreparation.js';
+import { cadRouteRevisionPublicationRouter } from './routeRevisionPublication.js';
 
 export const cadDesignRouter = Router({ mergeParams: true });
 cadDesignRouter.use(cadRouteGroupsRouter);
@@ -30,6 +31,7 @@ cadDesignRouter.use(cadRouteAlignmentRouter);
 cadDesignRouter.use(cadRouteAutoConnectionsRouter);
 cadDesignRouter.use(cadRouteTrayExportsRouter);
 cadDesignRouter.use(cadNetworkPreparationRouter);
+cadDesignRouter.use(cadRouteRevisionPublicationRouter);
 
 const uuid = z.string().uuid();
 const catalogueInput = z.object({ assetId: uuid }).strict();
@@ -239,8 +241,10 @@ cadDesignRouter.get('/designs/:designId/instances', safe(async (req: CadRequest,
     id:string;originalFilename:string;sourceSha256:string;manufacturer:string;partNumber:string;lengthMm:number|null;
     materialAssetId:string|null;cadRevision:number|null;componentKind:string|null;
     _widthMm:number|null;_heightMm:number|null;_routeId:string|null;_routeName:string|null;_routePurpose:string|null;
+    revisionDraftId:string|null;_createdAt:string;_position:string;
   }>(
-    `SELECT i.id, i.catalog_item_id AS "catalogItemId", i.revision,
+    `WITH placements AS (
+      SELECT i.id, i.catalog_item_id AS "catalogItemId", i.revision,
             i.x_mm AS "xMm", i.y_mm AS "yMm", i.z_mm AS "zMm",
             i.qx, i.qy, i.qz, i.qw, i.cut_length_mm AS "lengthMm",
             c.original_filename AS "originalFilename",c.source_sha256 AS "sourceSha256",
@@ -249,7 +253,13 @@ cadDesignRouter.get('/designs/:designId/instances', safe(async (req: CadRequest,
             c.material_component_cad_asset_id AS "materialAssetId",
             a.revision AS "cadRevision", a.component_id AS "componentId",p.component_kind AS "componentKind",
             COALESCE(p.width_mm,t.width_mm) AS "_widthMm",COALESCE(p.height_mm,t.height_mm) AS "_heightMm",
-            g.id AS "_routeId",g.name AS "_routeName",g.purpose AS "_routePurpose"
+            g.id AS "_routeId",COALESCE(parent.name,g.name) AS "_routeName",g.purpose AS "_routePurpose",
+            COALESCE(ri.route_group_id,CASE WHEN g.revision_of_route_id IS NOT NULL THEN g.id END) AS "revisionDraftId",
+            i.created_at AS "_createdAt",
+            ROW_NUMBER() OVER (
+              PARTITION BY COALESCE(ri.route_group_id,CASE WHEN g.revision_of_route_id IS NOT NULL THEN g.id END)
+              ORDER BY i.created_at,i.id
+            ) AS "_position"
        FROM cad_design_instances i
        JOIN cad_designs d ON d.project_id=i.project_id AND d.id=i.design_id
        JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
@@ -258,11 +268,14 @@ cadDesignRouter.get('/designs/:designId/instances', safe(async (req: CadRequest,
        LEFT JOIN material_trays t ON t.id=p.material_tray_id
        LEFT JOIN cad_route_group_members m ON m.project_id=i.project_id AND m.design_id=i.design_id AND m.instance_id=i.id
        LEFT JOIN cad_route_groups g ON g.project_id=m.project_id AND g.design_id=m.design_id AND g.id=m.route_group_id
-      WHERE i.project_id=$1 AND d.id=$2 ORDER BY i.created_at, i.id LIMIT 500`,
+       LEFT JOIN cad_route_groups parent ON parent.project_id=g.project_id AND parent.design_id=g.design_id AND parent.id=g.revision_of_route_id
+       LEFT JOIN cad_route_revision_instances ri ON ri.project_id=i.project_id AND ri.design_id=i.design_id AND ri.instance_id=i.id
+      WHERE i.project_id=$1 AND d.id=$2
+    ) SELECT * FROM placements WHERE "_position"<=500 ORDER BY "_createdAt",id`,
     [req.params.projectId, req.params.designId],
   );
   res.setHeader('Cache-Control', 'private, no-store');
-  res.json({ instances: result.rows.map(({_widthMm,_heightMm,_routeId,_routeName,_routePurpose,...row})=>({
+  res.json({ instances: result.rows.map(({_widthMm,_heightMm,_routeId,_routeName,_routePurpose,_createdAt:_created,_position:_rank,...row})=>({
     ...row,...cadSectionProperties({id:row.id,component_kind:row.componentKind,original_filename:row.originalFilename,source_sha256:row.sourceSha256,
       cut_length_mm:row.lengthMm,width_mm:_widthMm,height_mm:_heightMm,part_number:row.partNumber,manufacturer:row.manufacturer,
       material_asset_id:row.materialAssetId,cad_revision:row.cadRevision},
@@ -548,12 +561,27 @@ cadDesignRouter.get('/catalog/:catalogItemId/ports', safe(async (req: CadRequest
 cadDesignRouter.get('/designs/:designId/connections', safe(async (req: CadRequest, res: Response) => {
   if (!uuid.safeParse(req.params.designId).success) { failure(res, 400, 'INVALID_DESIGN_ID'); return; }
   const rows = await pool.query(
-    `SELECT c.id, c.source_instance_id AS "sourceInstanceId",
+    `WITH draft_members AS (
+      SELECT instance_id,route_group_id FROM cad_route_revision_instances WHERE project_id=$1 AND design_id=$2
+      UNION
+      SELECT m.instance_id,m.route_group_id FROM cad_route_group_members m
+      JOIN cad_route_groups g ON g.project_id=m.project_id AND g.design_id=m.design_id AND g.id=m.route_group_id
+      WHERE m.project_id=$1 AND m.design_id=$2 AND g.revision_of_route_id IS NOT NULL
+    ), links AS (
+      SELECT c.id, c.source_instance_id AS "sourceInstanceId",
             c.source_port_id AS "sourcePortId",
             c.target_instance_id AS "targetInstanceId",
-            c.target_port_id AS "targetPortId", c.created_at AS "createdAt"
+            c.target_port_id AS "targetPortId", c.created_at AS "createdAt",
+            ROW_NUMBER() OVER (
+              PARTITION BY COALESCE(source.route_group_id,target.route_group_id)
+              ORDER BY c.created_at,c.id
+            ) AS position
        FROM cad_design_connections c
-      WHERE c.project_id=$1 AND c.design_id=$2 ORDER BY c.created_at, c.id LIMIT 500`,
+       LEFT JOIN draft_members source ON source.instance_id=c.source_instance_id
+       LEFT JOIN draft_members target ON target.instance_id=c.target_instance_id
+      WHERE c.project_id=$1 AND c.design_id=$2
+    ) SELECT id,"sourceInstanceId","sourcePortId","targetInstanceId","targetPortId","createdAt"
+      FROM links WHERE position<=500 ORDER BY "createdAt",id`,
     [req.params.projectId, req.params.designId],
   );
   res.setHeader('Cache-Control', 'private, no-store');

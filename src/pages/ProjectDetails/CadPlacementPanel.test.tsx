@@ -110,12 +110,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mountManualPlacement(withRoute = false, failRefresh = false) {
+function mountManualPlacement(withRoute = false, failRefresh = false, withRevision = false) {
   const routeId = '00000000-0000-4000-8000-000000000080';
+  const revisionId = '00000000-0000-4000-8000-000000000081';
+  const revisionInstanceId = '00000000-0000-4000-8000-000000000082';
   const row = { id: instanceId, catalogItemId: catalogId, partNumber: 'CUSTOM-SECTION', manufacturer: 'Niedax',
     revision: 1, xMm: 100, yMm: 200, zMm: 300, qx: 0, qy: 0, qz: 0, qw: 1 };
   const route = { id: routeId, name: 'ANCHOR-ROUTE', tag: 'ANCHOR-ROUTE', color: '#112233',
-    purpose: 'Low voltage cable tray', revision: 1, status: 'draft', instanceIds: [instanceId], projectTrayId: null };
+    purpose: 'Low voltage cable tray', revision: 1, status: withRevision ? 'published' : 'draft', instanceIds: [instanceId], projectTrayId: null };
+  const revision = { ...route, id: revisionId, name: 'DRAFT-REVISION', tag: 'DRAFT-REVISION',
+    status: 'draft', instanceIds: [revisionInstanceId], revisionOfRouteId: route.id, revisionOfRouteName: route.name };
   let saved = false;
   const json = (payload: unknown) => ({ ok: true, json: async () => structuredClone(payload) });
   const request = vi.fn(async (url: string, options?: RequestInit) => {
@@ -131,9 +135,12 @@ function mountManualPlacement(withRoute = false, failRefresh = false) {
       if (saved && failRefresh) throw new Error('Refresh connection unavailable.');
       return json({ designs: [{ id: designId, modelVersionId, activeModel: true, status: 'proposed' }] });
     }
-    if (url.endsWith('/instances')) return json({ instances: [{ ...row }] });
+    if (url.endsWith('/instances')) return json({ instances: [
+      { ...row },
+      ...(withRevision ? [{ ...row, id: revisionInstanceId, revisionDraftId: revisionId }] : []),
+    ] });
     if (url.endsWith('/connections')) return json({ connections: [] });
-    if (url.endsWith('/routes')) return json({ routes: withRoute ? [{ ...route }] : [] });
+    if (url.endsWith('/routes')) return json({ routes: withRoute ? [{ ...route }, ...(withRevision ? [revision] : [])] : [] });
     if (url.endsWith('/placement-targets')) return json({ targets: [] });
     if (url.endsWith('/auto-attachments')) return json({ status: 'network-required', attachments: [] });
     return json({ schemaVersion: 1, units: 'mm' });
@@ -141,6 +148,7 @@ function mountManualPlacement(withRoute = false, failRefresh = false) {
   vi.stubGlobal('fetch', request);
   const onShow = vi.fn<ComponentProps<typeof CadPlacementPanel>['onShow']>().mockResolvedValue(undefined);
   const onMove = vi.fn<ComponentProps<typeof CadPlacementPanel>['onMove']>().mockResolvedValue(undefined);
+  const onRemove = vi.fn<NonNullable<ComponentProps<typeof CadPlacementPanel>['onRemove']>>().mockResolvedValue(undefined);
   const onPickPlacement = vi.fn<NonNullable<ComponentProps<typeof CadPlacementPanel>['onPickPlacement']>>()
     .mockResolvedValue({ point: [0.11, 0.22, 0.33], cadInstanceId: instanceId, derivation: 'picked-surface-point' });
   render(<FluentProvider theme={webLightTheme}><CadPlacementPanel
@@ -148,9 +156,10 @@ function mountManualPlacement(withRoute = false, failRefresh = false) {
     catalogue={[{ id: catalogId, partNumber: 'CUSTOM-SECTION', manufacturer: 'Niedax', originalFilename: 'custom.step',
       sourceSha256: 'a'.repeat(64), conversionStatus: 'ready', materialAssetId: catalogId, cadRevision: 1 }]}
     onPick={vi.fn()} onPickPlacement={onPickPlacement} onShow={onShow} onMove={onMove}
+    onRemove={withRevision ? onRemove : undefined}
     onColor={withRoute ? vi.fn().mockResolvedValue(undefined) : undefined}
   /></FluentProvider>);
-  return { request, onShow, onMove, onPickPlacement, routeId };
+  return { request, onShow, onMove, onRemove, onPickPlacement, routeId, revisionInstanceId };
 }
 
 async function pickManualPointAndMove(x = '1000', y = '2000', z = '3000') {
@@ -164,6 +173,24 @@ async function pickManualPointAndMove(x = '1000', y = '2000', z = '3000') {
 }
 
 describe('manual point placement integration', { timeout: 20000 }, () => {
+  it('only puts the draft copy on screen while the published route revision is selected', async () => {
+    const { onShow, onRemove, revisionInstanceId } = mountManualPlacement(true, false, true);
+    const routes = await screen.findByRole('region', { name: 'Saved CAD routes' });
+    const revision = await within(routes).findByRole(
+      'button', { name: /ANCHOR-ROUTE.*revision draft/ }, { timeout: 5000 },
+    );
+    await waitFor(() => expect(onShow).toHaveBeenCalledOnce());
+    expect(onShow.mock.calls[0][0]).toBe(instanceId);
+    fireEvent.click(revision);
+    await waitFor(() => expect(onShow).toHaveBeenCalledTimes(2));
+    expect(onRemove).toHaveBeenNthCalledWith(1, instanceId);
+    expect(onShow.mock.calls[1][0]).toBe(revisionInstanceId);
+    fireEvent.click(revision);
+    await waitFor(() => expect(onShow).toHaveBeenCalledTimes(3));
+    expect(onRemove).toHaveBeenNthCalledWith(2, revisionInstanceId);
+    expect(onShow.mock.calls[2][0]).toBe(instanceId);
+  });
+
   it('persists the point translation, reloads the moved mesh and clears the saved section selection', async () => {
     const { request, onShow, onMove, onPickPlacement } = mountManualPlacement();
     await waitFor(() => expect(onShow).toHaveBeenCalledOnce());

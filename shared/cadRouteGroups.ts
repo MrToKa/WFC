@@ -32,5 +32,8 @@ export type CadRouteGroup = {
   id: string; name: string; tag: string; color: string; purpose: string; revision: number;
   status: 'draft' | 'published'; instanceIds: string[]; projectTrayId: string | null;
   exportedTrayId?: string | null;
+  revisionOfRouteId?: string | null;
+  revisionOfRouteName?: string | null;
+  revisionInstanceIds?: string[];
   networkMode?: 'attached' | 'independent' | 'automatic';
 };

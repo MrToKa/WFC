@@ -62,6 +62,7 @@ type Connection = {
 type Instance = {
   metadata?: CadSectionMetadata;
   route?: CadSectionRoute;
+  revisionDraftId?: string | null;
   id: string;
   catalogItemId: string;
   partNumber: string;
@@ -141,6 +142,7 @@ export function CadPlacementPanel({
 }: Props) {
   const rendered = useRef(new Set<string>());
   const renderedLengths = useRef(new Map<string, number | null>());
+  const rendering = useRef(Promise.resolve());
   const [displayedIds, setDisplayedIds] = useState<string[]>([]);
   const [displaying, setDisplaying] = useState(false);
   const [designId, setDesignId] = useState<string | null>(null);
@@ -177,9 +179,12 @@ export function CadPlacementPanel({
   const [newSection, setNewSection] = useState(false);
   const [updatedRoute, setUpdatedRoute] = useState<CadRouteGroup>();
   const [hiddenSectionIds, setHiddenSectionIds] = useState<string[]>([]);
+  const hiddenSections = useRef(new Set<string>());
   const changeSectionVisibility = onVisibility
     ? async (id: string, visible: boolean) => {
         await onVisibility(id, visible);
+        if (visible) hiddenSections.current.delete(id);
+        else hiddenSections.current.add(id);
         setHiddenSectionIds((old) =>
           visible ? old.filter((value) => value !== id) : [...new Set([...old, id])],
         );
@@ -187,14 +192,23 @@ export function CadPlacementPanel({
     : undefined;
   const managedCreation = newTrayMode !== undefined;
   const toolsOpen = !managedCreation || newTrayMode || newSection || Boolean(editingId);
+  const revisionId = selectedRoute?.revisionOfRouteId ? selectedRoute.id : undefined;
+  const publishedMembers = routeGroups.find((route) => route.id === selectedRoute?.revisionOfRouteId)?.instanceIds;
+  const sceneInstances = useMemo(
+    () => instances.filter((instance) =>
+      (instance.revisionDraftId == null || instance.revisionDraftId === revisionId) &&
+      !publishedMembers?.includes(instance.id)),
+    [instances, publishedMembers, revisionId],
+  );
   const visibleIds = useMemo(() => {
-    if (!managedCreation) return instances.map((instance) => instance.id);
+    if (revisionId && selectedRoute) return selectedRoute.instanceIds;
+    if (!managedCreation) return sceneInstances.map((instance) => instance.id);
     if (selectedRoute) return selectedRoute.instanceIds;
     const assigned = new Set(routeGroups.flatMap((route) => route.instanceIds));
     return instances
-      .filter((instance) => !instance.route?.id && !assigned.has(instance.id))
+      .filter((instance) => !instance.revisionDraftId && !instance.route?.id && !assigned.has(instance.id))
       .map((instance) => instance.id);
-  }, [managedCreation, instances, selectedRoute, routeGroups]);
+  }, [managedCreation, instances, selectedRoute, routeGroups, sceneInstances, revisionId]);
   const visibleInstances = instances.filter((instance) => visibleIds.includes(instance.id));
   useEffect(() => {
     onBusyChange?.(busy || routeBusy);
@@ -378,7 +392,7 @@ export function CadPlacementPanel({
   // Recreate saved CAD instances after a Viewer reload. This is a display
   // side effect only; source STEP objects and project model remain immutable.
   useEffect(() => {
-    if (!instances.length || !designId) {
+    if (!designId) {
       setDisplayedIds([]);
       setDisplaying(false);
       return;
@@ -388,7 +402,23 @@ export function CadPlacementPanel({
     setDisplayedIds([]);
     setDisplaying(true);
     const display = async () => {
-      for (const instance of instances) {
+      if (controller.signal.aborted) return;
+      const visible = new Set(sceneInstances.map((instance) => instance.id));
+      if (onRemove) {
+        for (const id of rendered.current) {
+          if (controller.signal.aborted) return;
+          if (visible.has(id)) continue;
+          try {
+            await onRemove(id);
+            rendered.current.delete(id);
+            renderedLengths.current.delete(id);
+          } catch (error) {
+            if (!controller.signal.aborted)
+              setNotice(error instanceof Error ? error.message : 'Could not clear the previous 3D placements.');
+          }
+        }
+      }
+      for (const instance of sceneInstances) {
         if (controller.signal.aborted) return;
         try {
           const transform = {
@@ -419,6 +449,7 @@ export function CadPlacementPanel({
             await onShow(instance.id, mesh, transform);
             rendered.current.add(instance.id);
             renderedLengths.current.set(instance.id, instance.lengthMm ?? null);
+            if (hiddenSections.current.has(instance.id)) await onVisibility?.(instance.id, false);
           }
           if (!controller.signal.aborted && onProperties && instance.metadata && instance.route)
             await onProperties(instance.id, instance.metadata, instance.route);
@@ -442,15 +473,16 @@ export function CadPlacementPanel({
         }
       }
     };
-    void display().finally(() => {
+    rendering.current = rendering.current.then(display).finally(() => {
       if (!controller.signal.aborted) setDisplaying(false);
     });
     return () => controller.abort();
-  }, [instances, designId, api, onShow, onMove, onProperties]);
+  }, [sceneInstances, designId, api, onShow, onMove, onProperties, onRemove, onVisibility]);
 
   useEffect(() => {
     rendered.current.clear();
     renderedLengths.current.clear();
+    hiddenSections.current.clear();
     setDisplayedIds([]);
   }, [projectId, modelVersionId, token]);
 
@@ -736,7 +768,7 @@ export function CadPlacementPanel({
           setUpdatedRoute(data.route);
         } catch (error) {
           setNotice(
-            `Section saved, but could not add it to ${selectedRoute.name}: ${error instanceof Error ? error.message : 'unknown error'}. Use Add existing section to retry.`,
+            `Section saved, but could not add it to ${selectedRoute.revisionOfRouteName ?? selectedRoute.name}: ${error instanceof Error ? error.message : 'unknown error'}. Use Add existing section to retry.`,
           );
         }
         setNewSection(false);
@@ -833,11 +865,11 @@ export function CadPlacementPanel({
       busy ||
       routeBusy ||
       externalBusy ||
-      (scope === 'selected' && (!selectedRoute || routeDirty))
+      (scope === 'selected' && (!selectedRoute || selectedRoute.revisionOfRouteId || routeDirty))
     )
       return;
     const route = scope === 'selected' ? selectedRoute : null;
-    const count = route ? route.instanceIds.length : instances.length;
+    const count = route ? route.instanceIds.length : instances.filter((instance) => !instance.revisionDraftId).length;
     if (extension === 'assembly.step' && count > MAX_STEP_ASSEMBLY_PARTS) {
       setNotice(
         `STEP export supports at most ${MAX_STEP_ASSEMBLY_PARTS} saved components. Select a smaller route; all components can still be exported as a materials list.`,
@@ -880,7 +912,7 @@ export function CadPlacementPanel({
       {loading ? <Spinner size="tiny" label="Reading proposal…" /> : null}
       {selectedRoute || newTrayMode ? (
         <div>
-          {selectedRoute ? <Caption1 block>Selected route: {selectedRoute.name}</Caption1> : null}
+          {selectedRoute ? <Caption1 block>Selected route: {selectedRoute.revisionOfRouteName ?? selectedRoute.name}{revisionId ? ' · revision draft' : ''}</Caption1> : null}
           <Button
             disabled={
               busy ||
@@ -1249,7 +1281,7 @@ export function CadPlacementPanel({
         <Caption1>
           {displaying
             ? 'Displaying saved components…'
-            : `${displayedIds.filter((id) => instances.some((instance) => instance.id === id)).length} of ${instances.length} saved components ready in 3D`}
+            : `${displayedIds.filter((id) => sceneInstances.some((instance) => instance.id === id)).length} of ${sceneInstances.length} saved components ready in 3D`}
         </Caption1>
       </div>
       <Button
@@ -1324,7 +1356,7 @@ export function CadPlacementPanel({
       {managedCreation ? (
         <Caption1>
           {selectedRoute
-            ? `Components in ${selectedRoute.name}: ${visibleInstances.length}`
+            ? `Components in ${selectedRoute.revisionOfRouteName ?? selectedRoute.name}: ${visibleInstances.length}`
             : newTrayMode
               ? `New tray — unassigned components: ${visibleInstances.length}`
               : `Unassigned components: ${visibleInstances.length}. Select a component to edit, or choose a complete route below.`}
@@ -1366,6 +1398,9 @@ export function CadPlacementPanel({
           hiddenSectionIds={hiddenSectionIds}
           memberScopeIds={managedCreation ? visibleIds : undefined}
           newDraftInstanceIds={newDraftInstanceIds}
+          connectionKey={revisionId ? connections
+            .filter((link) => visibleIds.includes(link.sourceInstanceId) || visibleIds.includes(link.targetInstanceId))
+            .map((link) => link.id).join(',') : undefined}
           onNewRoute={onNewTray}
           externalBusy={busy || externalBusy}
           creationActive={newTrayMode}
@@ -1417,7 +1452,7 @@ export function CadPlacementPanel({
       >
         <Caption1>Exports use saved placements and saved route membership.</Caption1>
         <Button
-          disabled={!designId || !selectedRoute || routeDirty}
+          disabled={!designId || !selectedRoute || Boolean(revisionId) || routeDirty}
           onClick={() => {
             void download('assembly.step', 'selected');
           }}
@@ -1425,7 +1460,7 @@ export function CadPlacementPanel({
           Export selected tray STEP
         </Button>
         <Button
-          disabled={!designId || !selectedRoute || routeDirty}
+          disabled={!designId || !selectedRoute || Boolean(revisionId) || routeDirty}
           onClick={() => {
             void download('materials.csv', 'selected');
           }}

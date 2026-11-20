@@ -18,7 +18,7 @@ const part=(n:number,sku:string,category=100,length:number|null=1500):CadExportP
   manufacturer:'Niedax',part_number:sku,family:'Ladder',original_filename:'NDX_KL_60-303_F_MED_214.step',source_sha256:STRAIGHT_SOURCE_SHA256,
   source_object_key:`immutable/${category}.step`,material_asset_id:id(category+100),cad_revision:3,component_kind:'straight',cut_length_mm:length,width_mm:300,height_mm:60,
   x_mm:n*100,y_mm:-n*20,z_mm:n*30,qx:0,qy:0,qz:0,qw:1});
-type State={exists:boolean;revision:number;routes:Array<{id:string;name:string;revision:number;purpose?:string|null;members:string[]}>;parts:CadExportPart[]};
+type State={exists:boolean;revision:number;routes:Array<{id:string;name:string;revision:number;purpose?:string|null;members:string[];revisionDraft?:boolean}>;parts:CadExportPart[];revisionClones?:string[]};
 let state:State,mutateDuringRead:(()=>void)|undefined;
 let server:Server,base:string;
 const clients:Array<{query:ReturnType<typeof vi.fn>;release:ReturnType<typeof vi.fn>}>=[];
@@ -41,12 +41,20 @@ beforeEach(()=>{
       if(sql.startsWith('BEGIN')){frozen=structuredClone(state);return {rows:[]};}
       if(sql.startsWith('SELECT model_version_id,revision FROM cad_designs'))return {rows:frozen.exists&&values[0]===projectId&&values[1]===designId?[{model_version_id:modelId,revision:frozen.revision}]:[]};
       if(sql.startsWith('SELECT id,name,revision,purpose FROM cad_route_groups')){
-        if(values.length===2)return {rows:frozen.routes.map(({id,name,revision,purpose})=>({id,name,revision,purpose:purpose??null}))};
-        const route=frozen.routes.find(row=>row.id===values[2]);return {rows:values[0]===projectId&&values[1]===designId&&route?[{id:route.id,name:route.name,revision:route.revision,purpose:route.purpose??null}]:[]};
+        const visible=frozen.routes.filter(row=>!sql.includes('revision_of_route_id IS NULL')||!row.revisionDraft);
+        if(values.length===2)return {rows:visible.map(({id,name,revision,purpose})=>({id,name,revision,purpose:purpose??null}))};
+        const route=visible.find(row=>row.id===values[2]);return {rows:values[0]===projectId&&values[1]===designId&&route?[{id:route.id,name:route.name,revision:route.revision,purpose:route.purpose??null}]:[]};
       }
-      if(sql.startsWith('SELECT route_group_id,instance_id'))return {rows:frozen.routes.filter(row=>values.length===2||row.id===values[2]).flatMap(row=>row.members.map(instance_id=>({route_group_id:row.id,instance_id})))};
+      if(sql.startsWith('SELECT route_group_id,instance_id'))return {rows:frozen.routes
+        .filter(row=>(values.length===2||row.id===values[2])&&(!sql.includes('draft.revision_of_route_id')||!row.revisionDraft))
+        .flatMap(row=>row.members.map(instance_id=>({route_group_id:row.id,instance_id})))};
       if(sql.startsWith('SELECT instance_id FROM cad_route_group_members'))return {rows:frozen.routes.find(row=>row.id===values[2])?.members.map(instance_id=>({instance_id}))??[]};
-      if(sql.startsWith('SELECT id FROM cad_design_instances'))return {rows:frozen.parts.map(row=>({id:row.id}))};
+      if(sql.startsWith('SELECT id FROM cad_design_instances')){
+        const excluded=new Set(sql.includes('cad_route_revision_instances')?frozen.revisionClones:[]);
+        if(sql.includes('draft.revision_of_route_id'))for(const route of frozen.routes.filter(row=>row.revisionDraft))
+          for(const member of route.members)excluded.add(member);
+        return {rows:frozen.parts.filter(row=>!excluded.has(row.id)).map(row=>({id:row.id}))};
+      }
       if(sql.startsWith('SELECT i.id,i.revision,i.catalog_item_id')){
         const selected=values[2] as string[];const rows=frozen.parts.filter(row=>selected.includes(row.id));mutateDuringRead?.();return {rows};
       }
@@ -73,6 +81,16 @@ describe('route-scoped and complete-proposal CAD deliverables',()=>{
     mocks.assembly.mockClear();const all=await get('step');expect(all.status).toBe(200);expect(mocks.assembly.mock.calls[0][0]).toMatchObject(state.parts);
     expect(all.headers.get('x-wfc-export-scope')).toBe('proposal');expect(all.headers.get('x-wfc-route-id')).toBeNull();
     expect(all.headers.get('content-disposition')).toContain('wfc-proposed-cable-trays.step');
+  });
+  it('excludes active revision members and unassigned revision copies from CAD deliveries',async()=>{
+    const revisionId=id(14);
+    state.routes.push({id:revisionId,name:'DRAFT-BC182',revision:1,members:[id(15)],revisionDraft:true});
+    state.parts.push(part(15,'REVISION-MEMBER'),part(16,'UNASSIGNED-REVISION-COPY'));
+    state.revisionClones=[id(16)];
+    const result=await get('csv');expect(result.status).toBe(200);
+    const csv=await result.text();expect(csv).toContain('SKU-A');expect(csv).not.toContain('REVISION-');
+    expect((await get('step',`?routeId=${revisionId}`)).status).toBe(404);
+    expect(mocks.assembly).not.toHaveBeenCalled();
   });
   it('produces exact scoped and all-proposal material quantities, separate cut lengths and pinned revision columns',async()=>{
     const selected=await get('csv',`?routeId=${routeA}`),csv=await selected.text();

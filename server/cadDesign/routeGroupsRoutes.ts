@@ -6,6 +6,7 @@ import { cadRouteGroupInputSchema, cadRouteGroupUpdateSchema, cadRouteGroupDelet
 import { pool } from '../db.js';
 import { requireProjectEdit } from '../middleware.js';
 import { PublicationError } from './routePublication.js';
+import { CadRouteRevisionError, discardCadRouteRevision, startCadRouteRevision } from './routeRevisionDraft.js';
 import { synchronizeCadTrayExportsAfterTransfer } from './routeTrayExports.js';
 
 export const cadRouteGroupsRouter = Router({ mergeParams: true });
@@ -25,13 +26,18 @@ const safe = (handler: (req: Request, res: Response) => Promise<void>) =>
   (req: Request, res: Response, next: NextFunction): void => {
     void handler(req,res).catch((error: unknown) => {
       if (error instanceof RouteGroupError) { res.status(error.status).json({ code: error.code }); return; }
-      if (error instanceof PublicationError) { res.status(error.status).json({ code: error.code, message: error.message }); return; }
+      if (error instanceof PublicationError || error instanceof CadRouteRevisionError) {
+        res.status(error.status).json({ code: error.code, message: error.message }); return;
+      }
       const code = (error as { code?: string })?.code;
       if (code === '23505') { res.status(409).json({ code: 'CAD_ROUTE_TAG_OR_MEMBER_CONFLICT' }); return; }
       if (code === '23503' && (error as { constraint?: string }).constraint?.startsWith('cad_route_tray_exports')) {
         res.status(409).json({ code: 'CAD_ROUTE_TRAY_EXPORT_EXISTS', message: 'Remove the linked entry from the Trays list before removing this route group.' }); return;
       }
       if (code === '23503') { res.status(409).json({ code: 'CAD_ROUTE_MEMBERSHIP_CONFLICT' }); return; }
+      if (code === '23514' && (error as { constraint?: string }).constraint === 'cad_revision_clone_membership') {
+        res.status(409).json({ code: 'CAD_ROUTE_REVISION_SECTION_TRANSFER', message: 'A cloned section belongs to its route revision draft.' }); return;
+      }
       if (code === '40P01' || code === '40001') { res.status(409).json({ code: 'CAD_DESIGN_CONFLICT' }); return; }
       next(error);
     });
@@ -40,6 +46,11 @@ const routeSelect = `SELECT g.id,g.name,g.tag,g.color,g.purpose,g.revision,g.sta
   g.project_tray_id AS "projectTrayId",
   (SELECT e.tray_id FROM cad_route_tray_exports e
     WHERE e.project_id=g.project_id AND e.design_id=g.design_id AND e.route_group_id=g.id) AS "exportedTrayId",
+  g.revision_of_route_id AS "revisionOfRouteId",
+  (SELECT parent.name FROM cad_route_groups parent WHERE parent.project_id=g.project_id AND parent.design_id=g.design_id
+    AND parent.id=g.revision_of_route_id) AS "revisionOfRouteName",
+  COALESCE((SELECT jsonb_agg(r.instance_id::text ORDER BY r.instance_id) FROM cad_route_revision_instances r
+    WHERE r.project_id=g.project_id AND r.design_id=g.design_id AND r.route_group_id=g.id),'[]'::jsonb) AS "revisionInstanceIds",
   CASE WHEN g.status='published' THEN 'automatic' ELSE NULL END AS "networkMode",
   COALESCE((SELECT jsonb_agg(m.instance_id::text ORDER BY m.instance_id) FROM cad_route_group_members m
     WHERE m.project_id=g.project_id AND m.design_id=g.design_id AND m.route_group_id=g.id),'[]'::jsonb) AS "instanceIds"
@@ -101,6 +112,27 @@ cadRouteGroupsRouter.get('/designs/:designId/routes', safe(async (req,res) => {
   res.setHeader('Cache-Control','private, no-store');
   res.json({ routes });
 }));
+cadRouteGroupsRouter.post('/designs/:designId/routes/:routeId/revision', requireProjectEdit, safe(async (req,res) => {
+  validateParams(req);
+  const parsed = cadRouteGroupDeleteSchema.safeParse(req.body);
+  if (!parsed.success) throw new RouteGroupError('INVALID_CAD_ROUTE_REVISION',400);
+  const { projectId,designId,routeId } = req.params;
+  const result = await withCadRouteDesignTransaction(projectId,designId,async client => {
+    const revision = await startCadRouteRevision(client,projectId,designId,routeId,parsed.data.expectedRevision,req.userId ?? null);
+    return { created:revision.created,route:await readRoute(client,projectId,designId,revision.id) };
+  });
+  res.setHeader('Cache-Control','private, no-store');
+  res.status(result.created ? 201 : 200).json({ route:result.route });
+}));
+cadRouteGroupsRouter.delete('/designs/:designId/routes/:routeId/revision', requireProjectEdit, safe(async (req,res) => {
+  validateParams(req);
+  const parsed = cadRouteGroupDeleteSchema.safeParse(req.body);
+  if (!parsed.success) throw new RouteGroupError('INVALID_CAD_ROUTE_REVISION',400);
+  const { projectId,designId,routeId } = req.params;
+  await withCadRouteDesignTransaction(projectId,designId,client =>
+    discardCadRouteRevision(client,projectId,designId,routeId,parsed.data.expectedRevision));
+  res.status(204).send();
+}));
 // Repair earlier saved draft projections before a new base network captures its
 // catalogue. Context reads and the later immutable network proof stay read-only.
 cadRouteGroupsRouter.post('/designs/:designId/synchronize-trays', requireProjectEdit, safe(async (req,res) => {
@@ -158,6 +190,8 @@ cadRouteGroupsRouter.post('/designs/:designId/routes/:routeId/sections', require
       const source = await readRoute(client,projectId,designId,sourceId);
       if (source.revision !== value.expectedSourceRevision) throw new RouteGroupError('STALE_CAD_SOURCE_ROUTE');
       if (source.status !== 'draft') throw new RouteGroupError('CAD_ROUTE_PUBLISHED');
+      if (source.revisionOfRouteId || target.revisionOfRouteId) throw new CadRouteRevisionError('CAD_ROUTE_REVISION_SECTION_TRANSFER',
+        'A route revision can only add unassigned components. Keep sections already assigned to other routes in their current groups.');
       // The design lock serializes membership writers. Remove the old ownership
       // before inserting the new one; the unique project/member key stays enforced.
       // Keep an empty source draft when its final section is moved.
@@ -187,7 +221,8 @@ cadRouteGroupsRouter.patch('/designs/:designId/routes/:routeId', requireProjectE
   if (!parsed.success) throw new RouteGroupError('INVALID_CAD_ROUTE',400);
   const value = parsed.data, projectId = req.params.projectId, designId = req.params.designId, id = req.params.routeId;
   const route = await withCadRouteDesignTransaction(projectId,designId,async client => {
-    const current = await client.query<{ revision: number; status: string }>('SELECT revision,status FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND id=$3 FOR UPDATE',[projectId,designId,id]);
+    const current = await client.query<{ revision: number; status: string; revision_of_route_id: string | null; name: string; tag: string; purpose: string }>(
+      'SELECT revision,status,revision_of_route_id,name,tag,purpose FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND id=$3 FOR UPDATE',[projectId,designId,id]);
     if (!current.rows[0]) throw new RouteGroupError('CAD_ROUTE_NOT_FOUND',404);
     if (current.rows[0].revision !== value.expectedRevision) throw new RouteGroupError('STALE_CAD_ROUTE');
     if (current.rows[0].status === 'published') {
@@ -205,6 +240,9 @@ cadRouteGroupsRouter.patch('/designs/:designId/routes/:routeId', requireProjectE
       return readRoute(client,projectId,designId,id);
     }
     if (current.rows[0].status !== 'draft') throw new RouteGroupError('CAD_ROUTE_PUBLISHED');
+    if (current.rows[0].revision_of_route_id && (current.rows[0].name !== value.name || current.rows[0].tag !== value.tag
+      || current.rows[0].purpose !== value.purpose)) throw new CadRouteRevisionError('CAD_ROUTE_REVISION_IDENTITY',
+      'A geometry revision keeps the name and purpose of its published route.');
     await validateMembers(client,projectId,designId,value.instanceIds,id);
     const updated = await client.query(`UPDATE cad_route_groups SET name=$5,tag=$6,color=$7,purpose=$8,revision=revision+1,updated_at=now()
       WHERE project_id=$1 AND design_id=$2 AND id=$3 AND revision=$4 AND status='draft' RETURNING id`,
@@ -224,9 +262,11 @@ cadRouteGroupsRouter.delete('/designs/:designId/routes/:routeId', requireProject
   if (!parsed.success) throw new RouteGroupError('INVALID_CAD_ROUTE_REVISION',400);
   const projectId = req.params.projectId, designId = req.params.designId, id = req.params.routeId;
   await withCadRouteDesignTransaction(projectId,designId,async client => {
-    const current = await client.query<{ revision: number; status: string; project_tray_id: string | null }>('SELECT revision,status,project_tray_id FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND id=$3 FOR UPDATE',[projectId,designId,id]);
+    const current = await client.query<{ revision: number; status: string; project_tray_id: string | null; revision_of_route_id: string | null }>(
+      'SELECT revision,status,project_tray_id,revision_of_route_id FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND id=$3 FOR UPDATE',[projectId,designId,id]);
     if (!current.rows[0]) throw new RouteGroupError('CAD_ROUTE_NOT_FOUND',404);
     if (current.rows[0].revision !== parsed.data.expectedRevision) throw new RouteGroupError('STALE_CAD_ROUTE');
+    if (current.rows[0].revision_of_route_id) throw new CadRouteRevisionError('CAD_ROUTE_REVISION_DISCARD_REQUIRED','Use Discard revision to remove the draft copies safely.');
     if (current.rows[0].status !== 'draft' || current.rows[0].project_tray_id) throw new RouteGroupError('CAD_ROUTE_PUBLISHED');
     const deleted = await client.query(`DELETE FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND id=$3 AND revision=$4 AND status='draft' RETURNING id`,[projectId,designId,id,parsed.data.expectedRevision]);
     if (!deleted.rows[0]) throw new RouteGroupError('STALE_CAD_ROUTE');

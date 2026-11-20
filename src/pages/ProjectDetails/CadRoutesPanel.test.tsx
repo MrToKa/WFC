@@ -85,6 +85,94 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe('published route revisions', { timeout: 20000 }, () => {
+  const published: CadRouteGroup = {
+    ...draft,
+    name: 'TRAY-01',
+    status: 'published',
+    projectTrayId: id(30),
+  };
+  const revision: CadRouteGroup = {
+    ...draft,
+    id: id(31),
+    name: 'REVISION-31',
+    tag: 'REVISION-31',
+    revision: 1,
+    revisionOfRouteId: published.id,
+    revisionOfRouteName: published.name,
+  };
+
+  it('opens the draft, reviews cable impact and publishes only after confirmation', async () => {
+    let routes = [published];
+    const refreshGeometry = vi.fn(async () => {});
+    const refreshTrays = vi.fn(async () => {});
+    fetchMock.mockImplementation(async (url: string) => {
+      let body: unknown;
+      if (url.endsWith(`/${published.id}/revision`)) {
+        routes = [published, revision];
+        body = { route: revision };
+      } else if (url.endsWith(`/${revision.id}/revision/preview`)) {
+        body = {
+          reviewToken: 'review-token',
+          cables: [
+            { id: id(33), tag: 'C-101', needsRecalculation: true, reason: 'Route length changed.' },
+            { id: id(34), tag: 'C-102', needsRecalculation: false, reason: 'Route unchanged.' },
+          ],
+        };
+      } else if (url.endsWith(`/${revision.id}/revision/publish`)) {
+        routes = [{ ...published, revision: published.revision + 1 }];
+        body = { id: published.id, status: 'published' };
+      } else {
+        body = { routes };
+      }
+      return { ok: true, json: async () => body };
+    });
+    show(refreshGeometry, undefined, refreshTrays);
+    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01.*published/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start revision' }));
+    const reviewButton = await screen.findByRole('button', { name: 'Review revision' });
+    expect(screen.getByLabelText('Route name')).toHaveValue('TRAY-01');
+    expect(screen.getByLabelText('Route name')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Add to trays list' })).toBeNull();
+    await waitFor(() => expect(reviewButton).toBeEnabled());
+    fireEvent.click(reviewButton);
+    const review = await screen.findByRole('region', { name: 'Review route revision' });
+    expect(within(review).getByText('C-101')).toBeVisible();
+    expect(within(review).getByText('1 of 2 affected cables need recalculation.')).toBeVisible();
+    expect(writes().some(([url]) => url.endsWith('/revision/publish'))).toBe(false);
+    const confirm = within(review).getByRole('button', { name: 'Publish revision' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    fireEvent.click(confirm);
+    await waitFor(() => expect(refreshTrays).toHaveBeenCalledOnce());
+    expect(refreshGeometry).toHaveBeenCalledTimes(2);
+    const publishRequest = writes().find(([url]) => url.endsWith('/revision/publish'));
+    expect(JSON.parse(publishRequest?.[1].body)).toEqual({
+      expectedRevision: revision.revision,
+      reviewToken: 'review-token',
+    });
+    expect(screen.queryByRole('region', { name: 'Review route revision' })).toBeNull();
+    expect(screen.getByRole('button', { name: /TRAY-01.*published/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('confirms discard and returns to the original published route', async () => {
+    let routes = [published, revision];
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (url.endsWith(`/${revision.id}/revision`) && options.method === 'DELETE') {
+        routes = [published];
+        return { ok: true };
+      }
+      return { ok: true, json: async () => ({ routes }) };
+    });
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01.*revision draft/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard revision' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Discard revision draft?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Discard draft' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /TRAY-01.*revision draft/ })).toBeNull());
+    expect(screen.getByRole('button', { name: /TRAY-01.*published/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
 describe('automatic Trays display updates after membership changes', () => {
   function membershipCatalogue(sourceAssigned: boolean, refused = false) {
     let saved = { ...draft };

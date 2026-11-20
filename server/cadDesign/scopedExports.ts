@@ -41,16 +41,26 @@ export async function readCadExportSnapshot(pool:Pick<Pool,'connect'>,projectId:
     let route:CadExportSnapshot['route']=null;
     if(routeId){
       route=(await client.query<CadExportRoute>(
-        'SELECT id,name,revision,purpose FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND id=$3',[projectId,designId,routeId])).rows[0]??null;
+        'SELECT id,name,revision,purpose FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND id=$3 AND revision_of_route_id IS NULL',[projectId,designId,routeId])).rows[0]??null;
       if(!route)throw new CadExportError('CAD_ROUTE_NOT_FOUND',404);
     }
     const routes=route?[route]:(await client.query<CadExportRoute>(
-      'SELECT id,name,revision,purpose FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 ORDER BY id',[projectId,designId])).rows;
+      'SELECT id,name,revision,purpose FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND revision_of_route_id IS NULL ORDER BY id',[projectId,designId])).rows;
     const memberships=(await client.query<{route_group_id:string;instance_id:string}>(`SELECT route_group_id,instance_id FROM cad_route_group_members
-      WHERE project_id=$1 AND design_id=$2 ${routeId?'AND route_group_id=$3':''} ORDER BY route_group_id,instance_id`,routeId?[projectId,designId,routeId]:[projectId,designId])).rows;
+      WHERE project_id=$1 AND design_id=$2 ${routeId?'AND route_group_id=$3':`AND NOT EXISTS (
+        SELECT 1 FROM cad_route_groups draft WHERE draft.project_id=$1 AND draft.design_id=$2
+          AND draft.id=cad_route_group_members.route_group_id AND draft.revision_of_route_id IS NOT NULL)`}
+      ORDER BY route_group_id,instance_id`,routeId?[projectId,designId,routeId]:[projectId,designId])).rows;
     const ids=routeId?(await client.query<{instance_id:string}>(`SELECT instance_id FROM cad_route_group_members
       WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 ORDER BY instance_id LIMIT 10001`,[projectId,designId,routeId])).rows.map(row=>row.instance_id):
-      (await client.query<{id:string}>('SELECT id FROM cad_design_instances WHERE project_id=$1 AND design_id=$2 ORDER BY created_at,id LIMIT 10001',[projectId,designId])).rows.map(row=>row.id);
+      (await client.query<{id:string}>(`SELECT id FROM cad_design_instances WHERE project_id=$1 AND design_id=$2
+        AND NOT EXISTS (SELECT 1 FROM cad_route_revision_instances clone WHERE clone.project_id=$1 AND clone.design_id=$2
+          AND clone.instance_id=cad_design_instances.id)
+        AND NOT EXISTS (SELECT 1 FROM cad_route_group_members m JOIN cad_route_groups draft
+          ON draft.project_id=m.project_id AND draft.design_id=m.design_id AND draft.id=m.route_group_id
+          WHERE m.project_id=$1 AND m.design_id=$2 AND m.instance_id=cad_design_instances.id
+            AND draft.revision_of_route_id IS NOT NULL)
+        ORDER BY created_at,id LIMIT 10001`,[projectId,designId])).rows.map(row=>row.id);
     if(!ids.length)throw new CadExportError(routeId?'EMPTY_CAD_ROUTE':'EMPTY_CAD_DESIGN',409);
     if(ids.length>10000)throw new CadExportError('CAD_EXPORT_INSTANCE_LIMIT',413);
     if(maxParts!==undefined&&ids.length>maxParts)throw new CadExportError('CAD_EXPORT_PART_LIMIT',413,`STEP assembly export supports at most ${MAX_STEP_ASSEMBLY_PARTS} selected components.`);
