@@ -383,22 +383,26 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
       }
       signal.throwIfAborted();
       let centreProbe:CentreFallbackProbe|null=null;
-      // A calculation grant does not authorize source-location changes. Only a
-      // current human automatic enrollment can perform this bounded machine action.
-      if(!isGrantPrincipal(execution.principal)&&blockedEquipmentSides(response).length&&dependencies.schemaVersion==='pathfinder.dependencies.v8'){
+      let centreTrialAttempted=false;
+      const explicitBulkJob=typeof job.bulk_submission_sha256==='string';
+      const blockedSides=blockedEquipmentSides(response);
+      if(!isGrantPrincipal(execution.principal)&&blockedSides.length&&dependencies.schemaVersion==='pathfinder.dependencies.v8'){
         try{
           const candidates=await authorized(async client=>{
             await fencedJob(client,job);
-            const authority=await readRecalculationJobAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id,lock:true});
-            if(!authority.enrolled||!authority.valid)return [];
+            if(!explicitBulkJob){
+              const authority=await readRecalculationJobAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id,lock:true});
+              if(!authority.enrolled||!authority.valid)return [];
+            }
             const current=await collectDependenciesForVersion(client,job.project_id,item.cable_id,dependencies.options,dependencies.schemaVersion,true);
             if(!current.dependencies||hash(current.dependencies)!==hash(dependencies))return [];
-            return readEquipmentCentreCandidates(client,dependencies,blockedEquipmentSides(response),signal);
+            return readEquipmentCentreCandidates(client,dependencies,blockedSides,signal);
           });
           centreProbe=await probeEquipmentCentreFallback({dependencies,failedResult:response,candidates,signal,
             request:(trial,id)=>weightedRequest(buildCableEngineRequest(trial,id,job.timeout_ms)),
             validate:(result,trial)=>{requireCableEngineStrategy(result,trial);requireCalculationLengthLedger(result,trial.settings);},
             execute:async(request,trial)=>{
+              centreTrialAttempted=true;
               if(!capacity)return {request,response:await engine.execute(request,signal)};
               return executeCapacityRouting({request,context:capacity,signal,execute:engine.execute.bind(engine),
                 validate:value=>{requireCableEngineStrategy(value,trial);requireCalculationLengthLedger(value,trial.settings);}});
@@ -451,6 +455,17 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
         const stale=inputsStale||capacityChanged;
         await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
         const status = stale ? 'stale' : response.status, result = {...response,calculationMode};
+        let centreTrialNote='';
+        if(!stale&&explicitBulkJob&&centreTrialAttempted){
+          if(centreProbe){
+            const {trialRequest}=centreProbe;
+            const points=centreProbe.candidates.map(({side})=>{
+              const {x,y,z}=trialRequest[side] as {x:number;y:number;z:number};
+              return `${side==='from'?'From':'To'} (${x}, ${y}, ${z}) m`;
+            }).join(' and ');
+            centreTrialNote=` The equipment bounding-box centre trial verified a route using ${points}. Review the location before recalculating.`;
+          }else centreTrialNote=' The equipment bounding-box centre trial did not verify a route.';
+        }
         const baseline=await readRevisionBaseline(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
         if(!baseline)throw new PathFinderError('REVISION_BASELINE_REQUIRED',409,'Recalculate this historical job to record a current immutable cable baseline.');
         const proposalHash = hash({dependencies,result,baselineHash:baseline.baselineHash});
@@ -473,7 +488,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
         }
         requireCablePurposeRoute(exact.result,exact.dependencies);
         const completed = await client.query(`UPDATE pf_job_items SET state='complete',status=$4,message=$5 WHERE project_id=$1 AND job_id=$2 AND cable_id=$3 AND state='running' RETURNING cable_id`,
-        [job.project_id,job.id,item.cable_id,exact.status,exact.message]);
+        [job.project_id,job.id,item.cable_id,exact.status,exact.message+centreTrialNote]);
         if (completed.rows.length) await client.query('UPDATE pf_jobs SET completed=completed+1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
         if(!stale&&exact.status==='calculated'&&exact.dependencies.schemaVersion==='pathfinder.dependencies.v8'){
           if(!exact.id||!sealed)throw new PathFinderError('AUTO_LENGTH_STORED_SOURCE_REQUIRED',409);
@@ -488,7 +503,9 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
         await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
         if(inserted.rows[0]?.id&&!stale&&exact.status==='calculated'&&computedRequest&&computedResponse)
           sourceToken=await reuse.prepareSource(client,dependencies,computedRequest,computedResponse,signal);
-        if(centreProbe&&!stale&&inserted.rows[0]?.id&&!isGrantPrincipal(execution.principal)&&dependencies.schemaVersion==='pathfinder.dependencies.v8'){
+        // An explicit bulk submission can verify a candidate, but its Cable List
+        // write mandate does not authorize changing a shared project location.
+        if(centreProbe&&!explicitBulkJob&&!stale&&inserted.rows[0]?.id&&!isGrantPrincipal(execution.principal)&&dependencies.schemaVersion==='pathfinder.dependencies.v8'){
           // The failure above stays immutable. Successful probe geometry belongs
           // only to the machine receipt; new heads force normal fresh admission.
           if(capacity){

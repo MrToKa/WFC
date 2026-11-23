@@ -11,6 +11,7 @@ import { defaultOptions, engineResponseSchema, type EngineResponse } from './job
 import { barrierCanonicalJson } from '../../shared/pathfinderBarriers.js';
 import { barrierRouteHashInput } from '../../shared/pathfinderBarrierRuntime.js';
 import { DIRECT_SECONDARY_POLICY } from '../../shared/pathfinderDirectSecondary.js';
+import type { RoutingScope } from './routingScope.js';
 
 const seams=vi.hoisted(()=>({claim:vi.fn(),acquire:vi.fn(),transaction:vi.fn(),collect:vi.fn(),enrollment:vi.fn(),readEnrollment:vi.fn(),identity:vi.fn(),baseline:vi.fn(),seal:vi.fn(),verifySeal:vi.fn(),publish:vi.fn(),physicalFence:vi.fn()}));
 vi.mock('./workerScheduling.js',async original=>({...await original<typeof import('./workerScheduling.js')>(),claimCalculationSlice:seams.claim}));
@@ -37,7 +38,9 @@ function fixture(options:{before?:unknown;during?:unknown;authorityAtCompletion?
   lostCommitAck?:boolean;retained?:'exact'|'changed-dependencies'}={}){
   const barriers=syntheticDrillingRuntime({projectId:id(1),modelVersionId:id(5),contentFingerprint:'b'.repeat(64),selectionRevision:'1',captureFrameId:id(9),captureFrameSha256:'d'.repeat(64),coordinateFrame:'canonical-world-metres'});
   const points:[number,number,number][]=[[0,0,0],[1,0,0]],routeSha256=digest(barrierRouteHashInput(points));
+  const routing:RoutingScope={catalogRevision:'1',routingContentSha256:'a'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'b'.repeat(64)};
   const base={schemaVersion:'pathfinder.dependencies.v8',projectId:id(1),cableWriteRevision:'1',
+    routing,
     options:{...defaultOptions,barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1',scope:barriers.binding.scope,expectedRegistryRevision:'1',expectedSnapshot:null,drillThroughWalls:true}},
     artifact:{id:id(4),sha256:'a'.repeat(64)},model:{id:id(5),selectionRevision:'1',contentFingerprint:'b'.repeat(64)},engineIdentity:syntheticBarrierEngineIdentity(),barriers,
     cableInputs:{mto:'Control',fromLocation:'A',toLocation:'B',cableTypeId:id(10)},from:{point:points[0]},to:{point:points[1]},

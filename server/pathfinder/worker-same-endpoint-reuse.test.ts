@@ -10,7 +10,10 @@ import { PathFinderError } from './errors.js';
 import type { BarrierDependencySnapshot } from './jobContracts.js';
 
 const seams = vi.hoisted(() => ({ claim: vi.fn(), acquire: vi.fn(), transaction: vi.fn(), collect: vi.fn(), enrollment: vi.fn(),
-  identity: vi.fn(), baseline: vi.fn(), seal: vi.fn(), verify: vi.fn(), publish: vi.fn(), physical: vi.fn(),snapshot:vi.fn(),capacity:vi.fn() }));
+  identity: vi.fn(), baseline: vi.fn(), seal: vi.fn(), verify: vi.fn(), publish: vi.fn(), physical: vi.fn(),snapshot:vi.fn(),capacity:vi.fn(),
+  blockedSides:vi.fn(),centreCandidates:vi.fn(),centreProbe:vi.fn() }));
+vi.mock('./equipmentCentreFallback.js', async original => ({ ...await original<typeof import('./equipmentCentreFallback.js')>(),
+  blockedEquipmentSides:seams.blockedSides,readEquipmentCentreCandidates:seams.centreCandidates,probeEquipmentCentreFallback:seams.centreProbe }));
 vi.mock('./trayCapacityRouting.js',()=>({readTrayCapacityRouting:seams.capacity}));
 vi.mock('./workerScheduling.js', async original => ({ ...await original<typeof import('./workerScheduling.js')>(), claimCalculationSlice: seams.claim }));
 vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectDependenciesForVersion: seams.collect }));
@@ -31,7 +34,7 @@ type Row = Record<string, any>;
 const active: Array<ReturnType<typeof createPathFinderWorker>> = [];
 /** Real worker loop, one-item quanta and real reuse/strategy/ledger logic.
  * Only SQL, authority, immutable seals and native execution are synthetic seams. */
-function fixture(options: { count?: number; engineFailure?: boolean; unknownCommit?: boolean; staleSource?: boolean;
+function fixture(options: { count?: number; engineFailure?: boolean; unknownCommit?: boolean; staleSource?: boolean; bulk?:boolean; blockedEndpoint?:boolean;
   purposeRoute?:'allowed'|'forbidden'|'text-mismatch';
   mutateTarget?: (dependencies: BarrierDependencySnapshot) => void; revokeTarget?: boolean; cancelSource?: boolean;capacity?:boolean;capacityNoAlternative?:boolean;
   balance?:boolean;settledSource?:boolean;clearReuseAtSlice?:number[];interleaveGroup?:boolean;capacityNoAlternativeGroup?:boolean;finalCapacityChange?:'hash'|'free';
@@ -42,8 +45,9 @@ function fixture(options: { count?: number; engineFailure?: boolean; unknownComm
   if(options.purposeRoute==='text-mismatch')rawOutput.route!.routeText='/VFD';
   const job = { id: f.id(201), project_id: f.dependencies.projectId, authority_kind: 'current-login', requested_by: f.id(202),
     login_id: f.id(203), login_expires_at: new Date(Date.now() + 600000), owner_token: null as string | null, lease_until: null as Date | null,
-    state: 'queued', kind: 'calculate', cancel_requested: false, timeout_ms: 60000, completed: 0, failure: null };
-  const items = Array.from({ length: options.count ?? 3 }, (_, at) => ({ cable_id: f.id(210 + at), state: 'waiting', status: 'ready',
+    state: 'queued', kind: 'calculate', cancel_requested: false, timeout_ms: 60000, completed: 0, failure: null,
+    bulk_submission_sha256:options.bulk?'a'.repeat(64):null };
+  const items = Array.from({ length: options.count ?? 3 }, (_, at) => ({ cable_id: f.id(210 + at), state: 'waiting', status: 'ready',message:'',
     dependencies: { ...structuredClone(f.dependencies), cableId: f.id(210 + at), cableWriteRevision: String(20 + at),
       cableInputs: { ...f.dependencies.cableInputs, cableTypeId: f.id(220 + at) } } }));
   if (items[1]) options.mutateTarget?.(items[1].dependencies);
@@ -95,7 +99,7 @@ function fixture(options: { count?: number; engineFailure?: boolean; unknownComm
       proposals.push(record); return { rows: [{ id: record.id }] };
     }
     if (sql.startsWith("UPDATE pf_job_items SET state='complete'")) {
-      const item = items.find(value => value.cable_id === values[2])!; item.state = 'complete'; item.status = values[3]; return { rows: [{ cable_id: item.cable_id }] };
+      const item = items.find(value => value.cable_id === values[2])!; item.state = 'complete'; item.status = values[3]; item.message=values[4]; return { rows: [{ cable_id: item.cable_id }] };
     }
     if (sql.startsWith('UPDATE pf_jobs SET completed=completed+1')) { job.completed++; return { rows: [] }; }
     if (sql.startsWith('SELECT 1 FROM pf_job_items')) return { rows: items.some(item => item.state === 'waiting') ? [{}] : [] };
@@ -152,6 +156,10 @@ function fixture(options: { count?: number; engineFailure?: boolean; unknownComm
     if((options.capacityNoAlternative||options.capacityNoAlternativeGroup)&&Array.isArray(request.excludedRouteCodes)&&request.excludedRouteCodes.length){
       const output={...unavailableBarrierEngineResponse(request.requestId,f.dependencies.barriers,'TRAY_CAPACITY_EXHAUSTED'),status:'no_path' as const};outputs.push(output);return output;
     }
+    if(options.blockedEndpoint&&at===0){
+      const output={...unavailableBarrierEngineResponse(request.requestId,f.dependencies.barriers,'TO_ENDPOINT_IN_BARRIER'),
+        status:'no_path' as const,message:'The To endpoint is blocked.'};outputs.push(output);return output;
+    }
     const output = structuredClone({ ...rawOutput, requestId: request.requestId }); outputs.push(output);
     if (options.cancelSource && at === 0) job.cancel_requested = true;
     return output;
@@ -162,10 +170,27 @@ function fixture(options: { count?: number; engineFailure?: boolean; unknownComm
   const worker = createPathFinderWorker(pool, {} as PathFinderJobs, () => engine, async () => f.dependencies.engineIdentity,reuse); active.push(worker);
   return { worker, engine, job, items, proposals, outputs,autoLengths, collections, events,metadataRead,replicaCollect,reuse,capacityObservations, get slices() { return slices; } };
 }
-beforeEach(() => { vi.resetAllMocks(); seams.identity.mockResolvedValue(syntheticBarrierEngineIdentity()); });
+beforeEach(() => { vi.resetAllMocks(); seams.identity.mockResolvedValue(syntheticBarrierEngineIdentity()); seams.blockedSides.mockReturnValue([]); });
 afterEach(async () => { for (const worker of active.splice(0)) await worker.stop().catch(() => undefined); });
 
 describe('exact same-endpoint computation reuse across actual one-item worker slices', () => {
+  it('reports a verified bulk centre trial and continues processing without publishing the trial as the admitted route',async()=>{
+    seams.blockedSides.mockReturnValueOnce(['to']);
+    const candidate={side:'to'};
+    seams.centreCandidates.mockResolvedValue([candidate]);
+    seams.centreProbe.mockImplementation(async input=>{
+      const trialRequest={...input.request(input.dependencies,f.job.id),to:{x:13.085,y:77.14,z:16.3}};
+      const {response}=await input.execute(trialRequest,input.dependencies);
+      return {candidates:[candidate],trialRequest,trialResult:response};
+    });
+    const f=fixture({count:2,bulk:true,blockedEndpoint:true});
+    f.worker.start();await vi.waitFor(()=>expect(f.job.state).toBe('complete'));await f.worker.stop();
+    expect(seams.centreCandidates).toHaveBeenCalledOnce();
+    expect(f.items[0].message).toContain('centre trial verified a route using To (13.085, 77.14, 16.3) m');
+    expect(f.proposals.map(value=>value.status)).toEqual(['no_path','calculated']);
+    expect(f.autoLengths.map(value=>value.cableId)).toEqual([f.items[1].cable_id]);
+  });
+
   it.each([{capacity:false,balance:false},{capacity:true,balance:false},{capacity:false,balance:true}])(
     'refuses forbidden native output before publication or reuse with routing options %j',async options=>{
       const f=fixture({count:2,...options,purposeRoute:'forbidden'});
