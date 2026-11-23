@@ -1,3 +1,4 @@
+import { PROJECT_FILE_MAX_BYTES as MAX_FILE_SIZE_BYTES, PROJECT_FILE_SIZE_ERROR } from '../../../../shared/projectFileSize';
 import type { ChangeEvent, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -67,7 +68,6 @@ type UseProjectFilesSectionResult = {
   handleDeleteVersion: (version: ProjectFileVersion) => Promise<void>;
 };
 
-const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 
 const formatApiError = (error: unknown, fallback: string): string => {
   if (error instanceof ApiError) {
@@ -277,7 +277,7 @@ export const useProjectFilesSection = ({
       if (file.size > MAX_FILE_SIZE_BYTES) {
         showToast({
           title: 'File is too large',
-          body: 'Maximum allowed size is 25 MB.',
+          body: PROJECT_FILE_SIZE_ERROR,
           intent: 'error'
         });
         event.target.value = '';

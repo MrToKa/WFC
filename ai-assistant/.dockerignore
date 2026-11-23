@@ -1,0 +1,12 @@
+*
+!Dockerfile
+!server.mjs
+!server.test.mjs
+!cli.mjs
+!review-diagrams.mjs
+!lib/
+!lib/*.mjs
+!test/
+!test/*.test.mjs
+!test/wfc-facts-fixture.mjs
+!project-worker.mjs

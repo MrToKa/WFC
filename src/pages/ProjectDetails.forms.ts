@@ -19,6 +19,7 @@ export const PROJECT_FILES_PER_PAGE = 10;
 
 export type ProjectDetailsTab =
   | 'details'
+  | 'locator'
   | 'cables'
   | 'cable-list'
   | 'routings-viewer'

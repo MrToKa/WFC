@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import type { Response } from 'express';
+import type { RequestHandler, Response } from 'express';
+import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_SIZE_ERROR } from '../../shared/projectFileSize.js';
 import { Router } from 'express';
 import multer from 'multer';
 import type { AuthenticatedRequest } from '../middleware.js';
@@ -19,14 +20,25 @@ import {
   type ProjectFileVersionRow,
 } from '../models/projectFileVersion.js';
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
-
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_SIZE },
-});
+  // Busboy signals LIMIT_FILE_SIZE when the threshold is reached.
+  limits: { fileSize: PROJECT_FILE_MAX_BYTES + 1 },
+}).single('file');
+
+export const receiveProjectFile: RequestHandler = (req, res, next) => {
+  upload(req, res, (error: unknown) => {
+    if ((error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') ||
+        (req.file && req.file.size > PROJECT_FILE_MAX_BYTES)) {
+      res.status(413).json({ error: PROJECT_FILE_SIZE_ERROR });
+      return;
+    }
+    next(error);
+  });
+};
 
 const ALLOWED_EXTENSIONS = new Set([
+  '.csv',
   '.doc',
   '.docx',
   '.xls',
@@ -38,6 +50,7 @@ const ALLOWED_EXTENSIONS = new Set([
 ]);
 
 const FALLBACK_MIME_BY_EXTENSION: Record<string, string> = {
+  '.csv': 'text/csv',
   '.doc': 'application/msword',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xls': 'application/vnd.ms-excel',
@@ -162,7 +175,7 @@ export const projectFilesRouter = (() => {
   router.post(
     '/',
     requireProjectEdit,
-    upload.single('file'),
+    receiveProjectFile,
     async (req: ProjectFilesUploadRequest, res: Response) => {
       const { projectId } = req.params;
 
@@ -194,7 +207,7 @@ export const projectFilesRouter = (() => {
       if (!ALLOWED_EXTENSIONS.has(extension)) {
         res.status(400).json({
           error:
-            'Unsupported file type. Allowed extensions: .doc, .docx, .xls, .xlsx, .pdf, .jpg, .jpeg, .png',
+            'Unsupported file type. Allowed extensions: .csv, .doc, .docx, .xls, .xlsx, .pdf, .jpg, .jpeg, .png',
         });
         return;
       }

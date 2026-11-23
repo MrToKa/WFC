@@ -1,5 +1,6 @@
 import { request, uploadFile, downloadFile } from './http';
 import type { ProjectFile, ProjectFileVersion } from './types';
+import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_SIZE_ERROR } from '../../shared/projectFileSize';
 
 export async function fetchProjectFiles(
   projectId: string,
@@ -14,6 +15,7 @@ export async function uploadProjectFile(
   file: File,
   options?: { replaceFileId?: string },
 ): Promise<{ file: ProjectFile }> {
+  if (file.size > PROJECT_FILE_MAX_BYTES) throw new Error(PROJECT_FILE_SIZE_ERROR);
   const query = options?.replaceFileId
     ? `?replaceId=${encodeURIComponent(options.replaceFileId)}`
     : '';

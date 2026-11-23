@@ -3,10 +3,15 @@ import type { ComponentProps } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoutingsViewerTab } from './RoutingsViewerTab';
+import { MemoryRouter } from 'react-router-dom';
+import { LocatorPanel } from './LocatorPanel';
+import { GVL_PILOT_ID } from '../GvlStage5/pilotId';
 import { ControlPanelWindow } from '@/components/ControlPanelWindow';
 import { useRoutingsViewer } from './hooks/useRoutingsViewer';
 import type { CadComponentsPanel } from './CadComponentsPanel';
 
+vi.mock('../ProjectLocationReview', () => ({ ProjectLocationReview: () => <p>Current location data</p> }));
+vi.mock('../GvlStage5/GvlStage5', () => ({ PilotPage: () => <p>Pilot data</p> }));
 vi.mock('./hooks/useRoutingsViewer', () => ({ useRoutingsViewer: vi.fn() }));
 vi.mock('./hooks/useRoutingsViewerHeight', () => ({ useRoutingsViewerHeight: () => 560 }));
 const cadCapture = vi.hoisted(() => ({ render: vi.fn() }));
@@ -30,7 +35,7 @@ beforeEach(() => {
     pickCadAnchor: vi.fn(async () => ({ objectId: 1, point: [1, 2, 3] as [number, number, number], derivation: 'picked-surface-point' as const })),
     pickPlacementPoint: vi.fn(async () => ({ objectId: 1, point: [1, 2, 3] as [number, number, number], derivation: 'picked-surface-point' as const })),
     moveCadComponent: vi.fn(async () => {}), setCadComponentProperties: vi.fn(async () => {}), setCadComponentColor: vi.fn(async () => {}), setCadComponentVisibility: vi.fn(async () => {}),
-    removeCadComponent: vi.fn(async () => {}), focusCadComponent: vi.fn(async () => {}),
+    removeCadComponent: vi.fn(async () => {}), showAssistantSelection: vi.fn(), focusCadComponent: vi.fn(async () => {}),
   };
   vi.mocked(useRoutingsViewer).mockImplementation(() => current);
 });
@@ -76,6 +81,16 @@ describe('Routings builder drawing controls', () => {
       expect(screen.getByTestId('routings-model-host')).toBe(host);
       expect(current.retry).not.toHaveBeenCalled();
     } finally { mounted.unmount(); frame.remove(); }
+  });
+  it('switches Locator panels beside the same model host', () => {
+    render(<MemoryRouter>{view({ locatorPanel: <LocatorPanel projectId={GVL_PILOT_ID} token="session" writable admin
+      cables={[]} cableError={null} cablesLoading={false} /> })}</MemoryRouter>);
+    const host = screen.getByTestId('routings-model-host');
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Current location data');
+    fireEvent.click(screen.getByRole('tab', { name: 'Отчет на пилота' }));
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Pilot data');
+    expect(screen.getByTestId('routings-model-host')).toBe(host);
+    expect(screen.queryByText('Draw trays')).toBeNull();
   });
   it.each([false, true])('opens Draw trays directly with no obsolete route controls (dark: %s)', dark => {
     const refreshed = vi.fn();

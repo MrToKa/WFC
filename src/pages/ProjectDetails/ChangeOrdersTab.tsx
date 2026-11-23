@@ -201,6 +201,7 @@ const formatMoney = (amount: number): string =>
   );
 
 type Props = {
+  assistant?: React.ReactNode;
   project: Project;
   token: string | null;
   currentUser: User | null;
@@ -216,7 +217,7 @@ const DOCUMENT_LABELS: Record<
   'internal-ncrs': { singular: 'Internal NCR', plural: 'Internal NCRs', article: 'an' },
 };
 
-export const ChangeOrdersTab = ({
+export const ChangeOrdersTab = ({ assistant,
   project,
   token,
   currentUser,
@@ -1237,6 +1238,7 @@ export const ChangeOrdersTab = ({
         <Text>No {labels.plural} yet. Create the first one to begin.</Text>
       ) : null}
 
+      {assistant}
       {savedDetails && !newMode ? (
         <Accordion collapsible defaultOpenItems={[]} key={`${collection}-${savedDetails.id}`}>
           <AccordionItem value="change-log" className={styles.card}>

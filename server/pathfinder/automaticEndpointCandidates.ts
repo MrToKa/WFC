@@ -194,13 +194,14 @@ export type AutomaticNamedEndpointCandidate = {
   candidateObjectIds: string[]; point: [number,number,number] | null; objectId: string | null;
 };
 type PreparedNamedMatch = {
+  candidateIds?: string[];
   status: AutomaticNamedEndpointCandidate['status'];
   object: EndpointObjectRef | null;
 };
 
 /** Resolve exact names against the current prepared model, including names
  * without a location record. A partial candidate set cannot prove uniqueness. */
-export async function readPreparedNamedEndpointMatches(client: PoolClient, input: CandidateReadInput & { names: string[] }): Promise<Map<string, PreparedNamedMatch>> {
+export async function readPreparedNamedEndpointMatches(client: PoolClient, input: CandidateReadInput & { names: string[]; filter?: { branch: string; property: string } }): Promise<Map<string, PreparedNamedMatch>> {
   const projectId = policyUuidSchema.parse(input.projectId), current = endpointCurrentScopeSchema.parse(input.current);
   const controls = candidateControls(input);
   const names = [...new Set(input.names.map(normalizeLocation))].sort();
@@ -231,9 +232,20 @@ export async function readPreparedNamedEndpointMatches(client: PoolClient, input
   const objects = await readCandidateObjects(client, projectId, current, source.aggregate,
     [...new Set(rows.map(row => row.object_id))].sort(), controls);
   for (const [name, ids] of byName) {
-    const candidate = verifyCandidateObjects([...ids].sort(), () => [name], objects, source, controls);
+    const scopedIds = [...ids].filter(id => {
+      if (!input.filter) return true;
+      const object = objects.get(id)?.record;
+      // Keep unknown rows in the proof so incomplete evidence cannot establish uniqueness.
+      if (!object) return true;
+      const {branch,property} = input.filter;
+      const model = object.historicalModel;
+      return (!branch || model.leafToRootNames.some(n => normalizeLocation(n) === normalizeLocation(branch))) &&
+        (!property || model.properties.some(p => normalizeLocation(p.name) === normalizeLocation(property) && normalizeLocation(p.value) === name));
+    });
+    const candidate = verifyCandidateObjects(scopedIds.sort(), () => [name], objects, source, controls);
     const saved = candidate.anchor?.saved;
     matches.set(name, {
+      ...(input.filter ? {candidateIds:candidate.candidateObjectIds} : {}),
       status: candidate.status,
       object: saved ? { traceId: current.traceId, objectRevisionId: saved.record.id, recordSha256: saved.sha } : null,
     });

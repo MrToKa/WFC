@@ -1,3 +1,4 @@
+import { AssistantPanel } from './AssistantPanel';
 import { routingDiagnosticText } from '../../shared/cableRoutingLabels';
 import { CableAutoCalculatedLength } from '@/components/pathfinder/CableAutoCalculatedLength';
 import { CableRoutingValue } from '@/components/pathfinder/CableRoutingValue';
@@ -1891,6 +1892,7 @@ export const CableDetails = () => {
         </Accordion>
       </Card>
 
+      <AssistantPanel key={cableId} projectId={projectId} writable={canManageMaterials} />
       <Accordion collapsible defaultOpenItems={[]} key={details.cable.id}>
         <AccordionItem value="change-tracker" className={styles.fullWidthCard}>
           <AccordionHeader>Change tracker</AccordionHeader>

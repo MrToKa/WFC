@@ -129,12 +129,21 @@ const call = (path: string, token: string | null = 'basic', method = 'GET', body
 describe('project access through the complete API middleware stack', () => {
   it.each([
     '/api/projects',
+    `/api/projects/${allowedId}/gvl-stage5/report`,
     `/api/projects/${allowedId}`,
     '/api/materials/trays',
     '/api/templates',
   ])('requires authentication: %s', async (path) => {
     expect((await call(path, null)).status).toBe(401);
     expect(database.query).not.toHaveBeenCalled();
+  });
+
+  it('restricts pilot evidence to administrators of the pilot project', async () => {
+    const path = `/api/projects/${allowedId}/gvl-stage5/report`;
+    expect((await call(path)).status).toBe(403);
+    const otherProject = await call(path, 'admin');
+    expect(otherProject.status).toBe(404);
+    expect(await otherProject.json()).toEqual({ code: 'PILOT_PROJECT_NOT_FOUND' });
   });
 
   it('lists only assigned projects and no projects before access is granted', async () => {

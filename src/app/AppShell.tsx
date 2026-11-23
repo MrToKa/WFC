@@ -1,3 +1,4 @@
+import { AssistantPanel } from '@/pages/AssistantPanel';
 import { Suspense } from 'react';
 import {
   Button,
@@ -9,7 +10,7 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SignOut20Regular } from '@fluentui/react-icons';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { canReadCatalogs } from '@/utils/permissions';
@@ -161,6 +162,7 @@ const useStyles = makeStyles({
 export const AppShell = () => {
   const styles = useStyles();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { user, signOut } = useAuth();
   const navLinks = user
     ? [...AUTH_LINKS, ...ADMIN_LINKS.filter((link) => ['/admin', '/preparer'].includes(link.to) ? user.isAdmin === true : canReadCatalogs(user))]
@@ -230,6 +232,7 @@ export const AppShell = () => {
       <main id="app-root" className={styles.main} role="main" tabIndex={-1}>
         <Suspense fallback={<Spinner label="Loading page..." />}>
           <Outlet />
+          {user && !/^\/(projects|materials)\/[^/]+/.test(pathname) && <AssistantPanel key={pathname} />}
         </Suspense>
       </main>
     </div>

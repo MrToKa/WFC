@@ -215,7 +215,7 @@ export async function requireProjectAccess(
     req.query.view !== undefined && (typeof req.query.view !== 'string' ||
       !['list', 'change-tracker'].includes(req.query.view.toLowerCase()));
   const isAllowedRead = isRead && (basicProjectReadPaths.some((path) => path.test(req.path)) ||
-    (isTechnician && technicianFileReadPaths.some((path) => path.test(req.path))));
+    (isTechnician && (technicianFileReadPaths.some((path) => path.test(req.path)) || /^\/assistant(?:\/jobs\/[0-9a-f-]+\/source\/\d+)?\/?$/i.test(req.path))));
   const isViewerControl = isViewerSessionReadControl(req.method,req.path,false);
   if ((!isAllowedRead && !isExport && !isViewerControl) || (isExport && isCableReportExport)) {
     res.status(403).json({ error: 'This action or project section requires administrator access' });

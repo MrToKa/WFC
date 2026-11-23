@@ -11,9 +11,10 @@ export function requestPrincipal(req:{userId?:string;loginId?:string;loginExpire
 export function assertLoginNotExpired(who:JobPrincipal):void {
   if (!Number.isSafeInteger(who.loginExpiresAt) || who.loginExpiresAt <= Date.now()) throw new PathFinderError('LOGIN_EXPIRED',401);
 }
-export async function requireCurrentLogin(client:PoolClient,who:JobPrincipal):Promise<void> {
+export async function requireCurrentLogin(client:PoolClient,who:JobPrincipal,loginMode:'request'|'persisted-grant'='request'):Promise<void> {
   assertLoginNotExpired(who);
-  await client.query(`INSERT INTO viewer_login_bindings(login_id,user_id,expires_at) VALUES($1,$2,$3)
+  // Only a freshly authenticated request can register its login. A deferred job must find the original grant.
+  if(loginMode==='request') await client.query(`INSERT INTO viewer_login_bindings(login_id,user_id,expires_at) VALUES($1,$2,$3)
     ON CONFLICT(login_id) DO NOTHING`,[who.loginId,who.userId,new Date(who.loginExpiresAt)]);
   const binding = (await client.query<{user_id:string;expires_at:Date;revoked_at:Date|null}>(
     'SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings WHERE login_id=$1 FOR SHARE',[who.loginId])).rows[0];

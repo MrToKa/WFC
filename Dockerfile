@@ -34,7 +34,7 @@ ENV NODE_ENV=production DOTNET_ROOT=/usr/share/dotnet DOTNET_CLI_TELEMETRY_OPTOU
 WORKDIR /app
 
 COPY --from=tray-dotnet-runtime /usr/share/dotnet /usr/share/dotnet
-RUN apt-get update && apt-get install --no-install-recommends -y libicu72 libssl3 libgssapi-krb5-2 zlib1g \
+RUN apt-get update && apt-get install --no-install-recommends -y libicu72 libssl3 libgssapi-krb5-2 zlib1g poppler-utils \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s /usr/share/dotnet/dotnet /usr/local/bin/dotnet
 COPY --from=tray-engine-build /engine /opt/pathfinder
@@ -47,6 +47,8 @@ RUN npm ci --omit=dev --ignore-scripts \
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build ["/app/Template files", "./Template files"]
 COPY scripts/barrier-verifier-container-check.mjs ./scripts/barrier-verifier-container-check.mjs
+COPY scripts/project-rack-model-index.mjs ./scripts/project-rack-model-index.mjs
+COPY scripts/rack-page-proof.mjs ./scripts/rack-page-proof.mjs
 
 RUN mkdir -p /var/lib/wfc/model-imports /var/lib/wfc/pathfinder \
     && chown node:node /var/lib/wfc/model-imports /var/lib/wfc/pathfinder \

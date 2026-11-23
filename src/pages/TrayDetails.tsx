@@ -1,3 +1,4 @@
+import { AssistantPanel } from './AssistantPanel';
 import { generateId } from '@/utils/generateId';
 import { TrayReportGeneration } from '@/utils/trayReportGeneration';
 import { LoadCurveDrawingService } from './TrayDetails/loadCurveDrawingService';
@@ -3514,6 +3515,7 @@ export const TrayDetails = () => {
         </Button>
       </div>
 
+      <AssistantPanel key={trayId} projectId={projectId} writable={canEdit} />
       <TrayChangeTracker
         tray={tray}
         canExport={canExportChangeLogs(user, token)}

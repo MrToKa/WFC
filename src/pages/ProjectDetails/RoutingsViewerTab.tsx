@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { ControlPanelOpenButton, ControlPanelPart, useControlPanelDetached } from '@/components/ControlPanelWindow';
 import { Body1, Button, Caption1, Spinner, Subtitle2 } from '@fluentui/react-components';
 import { useRoutingsViewer } from './hooks/useRoutingsViewer';
@@ -6,9 +6,9 @@ import { useRoutingsViewerHeight } from './hooks/useRoutingsViewerHeight';
 import { CadComponentsPanel } from './CadComponentsPanel';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 
-type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; canDrawTrays?: boolean; onTraysChanged?: () => Promise<void>; controlsVisible?: boolean };
+type Props = { locatorPanel?: ReactNode; projectId: string | null; loadedProjectId: string | null; token: string | null; canDrawTrays?: boolean; onTraysChanged?: () => Promise<void>; controlsVisible?: boolean };
 
-export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTrays = false, onTraysChanged, controlsVisible = true }: Props) {
+export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTrays = false, onTraysChanged, controlsVisible = true, locatorPanel }: Props) {
   const detached = useControlPanelDetached();
   const styles = useRoutingsViewerStyles();
   const anchor = useRef<HTMLElement>(null);
@@ -18,12 +18,12 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTr
   const viewer = useRoutingsViewer({ projectId, loadedProjectId, token, container });
   const loading = viewer.phase === 'metadata' || viewer.phase === 'loading';
   const retryable = !loading && viewer.phase !== 'ready' && viewer.phase !== 'login-required';
-  return <section ref={anchor} hidden={!controlsVisible && !detached} aria-label="Routings builder" data-testid="routings-viewer-tab">
+  return <section ref={anchor} hidden={!controlsVisible && !detached} aria-label={locatorPanel ? 'Locator' : 'Routings builder'} data-testid="routings-viewer-tab">
     <div className={styles.layout} style={{ height, ...(detached ? { gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'minmax(0, 1fr)' } : {}) }} data-testid="routings-layout">
       <ControlPanelPart order={1} hidden={!controlsVisible}>
       <div className={styles.controls} style={detached ? { overflowY: 'visible' } : undefined}>
         <div className={styles.actions} style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-          <Subtitle2 as="h3">Draw trays</Subtitle2>
+          <Subtitle2 as="h3">{locatorPanel ? 'Locator' : 'Draw trays'}</Subtitle2>
           <ControlPanelOpenButton />
         </div>
         <div className={styles.status} aria-live="polite" aria-atomic="true" data-testid="routings-viewer-status" data-phase={viewer.phase}>
@@ -31,12 +31,12 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTr
           {viewer.model ? <Caption1>Active model: {viewer.model.label}</Caption1> : null}
           {retryable ? <Button onClick={viewer.retry}>Retry</Button> : null}
         </div>
-        {drawingEnabled ? <CadComponentsPanel key={JSON.stringify([projectId, token])}
+        {locatorPanel ?? (drawingEnabled ? <CadComponentsPanel key={JSON.stringify([projectId, token])}
           projectId={projectId} token={token} modelVersionId={viewer.model?.id ?? null}
           ready={viewer.phase === 'ready'} onPick={viewer.pickCadAnchor} onPickPlacement={viewer.pickPlacementPoint} onShow={viewer.showCadComponent}
           onMove={viewer.moveCadComponent} onFocus={viewer.focusCadComponent} onRemove={viewer.removeCadComponent}
           onColor={viewer.setCadComponentColor} onVisibility={viewer.setCadComponentVisibility} onProperties={viewer.setCadComponentProperties} onTraysChanged={onTraysChanged} />
-          : <Body1>{canDrawTrays ? 'Tray drawing is disabled.' : 'You do not have permission to draw trays in this project.'}</Body1>}
+          : <Body1>{canDrawTrays ? 'Tray drawing is disabled.' : 'You do not have permission to draw trays in this project.'}</Body1>)}
       </div>
       </ControlPanelPart>
       <div className={styles.host} ref={container} data-testid="routings-model-host" />

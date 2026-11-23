@@ -1,4 +1,5 @@
 import { projectTrayPurposesRouter } from './projectTrayPurposesRoutes.js';
+import { serveGvlPilotReport } from './gvlPilotReport.js';
 import { randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
@@ -22,6 +23,7 @@ import { cableTypesRouter } from './cableTypesRoutes.js';
 import { cablesRouter } from './cablesRoutes.js';
 import { roxtecEntriesRouter } from './roxtecEntriesRoutes.js';
 import { traysRouter } from './traysRoutes.js';
+import { assistantRouter } from '../assistant/routes.js';
 import { projectFilesRouter } from './projectFilesRoutes.js';
 import { changeOrdersRouter, internalNcrsRouter } from './changeOrdersRoutes.js';
 import { projectTrayDataRouter } from './projectTrayDataRoutes.js';
@@ -33,6 +35,7 @@ import { cadDesignEnabled } from '../cadDesign/configuration.js';
 const projectsRouter = Router();
 projectsRouter.use(authenticate, loadCurrentUserRole, requireProjectReadOnly);
 projectsRouter.use('/:projectId', requireProjectAccess);
+projectsRouter.get('/:projectId/gvl-stage5/report', requireAdmin, serveGvlPilotReport);
 const INVALID_TRAY_TEMPLATE_FILE = 'INVALID_TRAY_TEMPLATE_FILE';
 
 type NormalizedSupportOverrides = Record<
@@ -1020,6 +1023,7 @@ projectsRouter.use('/:projectId/roxtec', roxtecEntriesRouter);
 projectsRouter.use('/:projectId/tray-purposes', projectTrayPurposesRouter);
 projectsRouter.use('/:projectId/trays', traysRouter);
 projectsRouter.use('/:projectId/tray-data', projectTrayDataRouter);
+projectsRouter.use('/:projectId/assistant', assistantRouter);
 projectsRouter.use('/:projectId/files', projectFilesRouter);
 projectsRouter.use('/:projectId/change-orders', changeOrdersRouter);
 projectsRouter.use('/:projectId/internal-ncrs', internalNcrsRouter);

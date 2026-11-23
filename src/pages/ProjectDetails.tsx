@@ -61,8 +61,12 @@ import {
 } from './ProjectDetails/projectFileUtils';
 import { useMaterialData } from './TrayDetails/hooks';
 
+import { AssistantPanel } from './AssistantPanel';
+import { LocatorPanel } from './ProjectDetails/LocatorPanel';
+
 const VALID_TABS: ProjectDetailsTab[] = [
   'details',
+  'locator',
   'cables',
   'cable-list',
   'routings-viewer',
@@ -104,7 +108,9 @@ export const ProjectDetails = () => {
   const purposeScope = useRef(JSON.stringify([projectId, token]));
   purposeScope.current = JSON.stringify([projectId, token]);
   const canViewAll = canReadCatalogs(user);
-  const routingTabRequested = searchParams.get('tab') === 'routings-viewer' || searchParams.get('tab') === 'pathfinder' && Boolean(user?.isAdmin);
+  const requestedTab = searchParams.get('tab');
+  const locatorRequested = requestedTab === 'locator' || requestedTab === 'location-review';
+  const routingTabRequested = locatorRequested || requestedTab === 'routings-viewer' || searchParams.get('tab') === 'pathfinder' && Boolean(user?.isAdmin);
   const { materialTrays } = useMaterialData(routingTabRequested ? undefined : projectId, canViewAll && !routingTabRequested);
   const canExport = Boolean(token && (canViewAll || user?.role === 'technician'));
   const canExportHistory = canExportChangeLogs(user, token);
@@ -138,20 +144,22 @@ export const ProjectDetails = () => {
     [findMaterialTrayByType],
   );
 
-  const tabParam = searchParams.get('tab') as ProjectDetailsTab | null;
+  const canReadAssistant = canEdit || user?.role === 'technician';
+  const tabParam = (requestedTab === 'location-review' ? 'locator' : requestedTab) as ProjectDetailsTab | null;
   const selectedTab: ProjectDetailsTab =
-    tabParam && VALID_TABS.includes(tabParam) && (tabParam !== 'pathfinder' || Boolean(user?.isAdmin)) && (canViewAll || !ADMIN_TABS.includes(tabParam) || (tabParam === 'files' && canReadFiles))
+    tabParam && VALID_TABS.includes(tabParam) && (tabParam !== 'locator' || canReadAssistant) && (tabParam !== 'pathfinder' || Boolean(user?.isAdmin)) && (canViewAll || !ADMIN_TABS.includes(tabParam) || (tabParam === 'files' && canReadFiles))
       ? tabParam
       : 'details';
   const [selectedCableReportMto, setSelectedCableReportMto] = useState<CableMtoOption | null>(null);
   const controlScope = JSON.stringify([projectId, user?.id, token]);
+  const isModelTab = selectedTab === 'locator' || selectedTab === 'pathfinder' || selectedTab === 'routings-viewer';
   const [lastModelTab, setLastModelTab] = useState<{ scope: string; tab: ProjectDetailsTab } | null>(null);
   useEffect(() => {
-    if (selectedTab === 'pathfinder' || selectedTab === 'routings-viewer') {
+    if (isModelTab) {
       setLastModelTab(previous => previous?.scope === controlScope && previous.tab === selectedTab ? previous : { scope: controlScope, tab: selectedTab });
     }
-  }, [controlScope, selectedTab]);
-  const modelTab = selectedTab === 'pathfinder' || selectedTab === 'routings-viewer'
+  }, [controlScope, isModelTab, selectedTab]);
+  const modelTab = isModelTab
     ? selectedTab : lastModelTab?.scope === controlScope ? lastModelTab.tab : null;
 
   const [trayTemplateSaving, setTrayTemplateSaving] = useState<Record<string, boolean>>({});
@@ -163,7 +171,8 @@ export const ProjectDetails = () => {
   > | null>(null);
 
   // Manual routing owns its fresh full tray read and does not load the cable tables.
-  const tableProjectId = selectedTab === 'routings-viewer' || selectedTab === 'pathfinder' ? undefined : projectId;
+  const tableProjectId = isModelTab ? undefined : projectId;
+  const cableProjectId = selectedTab === 'locator' ? projectId : tableProjectId;
 
   const {
     cables,
@@ -210,9 +219,9 @@ export const ProjectDetails = () => {
     cableDialog,
   } = useCableListSection({
     active: selectedTab === 'cable-list',
-    projectId: tableProjectId,
+    projectId: cableProjectId,
     project,
-    token: canEdit && tableProjectId ? token : null,
+    token: canEdit && cableProjectId ? token : null,
     exportToken: canExport ? token : null,
     showToast,
   });
@@ -1386,8 +1395,12 @@ export const ProjectDetails = () => {
     );
   }
 
+  const openAssistant = requestedTab === 'ai-assistant' || searchParams.get('assistant') === 'open';
+  const assistant = canReadAssistant && projectId && <AssistantPanel
+    key={JSON.stringify([controlScope, selectedTab, openAssistant])} projectId={projectId} writable={canEdit} initiallyOpen={openAssistant} />;
+
   return (
-    <ControlPanelWindow scopeKey={JSON.stringify([controlScope, selectedTab])} enabled={selectedTab === 'pathfinder' || selectedTab === 'routings-viewer'} actionsInPanel>{() => (
+    <ControlPanelWindow scopeKey={JSON.stringify([controlScope, selectedTab])} enabled={isModelTab} actionsInPanel>{() => (
     <section className={styles.root} aria-labelledby="project-details-heading">
       <ControlPanelPart order={0} inlineOnly>
       <div className={styles.header}>
@@ -1411,6 +1424,7 @@ export const ProjectDetails = () => {
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="routings-viewer">Routings builder</Tab>
         {user?.isAdmin ? <Tab value="pathfinder">Path Finder</Tab> : null}
+        {canReadAssistant && <Tab value="locator">Locator</Tab>}
         <Tab value="trays">Trays</Tab>
         {canViewAll ? <Tab value="cable-report">Cables MTOs</Tab> : null}
         {canViewAll ? <Tab value="change-orders">Change Orders</Tab> : null}
@@ -1421,8 +1435,11 @@ export const ProjectDetails = () => {
       </TabList>
       </ControlPanelPart>
 
-      {modelTab === 'routings-viewer' ? (
-        <RoutingsViewerTab controlsVisible={selectedTab === 'routings-viewer'} projectId={projectId ?? null} loadedProjectId={project.id} token={token} canDrawTrays={canEdit} onTraysChanged={() => reloadTrays({ showSpinner: false })} />
+      {modelTab === 'routings-viewer' || (modelTab === 'locator' && canReadAssistant && projectId && token) ? (
+        <RoutingsViewerTab controlsVisible={selectedTab === modelTab}
+          locatorPanel={modelTab === 'locator' && projectId && token ? <LocatorPanel key={controlScope}
+            projectId={projectId} token={token} writable={canEdit} admin={Boolean(user?.isAdmin)}
+            cables={cables} cableError={cablesError} cablesLoading={cablesLoading} /> : undefined} projectId={projectId ?? null} loadedProjectId={project.id} token={token} canDrawTrays={canEdit} onTraysChanged={() => reloadTrays({ showSpinner: false })} />
       ) : null}
       {modelTab === 'pathfinder' && user?.isAdmin ? (
         <PathFinderTab obstacleRequest={obstacleRequest} controlsVisible={selectedTab === 'pathfinder'} key={projectId}
@@ -1433,7 +1450,7 @@ export const ProjectDetails = () => {
 
       <ControlPanelPart order={2}>
       {selectedTab === 'details' ? (
-        <DetailsTab
+        <DetailsTab assistant={assistant}
           canExport={canExportHistory}
           styles={styles}
           project={project}
@@ -1469,7 +1486,8 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'cables' ? (
         <CableTypesTab
-          changeLog={
+          changeLog={<>
+            {assistant}
             <SectionChangeLog
               styles={styles}
               items={cableTypes}
@@ -1478,7 +1496,7 @@ export const ProjectDetails = () => {
               loading={cableTypesLoading}
               error={cableTypesError}
             />
-          }
+          </>}
           canExport={canExport}
           styles={styles}
           isAdmin={canEdit}
@@ -1518,7 +1536,8 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'trays' ? (
         <TraysTab
-          changeLog={
+          changeLog={<>
+            {assistant}
             <SectionChangeLog
               styles={styles}
               items={trays}
@@ -1527,7 +1546,7 @@ export const ProjectDetails = () => {
               loading={traysLoading}
               error={traysError}
             />
-          }
+          </>}
           canExport={canExport}
           styles={styles}
           isAdmin={canEdit}
@@ -1607,14 +1626,15 @@ export const ProjectDetails = () => {
       {selectedTab === 'cable-list' ? (
         <CableListTab
           key={user?.id}
-          changeLog={
+          changeLog={<>
+            {assistant}
             <CableListChangeLog
               styles={styles}
               projectId={project.id}
               cables={cables}
               canExport={canExportHistory}
             />
-          }
+          </>}
           canExport={canExport}
           styles={styles}
           canManageCables={canManageCables}
@@ -1689,11 +1709,11 @@ export const ProjectDetails = () => {
       ) : null}
 
       {canViewAll && selectedTab === 'change-orders' ? (
-        <ChangeOrdersTab canEdit={canEdit} project={project} token={token} currentUser={user} />
+        <ChangeOrdersTab assistant={assistant} canEdit={canEdit} project={project} token={token} currentUser={user} />
       ) : null}
 
       {canViewAll && selectedTab === 'internal-ncrs' ? (
-        <ChangeOrdersTab
+        <ChangeOrdersTab assistant={assistant}
           canEdit={canEdit}
           project={project}
           token={token}
@@ -1703,7 +1723,7 @@ export const ProjectDetails = () => {
       ) : null}
 
       {selectedTab === 'roxtec' ? (
-        <RoxtecTab
+        <RoxtecTab assistant={assistant}
           styles={styles}
           projectId={project.id}
           token={canEdit ? token : null}
@@ -1711,6 +1731,7 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
+      {!['details', 'cables', 'trays', 'cable-list', 'change-orders', 'internal-ncrs', 'roxtec'].includes(selectedTab) && assistant}
       <Button appearance="secondary" onClick={() => navigate(-1)}>
         Back
       </Button>

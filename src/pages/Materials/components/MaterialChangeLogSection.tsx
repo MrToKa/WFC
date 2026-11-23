@@ -1,3 +1,4 @@
+import { AssistantPanel } from '@/pages/AssistantPanel';
 import { useEffect, useState } from 'react';
 import {
   Accordion,
@@ -67,6 +68,8 @@ export const MaterialChangeLogSection = ({
   }, [category, materialId, refreshKey, retry]);
 
   return (
+    <>
+    <AssistantPanel key={materialId} />
     <Accordion collapsible defaultOpenItems={[]} key={`${category}:${materialId}`}>
       <AccordionItem value="change-log" className={styles.card}>
         <AccordionHeader>Change log</AccordionHeader>
@@ -83,5 +86,6 @@ export const MaterialChangeLogSection = ({
         </AccordionPanel>
       </AccordionItem>
     </Accordion>
+    </>
   );
 };

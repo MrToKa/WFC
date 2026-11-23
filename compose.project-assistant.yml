@@ -1,0 +1,34 @@
+services:
+  backend:
+    environment:
+      WFC_ASSISTANT_URL: http://project-assistant:8092
+    secrets:
+      - assistant-token
+    networks:
+      - application
+      - assistant-private
+  project-assistant:
+    build: ./ai-assistant
+    environment:
+      WFC_AI_MAX_PAGES: ${WFC_AI_MAX_PAGES:-60}
+      WFC_AI_JOB_USD: ${WFC_AI_JOB_USD:-10}
+    command: ["node","project-worker.mjs"]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:size=128m,mode=1777"]
+    volumes: ["assistant-cache:/var/lib/wfc-ai/cache"]
+    networks: [assistant-private, assistant-egress]
+    secrets: [assistant-token, openai-api-key]
+secrets:
+  assistant-token:
+    file: ${WFC_ASSISTANT_TOKEN_FILE:?Set a private service token file}
+  openai-api-key:
+    file: ${WFC_OPENAI_KEY_FILE:?Set the OpenAI project key file}
+networks:
+  assistant-private:
+    internal: true
+  assistant-egress: {}
+volumes:
+  assistant-cache: {}

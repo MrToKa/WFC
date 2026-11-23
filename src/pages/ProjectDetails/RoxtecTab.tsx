@@ -54,13 +54,14 @@ const emptyDraft: RoxtecDraft = {
 };
 
 type RoxtecTabProps = {
+  assistant?: React.ReactNode;
   canExport?: boolean;
   styles: ProjectDetailsStyles;
   projectId: string | undefined;
   token: string | null;
 };
 
-export const RoxtecTab = ({ styles, projectId, token, canExport = false }: RoxtecTabProps) => {
+export const RoxtecTab = ({ assistant, styles, projectId, token, canExport = false }: RoxtecTabProps) => {
   const navigate = useNavigate();
   const [changeLog, setChangeLog] = useState<ProjectChangeLogEntry[]>([]);
   const [entries, setEntries] = useState<RoxtecEntry[]>([]);
@@ -520,6 +521,7 @@ export const RoxtecTab = ({ styles, projectId, token, canExport = false }: Roxte
           />
         ) : null}
       </div>
+      {assistant}
       <Accordion collapsible defaultOpenItems={[]} key={projectId}>
         <AccordionItem value="change-log" className={styles.panel}>
           <AccordionHeader>Change log</AccordionHeader>

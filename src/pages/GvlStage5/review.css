@@ -1,0 +1,25 @@
+.pilot-review { max-width: 72rem; margin: 0 auto; padding: clamp(1rem, 3vw, 2.25rem); color: var(--colorNeutralForeground1); }
+.pilot-review header,.pilot-tools,.pilot-tabs { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+.pilot-review header { justify-content:space-between; }
+.pilot-review h1 { font-size:clamp(1.45rem,3.5vw,2.15rem); line-height:1.2; margin:1rem 0 .35rem; }
+.pilot-review h2 { font-size:1.25rem; margin:1.4rem 0 .8rem; }
+.pilot-review a { color:var(--colorBrandForegroundLink); }
+.pilot-scope { color:var(--colorNeutralForeground2); line-height:1.6; }
+.pilot-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(9rem,1fr)); gap:1rem; padding:1.2rem 0; border-block:1px solid var(--colorNeutralStroke2); }
+.pilot-summary dt { color:var(--colorNeutralForeground2); font-size:.875rem; }
+.pilot-summary dd { margin:.4rem 0 0; font-weight:600; font-size:1.7rem; }
+.pilot-tabs { margin-top:1.3rem; gap:.25rem; }
+.pilot-tools { margin:.7rem 0; }
+.pilot-item { border-bottom:1px solid var(--colorNeutralStroke2); }
+.pilot-item summary { cursor:pointer; padding:.8rem .2rem; }
+.pilot-item summary span { color:var(--colorNeutralForeground2); margin-left:1rem; overflow-wrap:anywhere; }
+.pilot-item > div { margin:0 0 1rem 1rem; overflow-wrap:anywhere; }
+.pilot-item p { margin:.6rem 0; }
+.pilot-line { display:block; }
+.pilot-cable { display:inline-block; margin-right:.8rem; }
+.pilot-scroll { max-width:100%; overflow:auto; }
+.pilot-review table { width:100%; border-collapse:collapse; }
+.pilot-review th,.pilot-review td { text-align:left; padding:.65rem .5rem; border-bottom:1px solid var(--colorNeutralStroke2); }
+.pilot-audit > div { display:flex; flex-wrap:wrap; gap:.5rem; }
+.pilot-audit dt { min-width:10rem; font-weight:600; }
+.pilot-audit dd { margin:0; }

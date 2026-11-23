@@ -1,0 +1,37 @@
+# Use after the existing test app and CAD Compose files.
+services:
+  api:
+    image: wfc-test/api:${WFC_ASSISTANT_IMAGE_TAG:?Set the assistant build revision}
+    build:
+      context: ${WFC_ASSISTANT_SOURCE:?Set WFC assistant repository root}
+    environment:
+      WFC_ASSISTANT_URL: http://project-assistant:8092
+    networks: [test, assistant-private]
+    secrets: [assistant-token]
+  web:
+    image: wfc-test/web:${WFC_ASSISTANT_IMAGE_TAG:?Set the assistant build revision}
+    build:
+      context: ${WFC_ASSISTANT_SOURCE:?Set WFC assistant repository root}
+  project-assistant:
+    extends:
+      file: ${WFC_ASSISTANT_SOURCE}/compose.project-assistant.yml
+      service: project-assistant
+    build:
+      context: ${WFC_ASSISTANT_SOURCE}/ai-assistant
+    image: wfc-test/assistant:${WFC_ASSISTANT_IMAGE_TAG}
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://localhost:8092/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+secrets:
+  openai-api-key:
+    file: ${WFC_OPENAI_KEY_FILE:?Set the OpenAI project key file}
+  assistant-token:
+    file: ${WFC_ASSISTANT_TOKEN_FILE:?Set a private service token file}
+networks:
+  assistant-private:
+    internal: true
+  assistant-egress: {}
+volumes:
+  assistant-cache: {}

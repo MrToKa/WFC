@@ -1,3 +1,4 @@
+import { AssistantPanel } from './AssistantPanel';
 import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -852,6 +853,7 @@ export const CableTypeDetails = () => {
         )}
       </Card>
 
+      <AssistantPanel key={cableTypeId} projectId={projectId} writable={canEdit} />
       <Accordion collapsible defaultOpenItems={[]} key={details.cableType.id}>
         <AccordionItem value="change-tracker" className={styles.fullWidthCard}>
           <AccordionHeader>Change tracker</AccordionHeader>

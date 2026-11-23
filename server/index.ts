@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import https from 'node:https';
 import http from 'node:http';
+import { initializeAssistant, startAssistantJobs } from './assistant/jobs.js';
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { initializeDatabase } from './db.js';
@@ -72,6 +73,8 @@ const startServer = async (): Promise<void> => {
       await initializeCadAutomaticConnectivity(pool);
     }
     await initializePathFinderRuntime();
+    await initializeAssistant();
+    startAssistantJobs();
     if (config.https.enabled) {
       const resolvePath = (value: string): string =>
         path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);

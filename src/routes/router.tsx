@@ -1,5 +1,5 @@
 import { lazy, type ComponentType } from 'react';
-import { createBrowserRouter, type RouteObject } from 'react-router-dom';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom';
 import { AppShell } from '@/app/AppShell';
 import { RedirectIfAuthenticated, RequireAdmin, RequireCatalogAccess, RequireAuth } from '@/components/AuthGuards';
 
@@ -15,6 +15,7 @@ const AdminPanel = lazyPage(() => import('@/pages/AdminPanel'), 'AdminPanel');
 const SimplifiedPreparer = lazyPage(() => import('@/pages/SimplifiedPreparer'), 'SimplifiedPreparer');
 const CableDetails = lazyPage(() => import('@/pages/CableDetails'), 'CableDetails');
 const CableTypeDetails = lazyPage(() => import('@/pages/CableTypeDetails'), 'CableTypeDetails');
+const GvlStage5 = lazyPage(() => import('@/pages/GvlStage5/GvlStage5'), 'GvlStage5');
 const ProjectDetails = lazyPage(() => import('@/pages/ProjectDetails'), 'ProjectDetails');
 const ViewerHarness = lazyPage(() => import('@/viewer/ViewerHarness'), 'ViewerHarness');
 const RoxtecDetails = lazyPage(() => import('@/pages/RoxtecDetails'), 'RoxtecDetails');
@@ -57,6 +58,8 @@ export const routes: RouteObject[] = [
     path: '/',
     element: <AppShell />,
     children: [
+      { path: 'projects/:projectId/gvl-stage5', element: <RequireAdmin><GvlStage5 /></RequireAdmin> },
+      { path: 'ai-assistant', element: <RequireAuth><Navigate replace to="/" /></RequireAuth> },
       { path: 'preparer', element: <RequireAdmin><SimplifiedPreparer /></RequireAdmin> },
       ...(import.meta.env.VITE_VIEWER_HARNESS === 'true' ? [{
         path: 'projects/:projectId/viewer-harness',

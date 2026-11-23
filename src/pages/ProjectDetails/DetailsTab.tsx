@@ -80,6 +80,7 @@ type FormattedDates = {
 } | null;
 
 type DetailsTabProps = {
+  assistant?: React.ReactNode;
   purposeManagement?: TrayPurposeManagement;
   purposeRevision?: number;
   canExport?: boolean;
@@ -111,7 +112,7 @@ type DetailsTabProps = {
   onTrayTemplateChange: (purpose: string, fileId: string | null) => Promise<void>;
 };
 
-export const DetailsTab = ({
+export const DetailsTab = ({ assistant,
   purposeManagement,
   purposeRevision = 0,
   canExport = false,
@@ -883,6 +884,7 @@ export const DetailsTab = ({
           </>
         )}
       </div> : null}
+      {assistant}
       <Accordion collapsible defaultOpenItems={[]} key={project.id}>
         <AccordionItem value="change-tracker" className={styles.panel}>
           <AccordionHeader>Change tracker</AccordionHeader>

@@ -1,3 +1,4 @@
+import { AssistantPanel } from './AssistantPanel';
 import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import { useEffect, useMemo, useState } from 'react';
@@ -765,6 +766,7 @@ export const RoxtecDetails = () => {
         ) : null}
       </div>
 
+      <AssistantPanel key={roxtecId} projectId={projectId} writable={canManageRoxtec} />
       <Accordion collapsible defaultOpenItems={[]} key={`${projectId}:${roxtecId}`}>
         <AccordionItem value="change-log" className={styles.panel}>
           <AccordionHeader>Change log</AccordionHeader>

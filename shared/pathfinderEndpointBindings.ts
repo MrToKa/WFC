@@ -46,7 +46,7 @@ export const endpointModelMatchEvidenceSchema = z.object({
   sdkObjectId: z.number().int().positive().max(2147483647), objectName: nonempty(2048),
   objectGroup: endpointModelMatchObjectGroupSchema.optional(),
   bounds: endpointModelMatchBoundsSchema, bottomCentre: endpointPointSchema,
-  matchingPolicyVersion: z.literal('wfc.pf.project-exact-candidates.v3'), visibilityScopeSha256: hash,
+  matchingPolicyVersion: z.enum(['wfc.pf.project-exact-candidates.v3','wfc.assistant.visible-instrument-on-rack.v1']), visibilityScopeSha256: hash,
   approximate: z.literal(true), engineeringAccepted: z.literal(false),
 }).strict().refine(v => v.logicalKey === normalizeEndpointLocation(v.logicalKey)
   && (!v.objectGroup || v.objectGroup.objectIds[0] === v.sdkObjectId)

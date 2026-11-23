@@ -200,7 +200,15 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
     await run.controller.setCadComponentProperties(...args);
   }, [scope, current]);
+  const showAssistantSelection = useCallback(async (model: string, dbId: number | null, point: number[] | null) => {
+    const run = runRef.current;
+    const controller = run?.controller;
+    const snapshot = controller?.getLoadSnapshot();
+    if (!run || !current(run) || !controller || !snapshot?.ready || snapshot.modelVersionId !== model) throw new Error('Model version has changed.');
+    if (dbId !== null) await controller.showLocation(dbId);
+    else if (point?.length === 3) await controller.showLocationPoint([point[0],point[1],point[2]]);
+  }, [current]);
   const visible = state.scope === scope ? state : initial(scope);
-  return { ...visible, pickCadAnchor, pickPlacementPoint, showCadComponent, moveCadComponent, removeCadComponent, focusCadComponent,
+  return { ...visible, showAssistantSelection, pickCadAnchor, pickPlacementPoint, showCadComponent, moveCadComponent, removeCadComponent, focusCadComponent,
     setCadComponentColor, setCadComponentVisibility, setCadComponentProperties, retry, canShow: visible.phase === 'ready' };
 }

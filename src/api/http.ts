@@ -127,7 +127,8 @@ const readJson = async (response: Response): Promise<unknown> => {
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
 
-  if (options.body !== undefined) {
+  const form = options.body instanceof FormData ? options.body : undefined;
+  if (!form && options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -139,7 +140,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? 'GET',
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body: form ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
   });
 
   const contentType = response.headers.get('content-type') ?? '';

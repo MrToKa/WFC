@@ -27,14 +27,14 @@ async function connect(pool: Pool): Promise<PoolClient> {
   finally { if (timer) clearTimeout(timer); }
 }
 /** The project mutex is acquired first; project existence is disclosed only after current authority. */
-export async function endpointBindingTransaction<T>(pool: Pool, projectId: string, who: JobPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal): Promise<T> {
+export async function endpointBindingTransaction<T>(pool: Pool, projectId: string, who: JobPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal, loginMode:'request'|'persisted-grant'='request'): Promise<T> {
   policyUuidSchema.parse(projectId); policyUuidSchema.parse(who.userId); policyUuidSchema.parse(who.loginId); assertLoginNotExpired(who); signal?.throwIfAborted();
   const c = await connect(pool); let commitStarted = false, discard = false;
   try {
     await c.query('BEGIN'); await c.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
     const exists = (await c.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', [projectId])).rows.length === 1;
     const user = (await c.query<{ is_admin: boolean }>('SELECT is_admin FROM users WHERE id=$1 FOR SHARE', [who.userId])).rows[0];
-    if (!user) return fail('LOGIN_REVOKED', 401); if (!user.is_admin) return fail('ADMIN_REQUIRED', 403); await requireCurrentLogin(c, who); if (!exists) return fail('PROJECT_NOT_FOUND', 404);
+    if (!user) return fail('LOGIN_REVOKED', 401); if (!user.is_admin) return fail('ADMIN_REQUIRED', 403); await requireCurrentLogin(c, who, loginMode); if (!exists) return fail('PROJECT_NOT_FOUND', 404);
     signal?.throwIfAborted(); const result = await operation(c); signal?.throwIfAborted(); assertLoginNotExpired(who); commitStarted = true; await c.query('COMMIT'); signal?.throwIfAborted(); assertLoginNotExpired(who); return result;
   } catch (error) {
     discard = commitStarted; try { await c.query('ROLLBACK'); } catch { discard = true; }
@@ -234,6 +234,7 @@ export async function confirmEndpointBindingChangeInTransaction(c: PoolClient, p
 export async function confirmMatchedEndpointInTransaction(c: PoolClient, pid: string, who: JobPrincipal, input: {
   locationId: string; location: { name: string; aliases: string[] }; current: EndpointCurrentScope;
   expectedRegistryRevision: string; expectedLocationRevision: string | null; expectedHeadId: string | null; reason: string;
+  replaceVerifiedRackBinding?: { expectedObjectId: number };
   evidence: NonNullable<EndpointBinding['autoMatchEvidence']>; crossModelCandidates?:ModelLocationMatchAssign['scan']['candidates'];
 }, signal?: AbortSignal) {
   policyUuidSchema.parse(pid); policyUuidSchema.parse(input.locationId); assertLoginNotExpired(who); signal?.throwIfAborted();
@@ -254,10 +255,24 @@ export async function confirmMatchedEndpointInTransaction(c: PoolClient, pid: st
     if(canonicalPurposeJson(decision.candidate.bottomCentre)!==canonicalPurposeJson(evidence.bottomCentre)||decision.candidate.objectId!==evidence.sdkObjectId||canonicalPurposeJson(decision.candidate.objectGroup??null)!==canonicalPurposeJson(evidence.objectGroup??null))return fail('MODEL_LOCATION_CROSS_MODEL_CANDIDATE_CHANGED');
     crossModelAccepted=true;
   }
-  if (before.previous && !crossModelAccepted && (before.previous.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
+  let rackReplacement = false;
+  if (input.replaceVerifiedRackBinding) {
+    const old = before.previous;
+    const oldObject = input.replaceVerifiedRackBinding.expectedObjectId;
+    if (!Number.isSafeInteger(oldObject) || oldObject === evidence.sdkObjectId ||
+        evidence.matchingPolicyVersion !== 'wfc.assistant.visible-instrument-on-rack.v1' ||
+        !old || old.id !== input.expectedHeadId || old.status !== 'confirmed' ||
+        old.locationRevision !== before.value?.revision || old.autoMatchEvidence?.sdkObjectId !== oldObject ||
+        canonicalPurposeJson(old.autoMatchEvidence.current) !== canonicalPurposeJson(current))
+      return fail('MODEL_LOCATION_MATCH_REPLACEMENT_CHANGED');
+    if (!(await c.query('SELECT 1 FROM users WHERE id=$1 AND is_admin FOR SHARE', [who.userId])).rowCount)
+      return fail('ADMIN_REQUIRED',403);
+    rackReplacement = true;
+  }
+  if (before.previous && !crossModelAccepted && !rackReplacement && (before.previous.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
     || before.previous.status === 'confirmed' && before.previous.locationRevision === before.value?.revision
       && canonicalPurposeJson(before.previous.autoMatchEvidence?.current) === canonicalPurposeJson(current))
-    || !crossModelAccepted && await legacy(c, pid, input.locationId, current.modelVersionId)) return fail('MODEL_LOCATION_MATCH_EXISTING_BINDING');
+    || !crossModelAccepted && !rackReplacement && await legacy(c, pid, input.locationId, current.modelVersionId)) return fail('MODEL_LOCATION_MATCH_EXISTING_BINDING');
   return commitBinding(c, pid, who, input.locationId, input.location, current, before, revision, input.reason, {
     mode: 'fixed-world', derivation: ENDPOINT_MODEL_MATCH_DERIVATION, pointProjectMetres: evidence.bottomCentre,
     sourceObject: null, attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null, autoMatchEvidence: evidence,
