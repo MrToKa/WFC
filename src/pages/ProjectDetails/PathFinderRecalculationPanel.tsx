@@ -119,6 +119,7 @@ export function PathFinderRecalculationPanel(props: RecalculationPanelProps) {
         {progress.refused > 0 ? <p>Automatic saving refused: {progress.refused}.</p> : null}
         {progress.authorityExpired > 0 ? <p>Automatic saving authorization expired ({progress.authorityExpired}).</p> : null}
         {progress.stale > 0 ? <p>Results no longer current: {progress.stale}.</p> : null}
+        {(progress.unchanged ?? 0) > 0 ? <p>Unchanged cable values: {progress.unchanged}.</p> : null}
         {progress.notScheduledForSave > 0 ? <p>{context.automaticPairPolicy ? 'Results not scheduled for automatic saving' : 'Proposals without automatic saving'}: {progress.notScheduledForSave}.</p> : null}
         {progress.calculationFailed > 0 ? <p>Other outcomes needing attention: {progress.calculationFailed}.</p> : null}
       </div> : preparing ? <>

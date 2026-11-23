@@ -111,7 +111,7 @@ export const automaticPairCapacityClearProvenanceSchema = z.object({
     || Boolean(m.baselinePolicy) !== Boolean(value.materialObservation))
     ctx.addIssue({ code: 'custom', message: 'Capacity clearing requires the exact current automatic pair mandate and failed search.' });
 });
-export const automaticPairStatuses = ['pending', 'running', 'written', 'already-written', 'review-required', 'stale', 'authority-expired', 'refused', 'unknown'] as const;
+export const automaticPairStatuses = ['pending', 'running', 'written', 'already-written', 'unchanged', 'review-required', 'stale', 'authority-expired', 'refused', 'unknown'] as const;
 export type AutomaticPairStatus = typeof automaticPairStatuses[number];
 export const retainedCableRouteSchema = z.enum(['manual', 'execution', 'saved', 'none']);
 export type AutomaticPairOutcome = { status: AutomaticPairStatus; receiptId: string | null; code?: string };

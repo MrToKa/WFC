@@ -6,7 +6,7 @@ import { recalculationFixture, RECALCULATION_FIXTURE as f } from './recalculatio
 
 const counts = (change: Record<string, unknown> = {}) => ({ job_id: f.jobId, job_total: 2140, enrolled_total: 2140, ready_cables: 360, blocked_cables: 1780,
   total: 2140, eligible: 360, blocked_inputs: 1780, waiting: 360, running: 0, processed: 0, calculated: 0,
-  saved: 0, saving: 0, review_required: 0, refused: 0, authority_expired: 0, stale: 0, not_scheduled_for_save: 0, ...change });
+  saved: 0, unchanged: 0, saving: 0, review_required: 0, refused: 0, authority_expired: 0, stale: 0, not_scheduled_for_save: 0, ...change });
 function reader(row: ReturnType<typeof counts> | null = counts()) {
   const query = vi.fn(async () => ({ rows: row ? [row] : [] }));
   return { query, client: { query } as unknown as PoolClient };
@@ -42,6 +42,10 @@ describe('current-job calculation and Cable list progress', () => {
       waiting: 0, processed: 7, calculated: 6, review_required: 2, refused: 1, authority_expired: 1, stale: 1, not_scheduled_for_save: 1 }), { state: 'complete' });
     expect(x.context.progress).toMatchObject({ processed: 7, calculated: 6, saved: 0, saving: 0, reviewRequired: 2,
       refused: 1, authorityExpired: 1, stale: 1, notScheduledForSave: 1, calculationFailed: 1 });
+  });
+  it('counts unchanged calculations separately from saved and refused output', async () => {
+    const x = await currentContext(counts({ waiting: 358, processed: 2, calculated: 2, saved: 1, unchanged: 1 }));
+    expect(x.context.progress).toMatchObject({ calculated: 2, saved: 1, unchanged: 1, saving: 0, refused: 0 });
   });
   it('omits optional progress for older DTO fixtures and for absent/currently retired job scope', async () => {
     const old = recalculationFixture(); Object.assign(old.db.state, { enrolled_generation: '2', current_job_id: f.jobId, total: 1, ready_cables: 1, blocked_cables: 0 });

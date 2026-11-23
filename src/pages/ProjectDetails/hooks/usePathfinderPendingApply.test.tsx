@@ -41,6 +41,21 @@ beforeEach(() => { sessionStorage.clear(); });
 afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
 
 describe('durable human Apply recovery', () => {
+  it('settles an unchanged response for the exact retained Apply command', async () => {
+    const props = access();
+    vi.mocked(props.action).mockImplementationOnce(async () => {
+      const { projectId, proposalId, cableId, idempotencyKey, reviewId, expectedCableWriteRevision } = stored().intents[0];
+      return { receipt: null, duplicate: false, unchanged: {
+        projectId, proposalId, cableId, idempotencyKey, reviewId, expectedCableWriteRevision,
+      } };
+    });
+    const view = renderHook(() => usePathfinderPendingApply(props));
+    await waitFor(() => expect(view.result.current.canStart).toBe(true));
+    await act(async () => { expect(await view.result.current.start(input)).toBe(true); });
+    expect(stored().intents).toEqual([]);
+    expect(view.result.current.message).toContain('Cable values are unchanged');
+  });
+
   it.each(['exact', 'old-identity', 'old-evidence'] as const)('settles mixed Apply only through matching new evidence and identity: %s', async variant => {
     const props = access(), old = receipt();
     const mixed = mixedBarrierWriteEvidenceSchema.parse({ ...old.receipt.provenance.barrierEvidence,

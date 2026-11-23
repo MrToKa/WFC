@@ -29,6 +29,15 @@ export const formatCableVersionUser = (version: CableVersion): string => {
   return rawName || version.changedBy?.email || '-';
 };
 
+const cableVersionSourceLabels: Record<CableVersion['changeSource'], string> = {
+  import: 'import',
+  manual: 'manual save',
+  pathfinder: 'PathFinder apply',
+};
+
+export const formatCableVersionSource = (source: CableVersion['changeSource']): string =>
+  cableVersionSourceLabels[source];
+
 export const formatCableVersionValue = (value: string | number | null): string =>
   value === null || value === '' ? '-' : String(value);
 

@@ -64,6 +64,7 @@ export const recalculationProgressSchema = z.object({
   processed: count,
   calculated: count,
   saved: count,
+  unchanged: count.optional(),
   saving: count,
   reviewRequired: count,
   refused: count,
@@ -75,7 +76,7 @@ export const recalculationProgressSchema = z.object({
   if (value.eligible + value.blockedInputs !== value.total
     || value.waiting + value.running + value.processed !== value.eligible
     || value.calculated + value.calculationFailed !== value.processed
-    || value.saved + value.saving + value.reviewRequired + value.refused + value.authorityExpired + value.stale + value.notScheduledForSave !== value.calculated)
+    || value.saved + (value.unchanged ?? 0) + value.saving + value.reviewRequired + value.refused + value.authorityExpired + value.stale + value.notScheduledForSave !== value.calculated)
     context.addIssue({ code: 'custom', message: 'Calculation progress must retain its complete input, outcome and output partitions.' });
 });
 export type RecalculationProgress = z.infer<typeof recalculationProgressSchema>;

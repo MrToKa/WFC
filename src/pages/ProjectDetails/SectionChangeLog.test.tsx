@@ -118,7 +118,7 @@ it('merges material history and per-cable revisions and reloads after cable chan
       { id: 'b', cableId: 2, tag: 'Cable B', changeLog: [] },
     ],
     versions: [
-      version('a2', 'a', 2, 'New route'),
+      { ...version('a2', 'a', 2, 'New route'), changeSource: 'pathfinder' },
       version('b1', 'b', 1, 'Other route'),
       version('a1', 'a', 1, 'Old route'),
     ],
@@ -126,6 +126,7 @@ it('merges material history and per-cable revisions and reloads after cable chan
   const { rerender } = render(<Harness cables={[]} />);
   fireEvent.click(screen.getByRole('button', { name: 'Change log' }));
   expect(await screen.findByText('Routing: Old route → New route')).toBeVisible();
+  expect(screen.getByText('Updated via PathFinder apply (v2).')).toBeVisible();
   expect(screen.getByText('Added material')).toBeVisible();
   expect(screen.queryByText(/Other route → New route/)).not.toBeInTheDocument();
   expect(screen.getAllByText('Original Author')).toHaveLength(3);

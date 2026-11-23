@@ -16,7 +16,7 @@ import { readProposalApplicability, readAutomaticPairProposalApplicability } fro
 import { requireBarrierWriteEvidence, requireCurrentBarrierWriteScope } from './barrierWrites.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { readSnapshot } from './storage.js';
-import { recordPathFinderCableHistory } from './cableWriteHistory.js';
+import { recordPathFinderCableHistory, sameCableRouteValues } from './cableWriteHistory.js';
 import { PathFinderError } from './errors.js';
 import type { BarrierDependencySnapshot, EngineResponse } from './jobContracts.js';
 import { readVerifiedSameEndpointCurrent, type VerifiedSameEndpointCurrent } from './verifiedSameEndpointReuse.js';
@@ -154,12 +154,21 @@ export function createAutomaticPairWriter(pool: Pool, adapters: AutomaticPairWri
         return { status: 'refused', receiptId: null, code: 'AUTOMATIC_PAIR_CAPACITY_CHANGED' };
       if(!verified)await (adapters.snapshot ?? readSnapshot)(dependencies.artifact.id, dependencies.artifact.sha256);
       if(verified)await currentScope();await fence(client, claim); await mandateFence(client, m); signal?.throwIfAborted();
-      await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
       const nextRouting = capacityClear ? null : result.route!.routeText, nextDesign = capacityClear ? null : result.design!.designLengthMeters;
+      const nextRemarks = (capacityClear ? clearRouteObstacleRemarks(before.remarks) : routeObstacleRemarks(before.remarks, result)) ?? null;
+      if (sameCableRouteValues({ routing: before.routing, designLength: before.design_length, remarks: before.remarks },
+        { routing: nextRouting, designLength: nextDesign, remarks: nextRemarks })) {
+        await currentScope();
+        await fence(client, claim);
+        await mandateFence(client, m);
+        signal?.throwIfAborted();
+        return { status: 'unchanged', receiptId: null };
+      }
+      await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
       const after = (await client.query<Row>(`/* automatic-pair:write */ UPDATE cables c SET routing=$3,design_length=$4,remarks=$8,updated_at=clock_timestamp()
         WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 AND c.routing IS NOT DISTINCT FROM $6::text AND c.design_length IS NOT DISTINCT FROM $7::numeric
         RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,
-      [m.projectId, m.cableId, nextRouting, nextDesign, m.cableWriteRevision, before.routing, before.design_length, capacityClear ? clearRouteObstacleRemarks(before.remarks) ?? null : routeObstacleRemarks(before.remarks,result) ?? null])).rows[0]?.value;
+      [m.projectId, m.cableId, nextRouting, nextDesign, m.cableWriteRevision, before.routing, before.design_length, nextRemarks])).rows[0]?.value;
       if (!after) return fail('CABLE_WRITE_CONFLICT');
       if (capacityClear ? !automaticPairCapacityClearTransition(m.projectId, m.cableId, before, after)
         : !automaticPairOwnTransition(m.projectId, m.cableId, before, after, result) || after.routing !== nextRouting

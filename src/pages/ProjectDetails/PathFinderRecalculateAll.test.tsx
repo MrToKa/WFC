@@ -137,6 +137,7 @@ describe('whole-project background pass', () => {
   it('does not call manual or uncertain output saved', () => {
     expect(backgroundCalculationCounts(makeJob('complete', [item('calculated'), item('calculated', 'unknown'), item('calculated', 'review-required')]))).toMatchObject({ saved: 0, review: 1, unsaved: 2 });
     expect(backgroundCalculationCounts(makeJob('complete', [{ ...item('locations_required'), state: 'blocked' }]))).toMatchObject({ blocked: 1, calculated: 0 });
+    expect(backgroundCalculationCounts(makeJob('complete', [item('calculated', 'unchanged')]))).toMatchObject({ unchanged: 1, saved: 0, unsaved: 0, pendingUpdates: 0 });
   });
   it('distinguishes a retained manual route from expired writes with and without existing routes', async () => {
     const props = setup(), onReviewReady = vi.fn();

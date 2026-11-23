@@ -15,8 +15,8 @@ import type { readCurrentPositiveCapacity } from './capacityClearWrite.js';
 import { readAutomaticPairOwnership } from './automaticPairOwnership.js';
 
 type Row = Record<string, any>;
-function fixture(options:{reuse?:VerifiedSameEndpointReuse;cableId?:string;capacityClear?:boolean;positiveCapacity?:boolean;sequence?:number}={}) {
-  const { dependencies, result, id } = syntheticBarrierWriteInputs();
+function fixture(options:{reuse?:VerifiedSameEndpointReuse;cableId?:string;capacityClear?:boolean;positiveCapacity?:boolean;sequence?:number;routeCode?:string}={}) {
+  const { dependencies, result, id } = syntheticBarrierWriteInputs(options.routeCode);
   if(options.cableId)dependencies.cableId=options.cableId;
   if(options.capacityClear||options.positiveCapacity)
     dependencies.settings.trayCapacity={enabled:true,minimumFreeSpacePercent:30,tolerancePercentagePoints:3,layoutSha256:'c'.repeat(64)};
@@ -128,6 +128,33 @@ function historicalWriterProof(fixtures: ReturnType<typeof fixture>[]) {
   return { client, read, query };
 }
 describe('automatic pair exact sealed write with transactional synthetic SQL', () => {
+  it('keeps the cable revision and receipt history intact when recalculation returns the same values', async () => {
+    const f = fixture();
+    Object.assign(f.baseline, { routing: '/A', design_length: '7.0000', remarks: null });
+    Object.assign(f.state.cable, f.baseline);
+    f.mandate.baselineSha256 = automaticPairHash(f.baseline);
+    f.mandate.contentSha256 = automaticPairHash(automaticPairMandateHashInput(f.mandate));
+
+    expect(await f.run()).toEqual({ status: 'unchanged', receiptId: null });
+    expect(await f.run()).toEqual({ status: 'unchanged', receiptId: null });
+    expect(f.state.cable).toEqual(f.baseline);
+    expect(f.state.writes).toBe(0);
+    expect(f.history).not.toHaveBeenCalled();
+    expect(f.state.receipts).toEqual([]);
+  });
+
+  it('records a new version when only the design length changes', async () => {
+    const f = fixture();
+    f.baseline.routing = '/A';
+    f.state.cable.routing = '/A';
+    f.mandate.baselineSha256 = automaticPairHash(f.baseline);
+    f.mandate.contentSha256 = automaticPairHash(automaticPairMandateHashInput(f.mandate));
+
+    expect(await f.run()).toMatchObject({ status: 'written' });
+    expect(f.state.history).toHaveLength(1);
+    expect(f.state.cable).toMatchObject({ routing: '/A', design_length: '7', cable_write_revision: '8' });
+  });
+
   it.each([false, true])('saves a newly admitted empty pair after default material initialization, already initialized=%s', async initialized => {
     const f = fixture(); f.baseline.materials_initialized = initialized; f.state.cable.materials_initialized = initialized;
     engineeringAdmission(f, true);
@@ -182,7 +209,7 @@ describe('automatic pair exact sealed write with transactional synthetic SQL', (
     else { delete first.mandate.baselinePolicy; first.mandate.baselineSha256 = automaticPairHash(first.baseline);
       first.mandate.contentSha256 = automaticPairHash(automaticPairMandateHashInput(first.mandate)); }
     expect(await first.run()).toMatchObject({ status: 'written' });
-    const second = fixture({ sequence: 1 }), proof = historicalWriterProof([first, second]);
+    const second = fixture({ sequence: 1, routeCode: 'B' }), proof = historicalWriterProof([first, second]);
     const firstReceipt = first.state.receipts[0], origin = (await proof.read()({ projectId: first.mandate.projectId,
       cableId: first.mandate.cableId, receiptId: firstReceipt.id }))!;
     expect(origin).not.toBeNull(); Object.assign(second.baseline, first.state.cable); second.state.cable = structuredClone(second.baseline);
@@ -199,7 +226,7 @@ describe('automatic pair exact sealed write with transactional synthetic SQL', (
     expect(await second.run()).toMatchObject({ status: 'written' });
     const receipt = second.state.receipts[0], reloaded = await proof.read()({ projectId: second.mandate.projectId,
       cableId: second.mandate.cableId, receiptId: receipt.id });
-    expect(reloaded).toMatchObject({ originReceiptId: firstReceipt.id, receiptId: receipt.id, after: { cable_write_revision: '9', routing: '/A' } });
+    expect(reloaded).toMatchObject({ originReceiptId: firstReceipt.id, receiptId: receipt.id, after: { cable_write_revision: '9', routing: '/B' } });
     expect(second.mandate.baselineSha256).toBe(automaticPairHash(receipt.before_snapshot));
     second.proof.mockImplementation(async () => proof.read()({ projectId: second.mandate.projectId, cableId: second.mandate.cableId, receiptId: receipt.id }) as never);
     second.mandateFence.mockRejectedValue(Error('Expired authority is not required for receipt reconciliation'));

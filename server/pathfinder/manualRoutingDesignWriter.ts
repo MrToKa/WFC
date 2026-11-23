@@ -4,7 +4,7 @@ import { canonicalDecimalString } from '../../shared/pathfinderLengthLedger.js';
 import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 import { executionRoutingReasons } from '../../shared/cableRoutingControl.js';
 import { cableExecutionFacts, readCableRoutingControl } from './cableRoutingControlRepository.js';
-import { recordPathFinderCableHistory } from './cableWriteHistory.js';
+import { recordPathFinderCableHistory, sameCableRouteValues } from './cableWriteHistory.js';
 import { PathFinderError } from './errors.js';
 
 type Row=Record<string,any>;
@@ -26,7 +26,8 @@ export async function writeManualRoutingDesign(client:PoolClient,input:{projectI
   if(executionRoutingReasons(cableExecutionFacts(before),control.control.executionLocked).length)return unchanged('execution-protected');
   if(!control.control.manualProtected||before.routing!==input.manualRouting)return unchanged('not-used-manual');
   const remarks=routeObstacleRemarks(before.remarks,input.result);
-  if(before.design_length!==null&&canonicalDecimalString(before.design_length)===String(input.lengthMetres)&&Object.is(remarks,before.remarks))return unchanged('unchanged');
+  if (sameCableRouteValues({ routing: before.routing, designLength: before.design_length, remarks: before.remarks },
+    { routing: input.manualRouting, designLength: String(input.lengthMetres), remarks })) return unchanged('unchanged');
   const previousSetting=(await client.query<{value:string|null}>("SELECT current_setting('wfc.pathfinder_apply',true) AS value")).rows[0]?.value??'';
   await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
   const after=(await client.query<Row>(`/* manual-design:write */ UPDATE cables c SET design_length=$3,remarks=$5,updated_at=clock_timestamp()

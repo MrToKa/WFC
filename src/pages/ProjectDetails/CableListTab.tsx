@@ -25,6 +25,7 @@ import { CABLE_MTO_OPTIONS, type Cable, type CableType, type CableVersion } from
 import type { CableSearchCriteria } from './hooks/useCableListSection';
 import {
   diffCableVersions,
+  formatCableVersionSource,
   formatCableVersionTimestamp,
   formatCableVersionUser,
 } from './cableVersionUtils';
@@ -659,8 +660,7 @@ export const CableListTab = ({
                       const previousVersion = versionsDialog.versions[index + 1] ?? null;
                       const changes = diffCableVersions(version, previousVersion);
                       const changeLabel = version.changeType === 'create' ? 'Created' : 'Updated';
-                      const sourceLabel =
-                        version.changeSource === 'import' ? 'import' : 'manual save';
+                      const sourceLabel = formatCableVersionSource(version.changeSource);
 
                       return (
                         <tr key={version.id}>

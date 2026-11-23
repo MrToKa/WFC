@@ -54,6 +54,11 @@ const receiptSchema = z.object({ duplicate: z.boolean(), receipt: z.object({
       barrierEvidence: barrierWriteEvidenceSchema }).passthrough(),
   ]),
 }).passthrough() });
+const unchangedApplySchema = z.object({
+  receipt: z.null(), duplicate: z.literal(false),
+  unchanged: z.object({ projectId: uuid, proposalId: uuid, cableId: uuid, idempotencyKey: uuid, reviewId: uuid,
+    expectedCableWriteRevision: z.string() }).strict(),
+}).strict();
 const recoverySchema = z.object({ schemaVersion: z.literal('wfc.pf.apply-recovery.v1'), projectId: uuid, proposalId: uuid,
   idempotencyKey: uuid, reviewId: uuid, expectedCableWriteRevision: revision,
   status: z.enum(['already-applied', 'closed-without-apply']), duplicate: z.boolean(), receipt: z.unknown(),
@@ -116,7 +121,12 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
         expectedCableWriteRevision: intent.expectedCableWriteRevision,
       });
       if (!live() || request.current !== ticket) return false;
-      let closedWithoutApply = false, confirmed = mode === 'apply' && matchingReceipt(result, intent, allowHistorical);
+      const noChange = unchangedApplySchema.safeParse(result);
+      const unchanged = mode === 'apply' && noChange.success && noChange.data.unchanged.projectId === intent.projectId
+        && noChange.data.unchanged.proposalId === intent.proposalId && noChange.data.unchanged.cableId === intent.cableId
+        && noChange.data.unchanged.idempotencyKey === intent.idempotencyKey && noChange.data.unchanged.reviewId === intent.reviewId
+        && noChange.data.unchanged.expectedCableWriteRevision === intent.expectedCableWriteRevision;
+      let closedWithoutApply = false, confirmed = mode === 'apply' && (unchanged || matchingReceipt(result, intent, allowHistorical));
       if (mode === 'close') {
         const recovery = recoverySchema.safeParse(result);
         if (recovery.success && recovery.data.projectId === intent.projectId && recovery.data.proposalId === intent.proposalId
@@ -136,7 +146,7 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
       const stored = readStore(), current = stored.intents.find(item => ownerOf(item) === ownerOf(intent));
       if (!current || JSON.stringify(current) !== JSON.stringify(intent)) throw new Error('Pending Apply recovery identity changed.');
       writeStore({ version: 1, intents: stored.intents.filter(item => ownerOf(item) !== ownerOf(intent)) });
-      setState(value => ({ ...value, pending: null, message: closedWithoutApply
+      setState(value => ({ ...value, pending: null, message: unchanged ? 'Cable values are unchanged. No new cable revision was created.' : closedWithoutApply
         ? 'The pending request was closed without applying cable values. Its original key is blocked from any later Apply. Calculate and review a new proposal before applying.'
         : 'Routing and design length applied together. Installed length was preserved. The matching Apply receipt is confirmed.', error: null }));
       return true;

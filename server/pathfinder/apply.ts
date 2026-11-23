@@ -16,7 +16,7 @@ import { verifyRevisionResultForProposal } from './revisionResultRepository.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { readApplyAbandonment } from './applyRecovery.js';
 import { readProposalApplicability } from './proposalApplicability.js';
-import { recordPathFinderCableHistory } from './cableWriteHistory.js';
+import { recordPathFinderCableHistory, sameCableRouteValues } from './cableWriteHistory.js';
 import { canonicalDecimalString } from '../../shared/pathfinderLengthLedger.js';
 import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 
@@ -67,12 +67,21 @@ export function createPathFinderApply(pool:Pool) {
     const compatibilityIssue = routeCompatibilityIssue(route);
     if (compatibilityIssue) throw new PathFinderError('ROUTING_OUTSIDE_WFC_LIMIT',409,compatibilityIssue);
     assertLoginNotExpired(who);
-    const before = (await client.query<Row>(`SELECT to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value FROM cables c WHERE c.project_id=$1 AND c.id=$2`,[projectId,proposal.cable_id])).rows[0].value;
+    const before = (await client.query<Row>(`SELECT to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value FROM cables c WHERE c.project_id=$1 AND c.id=$2 FOR UPDATE`,[projectId,proposal.cable_id])).rows[0]?.value;
+    if (!before || before.cable_write_revision !== input.expectedCableWriteRevision) throw new PathFinderError('CABLE_WRITE_CONFLICT',409);
     await assertAutomaticRoutingControl(client, projectId, proposal.cable_id, before);
     await requireEnrollmentAuthority(client,{projectId,jobId:proposal.job_id,cableId:proposal.cable_id});
+    const remarks = routeObstacleRemarks(before.remarks, result) ?? null;
+    if (sameCableRouteValues({ routing: before.routing, designLength: before.design_length, remarks: before.remarks },
+      { routing: route, designLength: length, remarks })) {
+      await requireCurrentBarrierWriteScope(client, dependencies as BarrierDependencySnapshot);
+      await requireEnrollmentAuthority(client, { projectId, jobId: proposal.job_id, cableId: proposal.cable_id });
+      assertLoginNotExpired(who);
+      return { receipt: null, duplicate: false, unchanged: { projectId, proposalId, cableId: proposal.cable_id, ...input } };
+    }
     await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
     const after = (await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,remarks=$6,updated_at=NOW()
-      WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,[projectId,proposal.cable_id,route,length,input.expectedCableWriteRevision,routeObstacleRemarks(before.remarks,result) ?? null])).rows[0]?.value;
+      WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,[projectId,proposal.cable_id,route,length,input.expectedCableWriteRevision,remarks])).rows[0]?.value;
     if (!after) throw new PathFinderError('CABLE_WRITE_CONFLICT',409);
     // Verify the exact pair and preserved fields even if a schema trigger changes.
     let validTransition=false;

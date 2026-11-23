@@ -303,7 +303,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         const items = await client.query<Row>(`/* job-output-items */ SELECT i.cable_id,i.state,i.status,i.message,p.id AS proposal_id,
           COALESCE(d.status,CASE WHEN a.reason_code IS NOT NULL THEN 'review-required' END) AS automatic_update_status,
           d.receipt_id AS automatic_update_receipt,CASE WHEN d.status IS NOT NULL THEN d.reason_code ELSE a.reason_code END AS automatic_update_reason,
-          CASE WHEN c.id IS NULL OR d.status IN ('pending','running','written','already-written') THEN NULL
+          CASE WHEN c.id IS NULL OR d.status IN ('pending','running','written','already-written','unchanged') THEN NULL
             WHEN NULLIF(btrim(c.routing),'') IS NULL THEN 'none'
             WHEN rc.manual_protected AND rc.manual_routing=c.routing THEN 'manual'
             WHEN rc.execution_locked THEN 'execution'

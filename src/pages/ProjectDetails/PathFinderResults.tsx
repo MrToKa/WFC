@@ -119,7 +119,7 @@ type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | n
   onCalculationCommitted?: (value: PathFinderCalculatedItemIdentity) => void };
 export function pathFinderJobOutputLabel(update: NonNullable<PathFinderJob['items']>[number]['automaticUpdate']): string {
   if (!update) return 'Cable list update: not reported';
-  const labels = { pending: 'waiting to save', running: 'saving', written: 'saved', 'already-written': 'already saved',
+  const labels = { pending: 'waiting to save', running: 'saving', written: 'saved', 'already-written': 'already saved', unchanged: 'unchanged',
     'review-required': 'confirmation required', stale: 'not saved — inputs changed', 'authority-expired': 'not saved — authorization expired',
     refused: 'not saved', unknown: 'save not confirmed' };
   return `Cable list update: ${labels[update.status]}${update.reasonCode ? ` (${update.reasonCode.toLowerCase().replaceAll('_', ' ')})` : ''}`;

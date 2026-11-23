@@ -1,6 +1,17 @@
 import {randomUUID} from 'node:crypto';
 import type {PoolClient} from 'pg';
 import {PathFinderError} from './errors.js';
+import { canonicalDecimalString } from '../../shared/pathfinderLengthLedger.js';
+
+type CableRouteValues = { routing: string | null | undefined; designLength: string | null; remarks: string | null | undefined };
+
+export function sameCableRouteValues(current: CableRouteValues, next: CableRouteValues): boolean {
+  const sameDesign = current.designLength === null || next.designLength === null
+    ? current.designLength === next.designLength
+    : canonicalDecimalString(current.designLength) === canonicalDecimalString(next.designLength);
+  return sameDesign && (current.routing ?? '') === (next.routing ?? '')
+    && (current.remarks ?? '') === (next.remarks ?? '');
+}
 /** Caller has already authorized and atomically updated the exact cable pair. */
 export async function recordPathFinderCableHistory(client:PoolClient,input:{projectId:string;cableId:string;actorId:string}):Promise<{id:string;versionNumber:string}>{
   const result=await client.query(`INSERT INTO cable_versions(id,cable_id,version_number,change_type,change_source,cable_number,revision,mto,tag,cable_type_id,cable_type_name,

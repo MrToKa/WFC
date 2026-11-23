@@ -8,7 +8,7 @@ import {
 } from '@fluentui/react-components';
 import { fetchCableListHistory, type Cable, type ProjectChangeLogEntry } from '@/api/client';
 import type { FilterableTableSectionStyles } from '../ProjectDetails.styles';
-import { diffCableVersions, formatCableVersionUser } from './cableVersionUtils';
+import { diffCableVersions, formatCableVersionSource, formatCableVersionUser } from './cableVersionUtils';
 
 export type ChangeLogSource = {
   id: string;
@@ -104,7 +104,7 @@ export const CableListChangeLog = ({
             userName: formatCableVersionUser(version),
             changedAt: version.changedAt,
             changes: [
-              `${version.changeType === 'create' ? 'Created' : 'Updated'} via ${version.changeSource === 'import' ? 'import' : 'manual save'} (v${version.versionNumber}).`,
+              `${version.changeType === 'create' ? 'Created' : 'Updated'} via ${formatCableVersionSource(version.changeSource)} (v${version.versionNumber}).`,
               ...diffCableVersions(version, previous).map(
                 (change) => `${change.label}: ${change.previousValue} → ${change.nextValue}`,
               ),

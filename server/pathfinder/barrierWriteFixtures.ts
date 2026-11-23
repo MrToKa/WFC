@@ -4,7 +4,7 @@ import { syntheticEngineIdentity } from './calculationFixtures.js';
 import { syntheticInitialFillBarrierInputs } from './initialFillBarrierFixtures.js';
 
 /** Synthetic write-boundary fixture only; not a captured model or engineering evidence. */
-export function syntheticBarrierWriteInputs() {
+export function syntheticBarrierWriteInputs(routeCode = 'A') {
   const id=(n:number)=>`b7700000-0000-4000-8000-${String(n).padStart(12,'0')}`;
   const frame=id(10),aggregate=id(8),projection='b'.repeat(64);
   const endpoint=(locationId:string)=>({locationId,locationRevision:'1',bindingRevision:'1',point:[0,0,0] as [number,number,number],bindingId:id(16),bindingContentSha256:'f'.repeat(64),
@@ -18,7 +18,7 @@ export function syntheticBarrierWriteInputs() {
     from:endpoint(id(18)),to:endpoint(id(19)),endpointResolution:{schemaVersion:'pathfinder.endpoint-resolution.v1',matchingPolicy:'nfc-trim-uppercase-v1',from:{logicalKey:'FROM',locationId:id(18)},to:{logicalKey:'TO',locationId:id(19)}},
     comparison:null,engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1',engineIdentity:syntheticEngineIdentity()};
   const response:EngineResponse={schemaVersion:'pathfinder.model.response.v1',requestId:id(20),status:'calculated',message:'Synthetic writer fixture.',engineeringAccepted:false,
-    route:{success:true,message:'',routeText:'/A',routeCodes:['A'],segmentIds:['dbid:1'],pathPoints:[{x:0,y:0,z:0},{x:5,y:0,z:0}],lengthMeters:5,fromDistanceMeters:1,toDistanceMeters:1,
+    route:{success:true,message:'',routeText:`/${routeCode}`,routeCodes:[routeCode],segmentIds:['dbid:1'],pathPoints:[{x:0,y:0,z:0},{x:5,y:0,z:0}],lengthMeters:5,fromDistanceMeters:1,toDistanceMeters:1,
       fromRequiresSecondary:false,toRequiresSecondary:false,connectionGapCount:0,connectionGapLengthMeters:0},
     design:{lengthBeforePercentageMeters:'6',unroundedLengthMeters:'6.6',designLengthMeters:'7'},lengthLedger:{schemaVersion:'wfc.pf.length-components.v1',formulaVersion:'pathfinder-45c24bf5',settingsRevision:'2',
       raw:{lengthMeters:5,fromDistanceMeters:1,toDistanceMeters:1},rawLengthDecimalMeters:'5',from:{requiresSecondary:false,removedApproachMeters:'0'},to:{requiresSecondary:false,removedApproachMeters:'0'},

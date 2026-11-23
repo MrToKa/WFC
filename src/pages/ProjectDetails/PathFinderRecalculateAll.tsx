@@ -34,13 +34,14 @@ const isBlockedCalculation = (item: JobItem) =>
 export function backgroundCalculationCounts(job: PathFinderJob) {
   const items = job.items ?? [];
   const saved = items.filter(item => ['written', 'already-written'].includes(item.automaticUpdate?.status ?? '')).length;
+  const unchanged = items.filter(item => item.automaticUpdate?.status === 'unchanged').length;
   const pendingUpdates = items.filter(item => ['pending', 'running', 'unknown'].includes(item.automaticUpdate?.status ?? '')).length;
   const saving = items.filter(item => item.status === 'calculated' && ['pending', 'running'].includes(item.automaticUpdate?.status ?? '')).length;
   const calculated = items.filter(item => item.status === 'calculated').length;
   const review = items.filter(item => item.automaticUpdate?.status === 'review-required' && item.retainedRoute !== 'manual').length;
   const blocked = items.filter(isBlockedCalculation).length;
   const unsaved = items.filter(isUnsavedCalculation).length;
-  return { saved, saving, pendingUpdates, calculated, review, blocked, unsaved };
+  return { saved, unchanged, saving, pendingUpdates, calculated, review, blocked, unsaved };
 }
 
 function savingReason(update: JobItem['automaticUpdate']) {
@@ -333,7 +334,7 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       {submitting ? <Spinner size="tiny" label={findingMatches ? 'Finding all cables that match the filters…' : 'Starting background recalculation…'} /> : running ? <Spinner size="tiny" label={job?.status === 'complete' ? 'Saving calculated routes…' : 'Recalculating cables in the background…'} /> : job ? <Caption1 block>{job.status === 'complete' ? 'Background recalculation finished.' : `Background recalculation ${job.status}.`}</Caption1> : null}
       {!submitting && !pending && job && counts ? <>
         <ProgressBar value={job.total ? job.completed / job.total : 1} />
-        <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}.</Caption1>
+        <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}{counts.unchanged > 0 ? `; unchanged: ${counts.unchanged}` : ''}.</Caption1>
         {blockedReasons.length > 0 ? <><Caption1 block>Current calculation issues</Caption1><ul aria-label="Skipped or failed calculations">
           {blockedReasons.map(([reason, { cableIds }]) => <li key={reason}>
             <span>{cableIds.length} {cableIds.length === 1 ? 'cable' : 'cables'} · {reason}</span>

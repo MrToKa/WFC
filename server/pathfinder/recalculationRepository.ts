@@ -110,6 +110,7 @@ export async function readRecalculationProgress(c:Pick<PoolClient,'query'>,input
   ), classified AS (
     SELECT *,CASE WHEN eligible AND state='complete' AND status='calculated' THEN CASE
       WHEN output_status IN('written','already-written') AND receipt_id IS NOT NULL THEN 'saved'
+      WHEN output_status='unchanged' AND receipt_id IS NULL THEN 'unchanged'
       WHEN output_status IN('pending','running','unknown') THEN 'saving'
       WHEN output_status='review-required' THEN 'reviewRequired' WHEN output_status='refused' THEN 'refused'
       WHEN output_status='authority-expired' THEN 'authorityExpired' WHEN output_status='stale' THEN 'stale'
@@ -122,6 +123,7 @@ export async function readRecalculationProgress(c:Pick<PoolClient,'query'>,input
     count(*) FILTER(WHERE i.eligible AND i.state IN('complete','blocked'))::int AS processed,
     count(*) FILTER(WHERE i.output_bucket IS NOT NULL)::int AS calculated,
     count(*) FILTER(WHERE i.output_bucket='saved')::int AS saved,
+    count(*) FILTER(WHERE i.output_bucket='unchanged')::int AS unchanged,
     count(*) FILTER(WHERE i.output_bucket='saving')::int AS saving,
     count(*) FILTER(WHERE i.output_bucket='reviewRequired')::int AS review_required,
     count(*) FILTER(WHERE i.output_bucket='refused')::int AS refused,
@@ -132,7 +134,7 @@ export async function readRecalculationProgress(c:Pick<PoolClient,'query'>,input
   if(!row)return null;
   const parsed=recalculationProgressSchema.safeParse({schemaVersion:'wfc.pf.recalculation-progress.v1',jobId:row.job_id,generation:input.generation,
     total:row.total,eligible:row.eligible,blockedInputs:row.blocked_inputs,waiting:row.waiting,running:row.running,processed:row.processed,
-    calculated:row.calculated,saved:row.saved,saving:row.saving,reviewRequired:row.review_required,refused:row.refused,authorityExpired:row.authority_expired,
+    calculated:row.calculated,saved:row.saved,...(row.unchanged > 0 ? { unchanged: row.unchanged } : {}),saving:row.saving,reviewRequired:row.review_required,refused:row.refused,authorityExpired:row.authority_expired,
     stale:row.stale,notScheduledForSave:row.not_scheduled_for_save,calculationFailed:row.processed-row.calculated});
   if(!parsed.success||row.job_id!==input.jobId||row.job_total!==row.total||row.enrolled_total!==row.total
     ||row.ready_cables!==row.eligible||row.blocked_cables!==row.blocked_inputs)return fail('RECALCULATION_PROGRESS_UNAVAILABLE',503);

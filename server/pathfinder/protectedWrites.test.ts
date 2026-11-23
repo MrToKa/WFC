@@ -46,6 +46,7 @@ function fixture(){
     if(sql.startsWith('SELECT p.*,j.state'))return{rows:[proposal]};
     if(sql.startsWith('SELECT * FROM pf_reviews'))return{rows:[review]};
     if(sql.startsWith('INSERT INTO pf_reviews')){state.reviews.push({id:args[0]});return{rows:[]};}
+    if(sql.includes('cable-routing:control'))return{rows:[]};
     if(sql.startsWith('SELECT to_jsonb(c)'))return{rows:[{value:structuredClone(state.cable)}]};
     if(sql.startsWith('UPDATE cables c')){
       if(state.casMiss||state.cable.cable_write_revision!==args[4])return{rows:[]};
@@ -63,12 +64,26 @@ function fixture(){
   return{...f,projectId,cableId,proposalId,jobId,who,proposal,seal,review,input,state,query,release,client,apply,confirm,jobs};
 }
 describe('protected human Review and Apply with synthetic transaction transport',()=>{
+  it('acknowledges an identical reviewed result without writing cable values or history', async () => {
+    const f = fixture();
+    Object.assign(f.state.cable, { routing: '/A', design_length: '7.000' });
+    const before = structuredClone(f.state.cable);
+
+    expect(await f.apply()).toMatchObject({ receipt: null, unchanged: {
+      ...f.input, projectId: f.projectId, proposalId: f.proposalId, cableId: f.cableId,
+    } });
+    expect(f.state.cable).toEqual(before);
+    expect(f.state.history).toEqual([]);
+    expect(f.state.receipts).toEqual([]);
+    expect(f.query.mock.calls.some(([sql]) => sql.startsWith('UPDATE cables'))).toBe(false);
+  });
+
   it('replaces both existing values atomically, preserving installed length and history',async()=>{
     const f=fixture(),outcome=await f.apply();
     expect(outcome.duplicate).toBe(false);expect(f.state.cable).toEqual({routing:'/A',design_length:'7',install_length:'123.4500',cable_write_revision:'8',tag:'Synthetic unchanged tag'});
     expect(f.state.history).toHaveLength(1);expect(f.state.receipts).toHaveLength(1);
-    expect(outcome.receipt.before).toMatchObject({routing:'/OLD',design_length:'99'});
-    expect(outcome.receipt.provenance).toMatchObject({schemaVersion:'pathfinder.apply.v3',barrierEvidence:{dependencySha256:hash(f.dependencies),engineResultSha256:hash(f.result),status:'no-barriers-declared'},validationMethod:'manual-review'});
+    expect(outcome.receipt?.before).toMatchObject({routing:'/OLD',design_length:'99'});
+    expect(outcome.receipt?.provenance).toMatchObject({schemaVersion:'pathfinder.apply.v3',barrierEvidence:{dependencySha256:hash(f.dependencies),engineResultSha256:hash(f.result),status:'no-barriers-declared'},validationMethod:'manual-review'});
     expect(seams.collect).toHaveBeenCalledExactlyOnceWith(f.client,f.projectId,f.cableId,f.dependencies.options,'pathfinder.dependencies.v8',true,f.dependencies.engineIdentity);
     expect(seams.identity).toHaveBeenCalledTimes(2);expect(seams.scope).toHaveBeenCalledTimes(2);expect(f.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
   });

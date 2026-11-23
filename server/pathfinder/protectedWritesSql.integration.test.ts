@@ -140,8 +140,8 @@ describe.runIf(Boolean(fixturePath))('PF-B7 owned real SQL human Review and Appl
     const outcome=await f.apply(input),after=await f.cable();expect(outcome.duplicate).toBe(false);
     expect(after).toMatchObject({routing:'/A',design_length:'7',install_length:before.install_length,tag:before.tag,revision:before.revision});
     expect(BigInt(after.cable_write_revision)).toBe(BigInt(before.cable_write_revision)+1n);expect(await f.counts()).toEqual({history:1,receipts:1,reviews:1});
-    expect(outcome.receipt.before).toEqual(before);expect(outcome.receipt.after).toEqual(after);
-    expect(outcome.receipt.provenance).toMatchObject({schemaVersion:'pathfinder.apply.v3',validationMethod:'manual-review',barrierEvidence:{status:'no-barriers-declared',dependencySha256:hash(f.dependencies),engineResultSha256:hash(f.result)}});
+    expect(outcome.receipt?.before).toEqual(before);expect(outcome.receipt?.after).toEqual(after);
+    expect(outcome.receipt?.provenance).toMatchObject({schemaVersion:'pathfinder.apply.v3',validationMethod:'manual-review',barrierEvidence:{status:'no-barriers-declared',dependencySha256:hash(f.dependencies),engineResultSha256:hash(f.result)}});
     const history=(await pool.query('SELECT routing,design_length::text,install_length::text,change_source FROM cable_versions')).rows[0];
     expect(history).toMatchObject({routing:'/A',design_length:'7',install_length:before.install_length,change_source:'pathfinder'});
     seams.scope.mockRejectedValue(new Error('Old capture unavailable after committed receipt.'));
@@ -153,7 +153,7 @@ describe.runIf(Boolean(fixturePath))('PF-B7 owned real SQL human Review and Appl
     const expected='User instruction\n[PathFinder obstacles] Crosses obstacles: #123.';
     expect(after.remarks).toBe(expected);expect(after.install_length).toBe(before.install_length);
     expect((await pool.query('SELECT remarks FROM cable_versions WHERE cable_id=$1',[f.cableId])).rows).toEqual([{remarks:expected}]);
-    expect(outcome.receipt.after.remarks).toBe(expected);expect(outcome.receipt.before.remarks).toBe('User instruction');
+    expect(outcome.receipt?.after.remarks).toBe(expected);expect(outcome.receipt?.before.remarks).toBe('User instruction');
     expect((await f.apply(input)).duplicate).toBe(true);expect(await f.counts()).toEqual({history:1,receipts:1,reviews:1});
   });
   it('rolls back a new Review when the final barrier fence changes',async()=>{
