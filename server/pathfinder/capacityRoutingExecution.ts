@@ -1,14 +1,33 @@
 import { randomUUID } from 'node:crypto';
-import { engineResponseSchema, trayCapacityResultSchema, type EngineResponse } from './jobContracts.js';
+import { engineResponseSchema, MAX_ENGINE_INPUT_BYTES, trayCapacityResultSchema, type DependencySnapshot, type EngineResponse } from './jobContracts.js';
 import type { EngineInvocation } from './engineSession.js';
 import type { TrayCapacityRoutingContext } from './trayCapacityRouting.js';
 import type { z } from 'zod';
 
 export type NativeRoutingQuery=NonNullable<z.infer<typeof trayCapacityResultSchema>['query']>;
+function fitOptionalTrayOccupancies(request:EngineInvocation):EngineInvocation {
+  if (!Object.hasOwn(request,'parallelPowerTrayOccupancies') || Buffer.byteLength(JSON.stringify(request)) <= MAX_ENGINE_INPUT_BYTES) return request;
+  const {parallelPowerTrayOccupancies:_optional,...baseline}=request;
+  return baseline;
+}
+export function isParallelPowerCalculation(request:EngineInvocation,dependencies:DependencySnapshot):boolean {
+  const purpose = 'cablePurposeRouting' in dependencies ? dependencies.cablePurposeRouting?.purpose.toUpperCase() : undefined;
+  return request.operation === 'calculate' && request.category === 'LV' && !Object.hasOwn(request,'manualRouteConstraint')
+    && (dependencies.cableInputs.mto === 'LV' || purpose === 'POWER' || purpose === 'LV');
+}
+
+export function withTraySelectionInputs(request:EngineInvocation,context:TrayCapacityRoutingContext|null,dependencies:DependencySnapshot):EngineInvocation {
+  if (!context) return request;
+  return fitOptionalTrayOccupancies({...request, ...(context.routeCostMultipliers.length ? {routeCostMultipliers:context.routeCostMultipliers} : {}),
+    ...(context.parallelPowerTrayOccupancies.length && isParallelPowerCalculation(request,dependencies)
+      ? {parallelPowerTrayOccupancies:context.parallelPowerTrayOccupancies} : {})});
+}
+
 export function withNativeRoutingQuery(request:EngineInvocation,query:NativeRoutingQuery):EngineInvocation{
-  const {routeCostMultipliers:_weights,excludedRouteCodes:_excluded,...base}=request;
+  const {routeCostMultipliers:_weights,parallelPowerTrayOccupancies:_occupancies,excludedRouteCodes:_excluded,...base}=request;
   return {...base,timeoutMilliseconds:query.timeoutMilliseconds,
     ...(query.routeCostMultipliers.length?{routeCostMultipliers:query.routeCostMultipliers}:{}),
+    ...(query.parallelPowerTrayOccupancies?{parallelPowerTrayOccupancies:query.parallelPowerTrayOccupancies}:{}),
     ...(query.excludedRouteCodes.length?{excludedRouteCodes:query.excludedRouteCodes}:{})};
 }
 
@@ -28,7 +47,8 @@ export async function executeCapacityRouting(input:{request:EngineInvocation;con
     request,response:engineResponseSchema.parse({...value,...(message?{message}:{}),trayCapacity:trayCapacityResultSchema.parse({
       ...assessment,restrictionEnabled:restricted,outcome,attempts,excludedRouteCodes:[...excluded].sort(),query:{
         timeoutMilliseconds:request.timeoutMilliseconds,excludedRouteCodes:[...excluded].sort(),
-        routeCostMultipliers:Array.isArray(request.routeCostMultipliers)?request.routeCostMultipliers:[]}})})});
+        routeCostMultipliers:Array.isArray(request.routeCostMultipliers)?request.routeCostMultipliers:[],
+        ...(Object.hasOwn(request,'parallelPowerTrayOccupancies')?{parallelPowerTrayOccupancies:request.parallelPowerTrayOccupancies}:{})}})})});
   const unavailable=()=>{
     if(!response)throw new Error('Capacity search requires a native observation.');
     const message='The capacity search limit was reached. No route was assigned; other cables continue calculating.';
@@ -58,7 +78,7 @@ export async function executeCapacityRouting(input:{request:EngineInvocation;con
     for(const code of assessment.blockedRouteCodes){if(!nativeCode(code))return unavailable();excluded.add(code);}
     const remaining=Math.floor(input.request.timeoutMilliseconds-(performance.now()-started));
     if(excluded.size>CAPACITY_SEARCH_LIMITS.excludedRouteCodes||remaining<100||attempts>=CAPACITY_SEARCH_LIMITS.attempts)return unavailable();
-    request={...input.request,requestId:randomUUID(),timeoutMilliseconds:remaining,excludedRouteCodes:[...excluded].sort()};
+    request=fitOptionalTrayOccupancies({...input.request,requestId:randomUUID(),timeoutMilliseconds:remaining,excludedRouteCodes:[...excluded].sort()});
   }
   return unavailable();
 }

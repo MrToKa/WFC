@@ -197,7 +197,20 @@ export async function readProjectDrawingFreeSpace(c: PoolClient, projectId: stri
     const excluded = data.tray.purpose?.trim().toLowerCase() === 'type a (pink color) for mv cables';
     const summary = layout.summary, width = data.tray.widthMm;
     const occupied = summary ? data.project.cableLayout.considerBundleSpacingAsFree ? summary.occupiedWidthWithoutBundleSpacingMm : summary.occupiedWidthWithBundleSpacingMm : null;
-    freeSpaceByTrayId[row.id] = blocked || excluded || !width || occupied === null ? null : Math.max(0, (width - occupied) / width * 100);
+    // Bottom-row occupancy can fit even when cable or clamp envelopes collide.
+    const overflowMm = summary?.overflowMm ?? 0;
+    const freeWidthMm = !width || occupied == null ? null : width - occupied;
+    const displayedFreeWidthMm = freeWidthMm !== null && freeWidthMm >= 0 && overflowMm > 0
+      ? -overflowMm
+      : freeWidthMm;
+    const freeSpace = width && displayedFreeWidthMm !== null ? displayedFreeWidthMm / width * 100 : null;
+    // A drawing can be blocked by overflow while still measuring a width deficit.
+    const metricsBlocked = blocked && !(freeSpace !== null && freeSpace < 0 && !drawingDiagnostics(data, {
+      ...layout,
+      diagnostics: layout.diagnostics.filter(({ code }) =>
+        code !== 'DRAWING_OVERFLOW' && code !== 'DRAWING_HEIGHT_OVERFLOW' && code !== 'CLAMP_HEIGHT_OVERFLOW')
+    }).blocked);
+    freeSpaceByTrayId[row.id] = excluded || metricsBlocked ? null : freeSpace;
     provenance.push({ trayId: row.id, layoutSha256: drawingDigest(layout), inputSha256: drawingDigest(drawingInputHashInput(data, drawingDigest(captured.sources))), state: blocked ? 'blocked' : 'ready' });
   }
   if (!project) { const p = await ensureProjectExists(projectId, c); if (!p) return fail('PROJECT_NOT_FOUND', 404); project = drawingProjectSchema.parse(mapProjectRow(p)); }

@@ -91,6 +91,9 @@ describe('transaction-local tray capacity inputs', () => {
     expect(context.routeCostMultipliers.find(value => value.routeCode === '/T2')!.multiplier)
       .toBeGreaterThan(context.routeCostMultipliers.find(value => value.routeCode === '/T1')!.multiplier);
     expect(context.score(['/T2']).bottleneckOccupiedPercent).toBeGreaterThan(100);
+    expect(context.parallelPowerTrayOccupancies).toEqual(assessment.trays.map(tray=>({routeCode:tray.routeCode,occupiedPercent:tray.occupancyPercent})));
+    f.trays[1].width_mm='0';
+    expect((await f.read())!.parallelPowerTrayOccupancies.map(tray=>tray.routeCode)).toEqual(['/T1']);
   });
   it('finds a common To suffix while retaining different From prefixes and per-cable physical occupancy', async () => {
     const f = fixture(); f.cables[0].routing = f.cables[1].routing = '/ENTRY_A/SHARED/END';

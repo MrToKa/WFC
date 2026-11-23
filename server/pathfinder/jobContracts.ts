@@ -14,13 +14,22 @@ import { automaticPairPolicySchema } from '../../shared/pathfinderAutomaticPair.
 import { trayCapacityDiagnosticsSchema } from '../../shared/pathfinderTrayCapacity.js';
 import type { CablePurposeRouting } from '../../shared/routingCablePurposes.js';
 
+export const MAX_ENGINE_INPUT_BYTES = 1024 * 1024;
+
+const parallelPowerTrayOccupanciesSchema = z.array(z.object({
+  routeCode:z.string().regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).max(256),
+  occupiedPercent:z.number().finite().nonnegative(),
+}).strict()).min(1).max(4096).refine(entries => new Set(entries.map(entry => entry.routeCode)).size === entries.length,
+  'Parallel power tray route codes must be unique.');
+
 export const trayCapacityResultSchema=trayCapacityDiagnosticsSchema.extend({
   outcome:z.enum(['balanced','fits','rerouted','unavailable','no-capacity','no-path','search-limit']),
   attempts:z.number().int().min(0).max(16),excludedRouteCodes:z.array(z.string().max(256)).max(4096),
   query:z.object({timeoutMilliseconds:z.number().int().min(100).max(120000),
     excludedRouteCodes:z.array(z.string().regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).max(256)).max(4096),
     routeCostMultipliers:z.array(z.object({routeCode:z.string().regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).max(256),
-      multiplier:z.number().finite().min(1).max(1000)}).strict()).max(4096)}).strict().optional(),
+      multiplier:z.number().finite().min(1).max(1000)}).strict()).max(4096),
+    parallelPowerTrayOccupancies:parallelPowerTrayOccupanciesSchema.optional()}).strict().optional(),
 }).strict();
 
 export const optionsSchema = z.object({

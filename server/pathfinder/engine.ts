@@ -2,7 +2,7 @@ import { spawn, execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { PathFinderError } from './errors.js';
-import { engineResponseSchema, type EngineResponse } from './jobContracts.js';
+import { engineResponseSchema, MAX_ENGINE_INPUT_BYTES, type EngineResponse } from './jobContracts.js';
 import { residentBytes, retainPreparationEngineObservation, getEngineRssFailureDetail, type PreparationEngineObservation } from './engineResources.js';
 
 type EngineLifecycle=NonNullable<PreparationEngineObservation['lifecycle']>;
@@ -24,7 +24,7 @@ export async function runEngine(request: Record<string,unknown> & {requestId:str
   const stat = await fs.lstat(dll);
   if (!stat.isFile() || stat.isSymbolicLink()) throw new PathFinderError('PATHFINDER_ENGINE_NOT_CONFIGURED',503);
   const input = Buffer.from(JSON.stringify(request));
-  if (input.length > 1024 * 1024) throw new PathFinderError('ENGINE_INPUT_BUDGET',413);
+  if (input.length > MAX_ENGINE_INPUT_BYTES) throw new PathFinderError('ENGINE_INPUT_BUDGET',413);
   signal.throwIfAborted();
   return new Promise<EngineResponse>((resolve,reject) => {
     const started = performance.now(), preparation = request.operation === 'prepare';

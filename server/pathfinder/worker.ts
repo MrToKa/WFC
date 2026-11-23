@@ -33,7 +33,7 @@ import { publishAutoLength } from './autoLengthStore.js';
 import { requireCurrentBarrierWriteScope } from './barrierWrites.js';
 import { createVerifiedSameEndpointReuse, readVerifiedSameEndpointCurrent, type VerifiedSameEndpointReuse } from './verifiedSameEndpointReuse.js';
 import { readTrayCapacityRouting, type TrayCapacityRoutingContext } from './trayCapacityRouting.js';
-import { executeCapacityRouting, capacityExclusionHint, rememberCapacityExclusions, withNativeRoutingQuery } from './capacityRoutingExecution.js';
+import { executeCapacityRouting, capacityExclusionHint, rememberCapacityExclusions, withNativeRoutingQuery, withTraySelectionInputs, isParallelPowerCalculation } from './capacityRoutingExecution.js';
 import { sameEndpointComputationKey } from './sameEndpointCalculationReuse.js';
 import { isCapacityNoPathResult } from './capacityClearWrite.js';
 import { isPermittedCablePurposeRoute } from '../../shared/routingCablePurposes.js';
@@ -260,8 +260,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
       let capacity:TrayCapacityRoutingContext|null=null,capacityKey:string|null=null;
       const capacityHintKey=(value:TrayCapacityRoutingContext)=>hash({projectId:job.project_id,group:value.groupCableIds,occupancy:value.occupancySha256,
         policy:dependencies.settings.trayCapacity,balance:dependencies.settings.routingBalance,model:dependencies.model,artifact:dependencies.artifact,options:dependencies.options});
-      const weightedRequest=(request:EngineInvocation)=>capacity?.routeCostMultipliers?.length
-        ?{...request,routeCostMultipliers:capacity.routeCostMultipliers}:request;
+      const weightedRequest=(request:EngineInvocation)=>withTraySelectionInputs(request,capacity,dependencies);
       try {
         requireVersionedCalculationScope(dependencies);
         if(dependencies.settings.trayCapacity||dependencies.settings.routingBalance){
@@ -281,7 +280,9 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
               requireVersionedCalculationScope(sourceDependencies);
               const sourceRequest=withNativeRoutingQuery(buildCableEngineRequest(sourceDependencies,parsedSource.data.requestId,query.timeoutMilliseconds),query);
               const key=sameEndpointComputationKey(dependencies,targetRequest);
-              if(key&&key===sameEndpointComputationKey(sourceDependencies,sourceRequest)){
+              if(key&&key===sameEndpointComputationKey(sourceDependencies,sourceRequest)
+                && isParallelPowerCalculation(targetRequest,dependencies)===isParallelPowerCalculation(sourceRequest,sourceDependencies)
+                && (!query.parallelPowerTrayOccupancies || isParallelPowerCalculation(targetRequest,dependencies))){
                 const noCapacity=sourceDependencies.schemaVersion==='pathfinder.dependencies.v8'
                   &&isCapacityNoPathResult(sourceDependencies,settled.result)
                   &&hash(query.excludedRouteCodes)===hash(parsedSource.data.trayCapacity.excludedRouteCodes);

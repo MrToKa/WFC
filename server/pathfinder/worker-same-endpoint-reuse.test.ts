@@ -76,7 +76,8 @@ function fixture(options: { count?: number; engineFailure?: boolean; unknownComm
         trays:routeCodes.map(routeCode=>({routeCode,freeSpacePercent:blocked.length?26:options.balance&&!restricted?10:27,status:blocked.length?'below-minimum' as const:'fits' as const}))};};
     return {policy:{enabled:restricted,minimumFreeSpacePercent:30,effectiveMinimumFreeSpacePercent:27,tolerancePercentagePoints:3},
       minimumFreeSpacePercent:30,effectiveMinimumFreeSpacePercent:27,tolerancePercentagePoints:3,occupancySha256,groupCableCount:group.length,groupCableIds:group,groupKey:'test',
-      restrictionEnabled:restricted,routeCostMultipliers:weights,sameToGroupKey:'TO',sameToGroupCableIds:items.map(item=>item.cable_id),preferredCorridors:[],settledSource:settled,
+      restrictionEnabled:restricted,routeCostMultipliers:weights,parallelPowerTrayOccupancies:options.balance?[{routeCode:'/A',occupiedPercent:proposals.length?95:25}]:[],
+      sameToGroupKey:'TO',sameToGroupCableIds:items.map(item=>item.cable_id),preferredCorridors:[],settledSource:settled,
       evaluate,score:(codes:string[])=>({assessment:evaluate(codes),bottleneckOccupiedPercent:73,meanOccupiedPercent:73,knownTrayCount:codes.length,unknownTrayCount:0,sharedSuffixRouteCodes:[]})};
   });
   const proposals: Array<Row> = [], outputs: Array<Row> = [],autoLengths:Array<Row>=[], events: string[] = [], collections = new Map<string, number>();
@@ -205,7 +206,7 @@ describe('exact same-endpoint computation reuse across actual one-item worker sl
     expect(target.result.requestId).toBe(source.result.requestId);expect(target.result.route).toEqual(source.result.route);
     for(const proposal of f.proposals){
       expect(proposal.result.trayCapacity).toMatchObject({restrictionEnabled:false,outcome:'balanced',trays:[{freeSpacePercent:10}],
-        query:{routeCostMultipliers:[{routeCode:'/A',multiplier:2}],excludedRouteCodes:[],timeoutMilliseconds:60000}});
+        query:{routeCostMultipliers:[{routeCode:'/A',multiplier:2}],parallelPowerTrayOccupancies:[{routeCode:'/A',occupiedPercent:25}],excludedRouteCodes:[],timeoutMilliseconds:60000}});
     }
     expect(seams.verify).toHaveBeenCalledOnce();expect(seams.verify.mock.calls[0][1]).toEqual({projectId:f.job.project_id,
       proposalId:source.id,proposalHash:source.proposalHash,dependencies:source.dependencies,result:source.result});

@@ -7,7 +7,7 @@ import { readPurposePolicyState } from './policySchema.js';
 import { readDrawingPolicy } from './drawingPolicy.js';
 import { computeTrayDrawing } from '../../shared/trayDrawing/index.js';
 import { DEFAULT_DRAWING_MODES } from '../../shared/pathfinderDrawingPolicy.js';
-import { trayDrawingResponseSchema } from '../../shared/trayDrawingSnapshot.js';
+import { projectDrawingMetricsSchema, trayDrawingResponseSchema } from '../../shared/trayDrawingSnapshot.js';
 vi.mock('../services/projectService.js', () => ({ ensureProjectExists: vi.fn() }));
 vi.mock('../models/project.js', () => ({ mapProjectRow: (row: unknown) => row }));
 vi.mock('../models/tray.js', () => ({ mapTrayRow: (row: unknown) => row }));
@@ -91,6 +91,31 @@ describe('server per-tray settings CAS and replay', () => {
 
 
 describe('project drawing metrics request-local source reuse', () => {
+  it('reports a signed width deficit for an overflowing tray with valid inputs', async () => {
+    const x = fixture();
+    const result = layout();
+    Object.assign(result.summary, { occupiedWidthWithBundleSpacingMm: 375 });
+    result.diagnostics.push({ code: 'DRAWING_OVERFLOW', cableIds: [cableId], message: 'Tray width exceeded.' });
+    vi.mocked(computeTrayDrawing).mockReturnValue(result as never);
+
+    const metrics = await readProjectDrawingFreeSpace(x.client, projectId);
+    expect(projectDrawingMetricsSchema.parse(metrics).freeSpaceByTrayId[trayId]).toBe(-25);
+    expect(metrics.provenance[0].state).toBe('blocked');
+
+    x.cables[0].diameterMm = null;
+    expect((await readProjectDrawingFreeSpace(x.client, projectId)).freeSpaceByTrayId[trayId]).toBeNull();
+  });
+  it('reports measured horizontal overflow when bottom-row occupancy fits', async () => {
+    const x = fixture();
+    const result = layout();
+    Object.assign(result.summary, { occupiedWidthWithBundleSpacingMm: 280, overflowMm: 15 });
+    result.diagnostics.push({ code: 'DRAWING_OVERFLOW', cableIds: [cableId], message: 'Tray envelopes overlap.' });
+    vi.mocked(computeTrayDrawing).mockReturnValue(result as never);
+
+    const metrics = await readProjectDrawingFreeSpace(x.client, projectId);
+    expect(metrics.freeSpaceByTrayId[trayId]).toBe(-5);
+    expect(metrics.provenance[0].state).toBe('blocked');
+  });
   it('reads shared inputs once while preserving each tray input identity and memberships', async () => {
     const x = fixture();
     const second = { ...x.tray, id: id(70), name: 'SECOND' };

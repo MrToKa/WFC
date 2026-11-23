@@ -48,6 +48,7 @@ export type TrayCapacityRoutingContext = {
   minimumFreeSpacePercent: number | null; effectiveMinimumFreeSpacePercent: number | null;
   tolerancePercentagePoints: 3; occupancySha256: string; groupKey: string; groupCableCount: number; groupCableIds: string[];
   restrictionEnabled: boolean; routeCostMultipliers: Array<{ routeCode: string; multiplier: number }>;
+  parallelPowerTrayOccupancies: Array<{ routeCode: string; occupiedPercent: number }>;
   sameToGroupKey: string; sameToGroupCableIds: string[]; preferredCorridors: string[][];
   settledSource: { id: string; proposalHash: string; cableId: string; dependencies: unknown; result: unknown } | null;
   evaluate: (routeCodes: string[]) => TrayCapacityDiagnostics;
@@ -229,9 +230,11 @@ export async function readTrayCapacityRouting(client: PoolClient, input: {
   // geometry or claim that its whole prefix is already a shared corridor.
   const destinationAffinityCodes = preferredCorridors.length ? [] : observations.find(([key]) => key !== sourceKey)?.[1] ?? [];
   const preferredCodes = new Set([...preferredCorridors.flat(), ...destinationAffinityCodes]);
+  const parallelPowerTrayOccupancies: TrayCapacityRoutingContext['parallelPowerTrayOccupancies'] = [];
   const routeCostMultipliers = trays.length > COST_TRAYS ? [] : [...byCode.keys()].map(key => routeCode(key))
     .filter(code => /^\/[A-Z0-9][A-Z0-9_.-]*$/.test(code) && code.length <= ASSESSMENT_CODE_LENGTH).sort().map(code => {
       const occupancy = assess(code).occupancyPercent;
+      if (occupancy != null) parallelPowerTrayOccupancies.push({ routeCode: code, occupiedPercent: occupancy });
       const base = occupancy == null ? 100 : 1 + 8 * (occupancy / 100) ** 2;
       return { routeCode: code, multiplier: Math.max(1, Math.min(1000, occupancy == null ? base : base * (preferredCodes.has(code) ? 0.85 : 1))) };
     });
@@ -255,7 +258,7 @@ export async function readTrayCapacityRouting(client: PoolClient, input: {
     minimumFreeSpacePercent: minimum, effectiveMinimumFreeSpacePercent: effectiveMinimum,
     tolerancePercentagePoints: TRAY_CAPACITY_TOLERANCE_PERCENTAGE_POINTS, occupancySha256,
     groupKey: sourceKey ?? cableId, groupCableCount: fallbackGroupIds.length, groupCableIds: fallbackGroupIds,
-    restrictionEnabled, routeCostMultipliers, sameToGroupKey: toKey ?? cableId,
+    restrictionEnabled, routeCostMultipliers, parallelPowerTrayOccupancies, sameToGroupKey: toKey ?? cableId,
     sameToGroupCableIds: toGroup.map(value => value.id), preferredCorridors, settledSource, evaluate,
     score(routeCodes) {
       const assessment = evaluate(routeCodes), occupancies = assessment.trays.flatMap(value => value.occupancyPercent == null ? [] : [value.occupancyPercent]);

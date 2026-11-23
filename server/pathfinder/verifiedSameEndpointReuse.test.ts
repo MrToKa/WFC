@@ -231,4 +231,17 @@ describe('source-verified private common metadata capability',()=>{
     const f=balanceFixture();f.response.trayCapacity!.query!.routeCostMultipliers=[{routeCode:'/A',multiplier:3}];
     expect(await f.reuse.prepareSource(f.client,f.dependencies,f.request,f.response)).toBeNull();
   });
+  it('binds the exact known occupancies during native reuse and result-only replay',async()=>{
+    const f=balanceFixture(),known=[{routeCode:'/A',occupiedPercent:0},{routeCode:'/B',occupiedPercent:114}];
+    f.request.parallelPowerTrayOccupancies=known;
+    expect(await f.reuse.prepareSource(f.client,f.dependencies,f.request,f.response)).toBeNull();
+    f.response.trayCapacity!.query!.parallelPowerTrayOccupancies=known;
+    const token=await f.reuse.prepareSource(f.client,f.dependencies,f.request,f.response);
+    expect(token).not.toBeNull();f.reuse.commitSource(token!);
+    expect(await f.reuse.current(f.client,f.target,undefined,{...f.response,calculationMode:'calculate'})).not.toBeNull();
+    const changed={...f.request,parallelPowerTrayOccupancies:[{routeCode:'/A',occupiedPercent:1},known[1]]};
+    expect(f.reuse.find(f.target,changed)).toBeNull();
+    f.response.trayCapacity!.query!.parallelPowerTrayOccupancies=[known[0],known[0]];
+    expect(await f.reuse.prepareSource(f.client,f.dependencies,f.request,f.response)).toBeNull();
+  });
 });

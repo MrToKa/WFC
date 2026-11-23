@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import type { EngineInvocation } from './engineSession.js';
+import { isParallelPowerCalculation } from './capacityRoutingExecution.js';
 import { trayCapacityResultSchema, type BarrierDependencySnapshot, type DependencySnapshot, type EngineResponse } from './jobContracts.js';
 import { collectBarrierCommonMetadata, collectDependenciesWithVerifiedCommon, hash,
   type BarrierCommonCalculationCollection, type CollectedDependencies } from './dependencies.js';
@@ -48,9 +49,12 @@ function capacityNativeBody(value: unknown, dependencies: BarrierDependencySnaps
     || capacity.tolerancePercentagePoints !== 3 || capacity.attempts < 1 || capacity.blockedRouteCodes.length
     || restricted && capacity.restrictionEnabled === false || !restricted && capacity.restrictionEnabled !== false
     || balance && capacity.restrictionEnabled !== restricted || !restricted && codes.length) return null;
+  const hasParallelOccupancy = Object.hasOwn(request,'parallelPowerTrayOccupancies');
+  if (hasParallelOccupancy && (!isParallelPowerCalculation(request,dependencies) || !capacity.query?.parallelPowerTrayOccupancies)) return null;
   if (balance && !capacity.query) return null;
   if (capacity.query && (hash(capacity.query) !== hash({ timeoutMilliseconds: request.timeoutMilliseconds,
-    excludedRouteCodes: codes, routeCostMultipliers: weights }) || !validCodes(capacity.query.excludedRouteCodes))) return null;
+    excludedRouteCodes: codes, routeCostMultipliers: weights,
+    ...(hasParallelOccupancy ? {parallelPowerTrayOccupancies:request.parallelPowerTrayOccupancies} : {}) }) || !validCodes(capacity.query.excludedRouteCodes))) return null;
   const unknown = capacity.unavailableRouteCodes.length > 0 || capacity.policyIssue !== undefined;
   if (capacity.outcome !== (unknown ? 'unavailable' : !restricted ? 'balanced' : codes.length ? 'rerouted' : 'fits')) return null;
   const nativeCodes = new Set((route.routeCodes as string[]).map(code => '/' + code.normalize('NFC').trim().replace(/^\/+/, '').trim().toUpperCase())
@@ -137,7 +141,8 @@ export function createVerifiedSameEndpointReuse(configuration: Configuration) {
       const observedScope = dependencies.settings.trayCapacity || dependencies.settings.routingBalance;
       const targetRequest = !request && observedScope ? { ...reconstructed,
         ...(Object.hasOwn(entry.request, 'excludedRouteCodes') ? { excludedRouteCodes: structuredClone(entry.request.excludedRouteCodes) } : {}),
-        ...(Object.hasOwn(entry.request, 'routeCostMultipliers') ? { routeCostMultipliers: structuredClone(entry.request.routeCostMultipliers) } : {}) } : reconstructed;
+        ...(Object.hasOwn(entry.request, 'routeCostMultipliers') ? { routeCostMultipliers: structuredClone(entry.request.routeCostMultipliers) } : {}),
+        ...(Object.hasOwn(entry.request, 'parallelPowerTrayOccupancies') ? { parallelPowerTrayOccupancies: structuredClone(entry.request.parallelPowerTrayOccupancies) } : {}) } : reconstructed;
       if (sameEndpointComputationKey(dependencies, targetRequest) !== key) continue;
       const response = cache.get(dependencies, targetRequest); if (!response) { entries.delete(key); continue; }
       if (observedScope) {

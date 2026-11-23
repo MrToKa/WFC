@@ -56,7 +56,7 @@ export function drawingContentHashInput(snapshot: Omit<TrayDrawingSnapshot, 'sna
 }
 export const drawingExportReceiptSchema = z.object({ schemaVersion: z.literal('pathfinder.tray-drawing-export.v1'), projectId: uuid, projectTrayId: uuid, snapshotId: uuid, contentSha256: hash, exportId: uuid, duplicate: z.boolean(), files: z.array(z.object({ kind: z.enum(['bundles', 'load-curve', 'report']), id: uuid, fileName: text, contentType: text, sizeBytes: number.nonnegative().int(), sha256: hash }).strict()).length(3) }).strict();
 export const projectDrawingMetricsSchema = z.object({
-  project: drawingProjectSchema, trays: z.array(drawingTraySchema).max(2000), freeSpaceByTrayId: z.record(uuid, number.min(0).max(100).nullable()),
+  project: drawingProjectSchema, trays: z.array(drawingTraySchema).max(2000), freeSpaceByTrayId: z.record(uuid, number.max(100).nullable()),
   provenance: z.array(z.object({ trayId: uuid, layoutSha256: hash, inputSha256: hash, state: z.enum(['ready', 'blocked']) }).strict()).max(2000),
   revisions: z.object({ catalogRevision: revision, drawingPolicyRevision: revision, drawingInputRevision: revision }).strict(), layoutAlgorithmVersion: z.enum(['wfc-tray-placement-v2', 'wfc-tray-placement-v3']),
 }).strict().superRefine((value, ctx) => {

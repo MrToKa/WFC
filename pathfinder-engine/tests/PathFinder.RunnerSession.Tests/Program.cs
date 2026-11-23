@@ -13,6 +13,12 @@ internal static partial class TestProgram
     private static void Check(string label, bool pass, object? detail = null) { Checks.Add(new { label, status = pass ? "PASS" : "FAIL", detail }); if (!pass) failures++; }
     private static async Task<int> Main(string[] args)
     {
+        if (args is ["--parallel-trays"])
+        {
+            ParallelTrayChecks();
+            Console.WriteLine(JsonSerializer.Serialize(Checks));
+            return failures == 0 ? 0 : 1;
+        }
         if (args is ["--graph-store-checks", var graphWork])
         {
             if (!Path.IsPathFullyQualified(graphWork) || Directory.Exists(graphWork)) return 2;
@@ -38,6 +44,7 @@ internal static partial class TestProgram
         Directory.CreateDirectory(work); var manifest = Corpus.Emit(Path.Combine(work, "corpus"));
         try
         {
+            ParallelTrayChecks();
             GraphPreparationStoreChecks(work);
             await Protocol();
             await WorkerMemoryPolicyChecks();

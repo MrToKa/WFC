@@ -120,7 +120,7 @@ describe('verified approximate equipment centre fallback',()=>{
       tolerancePercentagePoints:3 as const,occupancySha256:'a'.repeat(64),groupCableCount:1,blockedRouteCodes:[],unavailableRouteCodes:['/BC018','/BC019'],trays:[]};
     const context:TrayCapacityRoutingContext={policy:{enabled:false,minimumFreeSpacePercent:30,effectiveMinimumFreeSpacePercent:27,tolerancePercentagePoints:3},
       restrictionEnabled:false,minimumFreeSpacePercent:30,effectiveMinimumFreeSpacePercent:27,tolerancePercentagePoints:3,occupancySha256:'a'.repeat(64),groupCableCount:1,
-      groupCableIds:[f.deps.cableId],groupKey:'group',routeCostMultipliers:[],sameToGroupKey:'to',sameToGroupCableIds:[f.deps.cableId],preferredCorridors:[],settledSource:null,
+      groupCableIds:[f.deps.cableId],groupKey:'group',routeCostMultipliers:[],parallelPowerTrayOccupancies:[],sameToGroupKey:'to',sameToGroupCableIds:[f.deps.cableId],preferredCorridors:[],settledSource:null,
       evaluate:()=>assessment,score:()=>({assessment,bottleneckOccupiedPercent:null,meanOccupiedPercent:null,knownTrayCount:0,unknownTrayCount:2,sharedSuffixRouteCodes:[]})};
     const p=(await probeEquipmentCentreFallback({...f.options,execute:async(request,trial)=>executeCapacityRouting({request,context,signal:f.options.signal,
       execute:async finalRequest=>({...f.success,requestId:finalRequest.requestId}),

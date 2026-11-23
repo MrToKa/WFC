@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { runEngine } from './engine.js';
-import { engineResponseSchema, type EngineResponse } from './jobContracts.js';
+import { engineResponseSchema, MAX_ENGINE_INPUT_BYTES, type EngineResponse } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
 
 export type EngineInvocation = Record<string, unknown> & {
@@ -33,8 +33,7 @@ export type EngineSessionEvent =
 type Observer = (event: EngineSessionEvent) => void;
 const VERSION = 'pathfinder.engine.session.v1',
   ENGINE = '45c24bf5f433f13e102600b36f20327c77961d0a';
-const INPUT = 1024 * 1024,
-  OUTPUT = 32 * 1024 * 1024,
+const OUTPUT = 32 * 1024 * 1024,
   STDERR = 65536;
 /** Interactive local work may keep its prepared model for five idle minutes;
  * request count, total lifetime, cancellation and memory ceilings remain fixed. */
@@ -62,7 +61,7 @@ const readySchema = z
     type: z.literal('ready'),
     runnerSha256: z.string().regex(/^[a-f0-9]{64}$/),
     engineVersion: z.literal(ENGINE),
-    maxInputBytes: z.literal(INPUT),
+    maxInputBytes: z.literal(MAX_ENGINE_INPUT_BYTES),
     maxOutputBytes: z.literal(OUTPUT),
     idleMilliseconds: z.union([z.literal(30000), z.literal(300000)]).optional(),
   })
@@ -529,7 +528,7 @@ export function createSessionEngineExecutor(
       )
         throw error('ENGINE_INPUT_BUDGET');
       const initial = Buffer.from(JSON.stringify(request));
-      if (initial.length < 1 || initial.length > INPUT) throw error('ENGINE_INPUT_BUDGET');
+      if (initial.length < 1 || initial.length > MAX_ENGINE_INPUT_BYTES) throw error('ENGINE_INPUT_BUDGET');
       busy = true;
       activeDone = deferred<void>();
       const deadline = Date.now() + request.timeoutMilliseconds;
@@ -581,7 +580,7 @@ export function createSessionEngineExecutor(
         const remaining = deadline - Date.now();
         if (remaining <= 0) throw error('ENGINE_DEADLINE');
         const input = Buffer.from(JSON.stringify({ ...request, timeoutMilliseconds: remaining }));
-        if (input.length > INPUT) throw error('ENGINE_INPUT_BUDGET');
+        if (input.length > MAX_ENGINE_INPUT_BYTES) throw error('ENGINE_INPUT_BUDGET');
         current.ordinal = current.ordinal < 1 ? 1 : current.ordinal + 1;
         const waiting = deferred<Reply>();
         current.waiting = waiting;

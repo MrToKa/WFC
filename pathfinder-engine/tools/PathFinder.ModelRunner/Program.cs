@@ -82,6 +82,7 @@ internal static partial class Program
 
     private static object Execute(Request request, CancellationToken token, SessionExecutionContext? session = null)
     {
+        long requestStart = Stopwatch.GetTimestamp();
         request = request with { Rules = EffectivePreparationRules(request) };
         var settings = request.ProjectSettings;
         if (request.Operation == "lookup-plan") return new
@@ -202,22 +203,32 @@ internal static partial class Program
         };
         PreparationMemoryTrace.Observe(PreparationMemoryPhase.BeforeQuery);
         if (request.SchemaVersion == "pathfinder.model.runner.v2")
-            return UsesMixedBarrierRuntime(request) ? ExecuteMixedBarrierRoute(request, root, model, prepared, summary, routeOptions, token, session) : ExecuteBarrierRoute(request, root, model, prepared, summary, routeOptions, token, session);
+        {
+            object RunProtected(Request query, CancellationToken queryToken) => UsesMixedBarrierRuntime(query)
+                ? ExecuteMixedBarrierRoute(query, root, model, prepared, summary, routeOptions, queryToken, session)
+                : ExecuteBarrierRoute(query, root, model, prepared, summary, routeOptions, queryToken, session);
+            return ParallelTrayRouting.Select(request, prepared.Segments, RunProtected,
+                response => response is Dictionary<string, object?> data && Equals(data["status"], "calculated")
+                    ? data["route"] as RouteResult : null, token, requestStart);
+        }
         DirectSecondaryDecision? directSecondary = null;
         RouteResult routeResult;
         var purposeTrays = PurposeRouting.Filter(prepared.Segments, request.AllowedPurposeRouteCodes, token);
+        RouteResult RunTrayNetwork(Request query, CancellationToken queryToken) => new RouteCalculator().CalculateLoadBalanced(
+            CapacityRouting.Filter(purposeTrays, query.ExcludedRouteCodes, queryToken), Point(query.From), Point(query.To), category,
+            query.RouteCostMultipliers, routeOptions, queryToken);
+        RouteResult SelectTrayNetwork() => ParallelTrayRouting.Select(request, prepared.Segments, RunTrayNetwork,
+            route => route.Success && (!(route.FromRequiresSecondary || route.ToRequiresSecondary) || settings?.SecondaryTrayLength is not null)
+                ? route : null, token, requestStart);
         if (request.Operation == "calculate" && request.DirectSecondaryPolicy is not null)
         {
             var evaluated = DirectSecondaryRoute.Evaluate(purposeTrays, Point(request.From), Point(request.To), category, routeOptions, token);
             directSecondary = DirectSecondaryDecision.Capture(evaluated);
-            routeResult = evaluated.IsDirect ? evaluated.DirectRoute : new RouteCalculator().CalculateLoadBalanced(
-                CapacityRouting.Filter(purposeTrays, request.ExcludedRouteCodes, token), Point(request.From), Point(request.To), category,
-                request.RouteCostMultipliers, routeOptions, token);
+            routeResult = evaluated.IsDirect ? evaluated.DirectRoute : SelectTrayNetwork();
         }
         else routeResult = request.Operation == "lookup"
             ? RouteLookupCalculator.Calculate(prepared.Segments, RouteLookupCalculator.Parse(request.RouteText), routeOptions, token)
-            : new RouteCalculator().CalculateLoadBalanced(CapacityRouting.Filter(purposeTrays, request.ExcludedRouteCodes, token),
-                Point(request.From), Point(request.To), category, request.RouteCostMultipliers, routeOptions, token);
+            : SelectTrayNetwork();
         token.ThrowIfCancellationRequested();
         if (request.Reverse)
         {
@@ -357,6 +368,12 @@ internal static partial class Program
         {
             if (r.Operation != "calculate") throw new ArgumentException("Cable Purpose route permissions apply only to calculation.");
             PurposeRouting.Validate(r.AllowedPurposeRouteCodes);
+        }
+        if (r.ParallelPowerTrayOccupancies is not null)
+        {
+            if (r.Operation != "calculate" || r.Category != "LV" || r.ManualRouteConstraint is not null || r.Route is not null)
+                throw new ArgumentException("Parallel tray balancing requires automatic LV network calculation.");
+            ParallelTrayRouting.Validate(r.ParallelPowerTrayOccupancies);
         }
         if (r.RouteCostMultipliers is not null)
         {
@@ -544,6 +561,8 @@ internal sealed record Request
     public string[]? AllowedPurposeRouteCodes { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RouteCostMultiplier[]? RouteCostMultipliers { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ParallelTrayOccupancy[]? ParallelPowerTrayOccupancies { get; init; }
     public RetainedRoute? Route { get; init; }
     public string? RouteText { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
