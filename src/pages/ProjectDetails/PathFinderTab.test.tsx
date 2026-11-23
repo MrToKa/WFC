@@ -442,6 +442,16 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     expect(list.queryByRole('button', { name: /=CABLE-1From:/ })).toBeNull(); expect(list.getByRole('button', { name: /=CABLE-2From:/ })).toBeVisible();
     expect(pf.calculate).not.toHaveBeenCalled(); expect(saveEndpointBinding).not.toHaveBeenCalled();
   });
+  it('opens the routing workspace from the advanced project cable list', async () => {
+    mount();
+    const workspace = workspaceCapture.render.mock.calls.at(-1)?.[0] as PathFinderCableWorkspaceProps;
+    const openProjectCable = vi.fn(() => true);
+    const handle = workspace.workspaceRef as { current: PathFinderCableWorkspaceHandle | null };
+    handle.current = { openProjectCable };
+    await userEvent.click(screen.getByRole('button', { name: /=CABLE-1From:/ }));
+    expect(openProjectCable).toHaveBeenCalledExactlyOnceWith(pf.data.cables[0]);
+  });
+
   it('fails closed on absent legacy availability even when old binding labels say matched', async () => {
     const user = userEvent.setup(), matched = pf.data.cables[0].fromMatch;
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, cables: [{ ...pf.data.cables[0], toMatch: matched }] } }); mount();

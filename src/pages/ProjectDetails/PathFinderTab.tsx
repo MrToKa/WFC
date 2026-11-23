@@ -377,7 +377,12 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <Caption1>Automatic model points are approximate and unconfirmed. Point availability does not guarantee a route or authorize Apply.</Caption1>
         <Caption1>{rows.length} of {data?.cables.length ?? 0} cables</Caption1>
         <ul className={styles.cableList} aria-label="Path Finder cables">
-          {rows.map(cable => <li key={cable.id}><Button className={styles.cableRow} appearance={selectedCableId === cable.id ? 'secondary' : 'subtle'} aria-pressed={selectedCableId === cable.id} data-cable-id={cable.id} onClick={() => { setSelectedCableId(cable.id); setWorkflowSelection(null); setNotice(null); }}>
+          {rows.map(cable => <li key={cable.id}><Button className={styles.cableRow} appearance={selectedCableId === cable.id ? 'secondary' : 'subtle'} aria-pressed={selectedCableId === cable.id} data-cable-id={cable.id} onClick={() => {
+            setNotice(null);
+            if (cableWorkspace.current?.openProjectCable(cable)) return;
+            setSelectedCableId(cable.id);
+            setWorkflowSelection(null);
+          }}>
             <span className={extra.row}><span>{cableLabel(cable)}</span><Caption1>From: {pointLabels[endpointPoint(cable.fromMatch).status]}; To: {pointLabels[endpointPoint(cable.toMatch).status]}</Caption1><Caption1>Saved bindings — From: {cable.fromMatch.status}; To: {cable.toMatch.status}</Caption1></span>
           </Button></li>)}
         </ul>
