@@ -1,6 +1,6 @@
 import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isCanonicalPoint, type CanonicalPoint, type ViewerSelection } from '../../viewer-runtime/protocol.mjs';
+import { isCanonicalPoint, type CanonicalPoint, type PickedPoint, type ViewerSelection } from '../../viewer-runtime/protocol.mjs';
 import { endpointPointSchema, type EndpointCurrentScope, type EndpointObjectRef } from '../../shared/pathfinderEndpointBindings';
 import { cableEndpointCommandSchema, cableEndpointDisplayObjectNameSchema } from '../../shared/pathfinderCableEndpoints';
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
@@ -22,6 +22,7 @@ export type CableEndpointSelectionAccess = {
   /** Omission preserves calculation-only v2. Only explicit policy input creates v3. */
   initialFill?: InitialFillPolicy | null;
   readSelection: () => Promise<ViewerSelection | null>;
+  pickEndpointPoint?: (signal: AbortSignal, sdkObjectId?: number) => Promise<PickedPoint | null>;
   onSaved?: (receipt: CableEndpointReceipt, current?: EndpointCurrentScope, calculation?: LocationImpactCalculation | null) => void | Promise<void>; onAuthorityLost?: () => void;
 };
 type Draft = { mode: 'object-derived'; sdkObjectId: number; object: EndpointObjectRef; point: CanonicalPoint }
@@ -211,6 +212,24 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
     update({ draft: { mode: 'fixed-world', point: parsed.data, derivation: 'manual-world-point', displaySdkObjectId: display?.sdkObjectId ?? null },
       error: null, notice: 'This is an explicit fixed-world point in project metres. It does not follow an object revision.' }); return true;
   }, [canAct, update]);
+  const pickSurface = useCallback((sdkObjectId?: number, name = '') => runRead(async signal => {
+    const context = data.current.context;
+    const pick = callbacks.current.pickEndpointPoint;
+    if (!context?.canBind || !context.current || !pick || readPendingCableEndpoint(owner())) return;
+    update({ notice: sdkObjectId === undefined ? 'Click the cable entry on the equipment in the 3D model.'
+      : 'Click the cable entry on the assigned equipment in the 3D model.' });
+    const hit = await pick(signal, sdkObjectId);
+    if (!live() || !latest.current.active || signal.aborted || readPendingCableEndpoint(owner())) return;
+    if (!hit) { update({ notice: null }); return; }
+    if (!Number.isSafeInteger(hit.objectId) || hit.objectId < 1 || hit.objectId > 2147483647
+      || (sdkObjectId !== undefined && hit.objectId !== sdkObjectId) || !isCanonicalPoint(hit.point)) {
+      update({ notice: 'The viewer did not return a valid point on the equipment. Pick again.' });
+      return;
+    }
+    const point = [...hit.point] as CanonicalPoint;
+    update({ draft: { mode: 'fixed-world', point, derivation: 'picked-surface-point', displaySdkObjectId: hit.objectId },
+      displaySelection: { sdkObjectId: hit.objectId, name, point }, notice: null });
+  }, { timeoutMilliseconds: 130_000 }), [runRead, owner, live, update]);
   const execute = useCallback(async (intent: PendingCableEndpoint, abort: AbortController, mode: 'save' | 'close' = 'save'): Promise<boolean> => {
     try {
       const verified = await verifyPendingCableEndpoint(owner(), intent); if (!live() || !latest.current.active || abort.signal.aborted) return false;
@@ -310,7 +329,7 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
     try { return await execute(pending, abort, mode); }
     finally { if (request.current === abort) { request.current = null; update({ busy: false }); } }
   }, [canAct, owner, update, execute]);
-  return { ...current, enabled: allowed && denied.current !== account, selectObject, assignObjectBottomCentre, setFixedPoint, applySelectedObject,
+  return { ...current, enabled: allowed && denied.current !== account, selectObject, assignObjectBottomCentre, pickSurface, setFixedPoint, applySelectedObject,
     chooseDisplayedPoint: () => { const display = data.current.displaySelection; return display ? setFixedPoint(display.point, display) : false; },
     refresh: loadContext, save, retry: () => reconcile('save'), closePending: () => reconcile('close'),
     canSelect: allowed && access.active && !current.busy && !current.pending && Boolean(current.context?.canBind),

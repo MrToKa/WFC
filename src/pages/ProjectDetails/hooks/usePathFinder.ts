@@ -586,7 +586,15 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   }, [accessFailure, isAdmin, live, projectId, token]);
   const clearStoredRoute = useCallback(() => { runRef.current?.storedRoute?.clear(); }, []);
   return { ...visible, setTrayAssignmentContext, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
-    pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
+    pickPoint: (options?: Parameters<ViewerController['pickPoint']>[0]): Promise<PickedPoint | null> =>
+      viewerAction(async viewer => {
+        try { return await viewer.pickPoint(options); }
+        catch (error) {
+          if (error instanceof ViewerAccessError && error.code === 'PICK_CANCELLED') return null;
+          throw error;
+        }
+      }),
+    cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
     readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray, showCadTray, hideTray,
     readObjectGuid: async (sdkObjectId: number): Promise<string | null> => {
@@ -599,14 +607,16 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         return live(run) && run.viewer === viewer && run.generation === generation && latestView.current.viewerPhase === 'ready' ? guid : null;
       } catch { return null; }
     },
-    showLocation: async (sdkObjectId: number, sdkObjectIds?: number[]): Promise<boolean> => {
+    showLocation: async (sdkObjectId: number, sdkObjectIds?: number[], surfacePoint?: CanonicalPoint): Promise<boolean> => {
       runRef.current?.storedRoute?.clear();
       const objectIds = sdkObjectIds ? [...sdkObjectIds] : undefined;
       return (await viewerAction(async viewer => {
         const expected = visible.data?.activeModel, run = runRef.current;
         if (visible.viewerPhase !== 'ready' || !expected || run?.modelVersionId !== expected.modelVersionId
           || run.selectionRevision !== expected.selectionRevision || run.contentFingerprint !== expected.contentFingerprint) return false;
-        if (objectIds) await viewer.showLocation(sdkObjectId, objectIds); else await viewer.showLocation(sdkObjectId);
+        if (surfacePoint) await viewer.showLocation(sdkObjectId, objectIds, surfacePoint);
+        else if (objectIds) await viewer.showLocation(sdkObjectId, objectIds);
+        else await viewer.showLocation(sdkObjectId);
         return true;
       })) === true;
     },

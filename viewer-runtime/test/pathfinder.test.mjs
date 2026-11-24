@@ -995,6 +995,28 @@ test('one-shot picking converts only the owned model surface hit and cancellatio
   assert.deepEqual(await picked, { objectId: 2, point: modelCoordinates(f.model).toCanonical([4, 5, 6]), derivation: 'picked-surface-point' }); f.controller.dispose();
 });
 
+test('surface picking on assigned equipment rejects other objects and keeps the assembly ID for a child hit', async () => {
+  const f = fixture(), abort = new AbortController();
+  f.model.getInstanceTree = () => ({ getNodeParentId: id => id === 2 ? 10 : 0 });
+  let hitId = 3;
+  f.viewer.hitTest = () => ({ model: f.model, dbId: hitId, intersectPoint: [4, 5, 6] });
+  const click = () => {
+    for (const type of ['pointerdown', 'click']) {
+      const event = new Event(type, { cancelable: true });
+      Object.assign(event, { button: 0, clientX: 13, clientY: 24 });
+      f.canvas.dispatchEvent(event);
+      if (type === 'click') return event.defaultPrevented;
+    }
+  };
+  const picked = f.controller.pickPoint(abort.signal, 10);
+  try {
+    assert.equal(click(), false);
+    hitId = 2;
+    assert.equal(click(), true);
+    assert.deepEqual(await picked, { objectId: 10, point: modelCoordinates(f.model).toCanonical([4, 5, 6]), derivation: 'picked-surface-point' });
+  } finally { abort.abort(); await picked.catch(() => {}); f.controller.dispose(); }
+});
+
 test('new protocol payloads reject malformed, nonfinite, oversized and missing load identities', () => {
   const begin = envelope('BEGIN_COMPUTED_PATH', { pathId: uuid(6), pointCount: 2, objectIds: [2] });
   assert.ok(validateEnvelope(begin, 'parent-to-frame'));

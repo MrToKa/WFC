@@ -102,7 +102,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     const recoverableModelCapture = ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(command.type) && modelCaptureErrorMessage(code) !== null && code !== 'MODEL_CAPTURE_MODEL_CHANGED';
     const recoverableLocation = ['SHOW_LOCATION', 'SHOW_LOCATION_POINT'].includes(command.type) && code === 'LOCATION_UNAVAILABLE';
     const recoverableGuid = command.type === 'READ_OBJECT_GUID' && code === 'OBJECT_GUID_UNAVAILABLE';
-    const recoverablePick = command.type === 'PICK_PLACEMENT_POINT' && ['PICK_CANCELLED', 'PICK_TIMEOUT', 'PICK_UNAVAILABLE'].includes(code);
+    const recoverablePick = ['PICK_POINT', 'PICK_PLACEMENT_POINT'].includes(command.type) && ['PICK_CANCELLED', 'PICK_TIMEOUT', 'PICK_UNAVAILABLE'].includes(code);
     const recoverableCad = command.type.startsWith('CAD_') && code === 'CAD_COMPONENT_FAILED';
     const recoverableTray = command.type === 'SHOW_TRAY' && code === 'TRAY_UNAVAILABLE'
       || command.type === 'SET_TRAY_ASSIGNMENTS' && code === 'TRAY_ASSIGNMENTS_UNAVAILABLE';
@@ -317,7 +317,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
           // authority immediately before reveal/focus, without changing a route.
           await requirePathFinder(command, signal);
           if (!live()) throw failure('INVALID_STATE');
-        }, command.payload.sdkObjectIds);
+        }, command.payload.sdkObjectIds, command.payload.surfacePoint);
         if (!live()) return;
         if (!emit(command, 'LOCATION_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');
       } else if (command.type === 'SET_TRAY_ASSIGNMENTS') {
@@ -360,7 +360,8 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         if (!live()) return;
         if (!emit(command, command.type === 'READ_SELECTION' ? 'MODEL_SELECTION' : command.type === 'READ_PREPARATION_OBJECTS' ? 'PREPARATION_OBJECTS' : 'MODEL_OBJECTS', result)) throw failure('EXTRACTION_FAILED');
       } else {
-        const result = command.type === 'PICK_PLACEMENT_POINT' ? await handle.pickPlacementPoint(command.payload, signal) : await handle.pickPoint(signal);
+        const result = command.type === 'PICK_PLACEMENT_POINT' ? await handle.pickPlacementPoint(command.payload, signal)
+          : await handle.pickPoint(signal, command.payload.sdkObjectId);
         await requirePathFinder(command, signal);
         if (!live()) return;
         if (!emit(command, command.type === 'PICK_PLACEMENT_POINT' ? 'PLACEMENT_POINT_PICKED' : 'POINT_PICKED', result)) throw failure('PICK_UNAVAILABLE');

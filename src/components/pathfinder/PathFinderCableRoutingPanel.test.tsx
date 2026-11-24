@@ -18,7 +18,7 @@ const id = (value: number) => `93000000-0000-4000-8000-${String(value).padStart(
 type Assignment = ReturnType<typeof useCableEndpointPairSelection>;
 type Endpoint = Assignment['from'];
 function endpoint(): Endpoint { return { context: null, draft: null, effectiveDraft: null, draftSource: null, displaySelection: null,
-  busy: false, error: null, notice: null, enabled: true, canSelect: true, selectObject: vi.fn(), setFixedPoint: vi.fn(), chooseDisplayedPoint: vi.fn(), refresh: vi.fn() } as unknown as Endpoint; }
+  busy: false, error: null, notice: null, enabled: true, canSelect: true, selectObject: vi.fn(), pickSurface: vi.fn(), setFixedPoint: vi.fn(), chooseDisplayedPoint: vi.fn(), refresh: vi.fn() } as unknown as Endpoint; }
 function pair(): Assignment { return { identity: 'owned', from: endpoint(), to: endpoint(), pending: null, legacyPending: false, legacyRecovery: null, storageReady: true,
   busy: false, error: null, notice: null, receipt: null, retired: false, refreshPhase: 'idle', enabled: true, canSave: false, canRetry: false,
   save: vi.fn(async () => true), retry: vi.fn(async () => true), closePending: vi.fn(async () => true), refresh: vi.fn() } as Assignment; }
@@ -218,8 +218,22 @@ describe('showing the popup From/To locations without changing them', () => {
     assignment.from.displaySelection = { sdkObjectId: 55, name: 'New selected object', point: [7, 8, 9] };
     const show = vi.fn(async () => true); render(<PathFinderCableRoutingPanel {...props()} onShowLocation={show} />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
-    expect(show).toHaveBeenCalledExactlyOnceWith(55); expect(assignment.save).not.toHaveBeenCalled();
+    if (mode === 'fixed-world') {
+      expect(show).toHaveBeenCalledExactlyOnceWith(55, undefined, [7, 8, 9]);
+      expect(screen.getByText('Cable entry selected. Click Save to confirm.')).toBeVisible();
+    }
+    else expect(show).toHaveBeenCalledExactlyOnceWith(55);
+    expect(assignment.save).not.toHaveBeenCalled();
     expect((screen.getByRole('textbox', { name: 'From assigned model object' }) as HTMLTextAreaElement).value).toContain('New selected object');
+  });
+  it('starts a surface pick for the requested side and constrains it to the assigned equipment', async () => {
+    const p = props();
+    assignment.to.context = context('to', 'confirmed');
+    render(<PathFinderCableRoutingPanel {...p} access={{ ...p.access, pickEndpointPoint: vi.fn() }} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Pick To cable entry in 3D' })); });
+    expect(assignment.to.pickSurface).toHaveBeenCalledExactlyOnceWith(124, 'Motor object 002');
+    expect(assignment.from.pickSurface).not.toHaveBeenCalled();
+    expect(assignment.save).not.toHaveBeenCalled();
   });
   it('shows the verified object on reopening a cable before recalculation', async () => {
     const saved = context('to', 'confirmed'), head = saved.head!;

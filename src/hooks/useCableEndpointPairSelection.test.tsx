@@ -513,6 +513,26 @@ describe('one explicit From/To Save', () => {
 });
 
 describe('explicit selected-object bottom-centre pair assignment', () => {
+  it('saves the picked entry coordinates and the equipment ID without resolving a bottom-centre anchor', async () => {
+    const point = [1.9, 110, 9.3] as [number, number, number];
+    const pickEndpointPoint = vi.fn(async () => ({ objectId: 55, point, derivation: 'picked-surface-point' as const }));
+    const props = { ...access(), pickEndpointPoint };
+    const view = renderHook(() => useCableEndpointPairSelection(props));
+    await ready(view);
+    await act(async () => view.result.current.to.pickSurface(55, '15-RW4001'));
+    expect(pickEndpointPoint).toHaveBeenCalledWith(expect.any(AbortSignal), 55);
+    expect(fetchCableEndpointSelection).not.toHaveBeenCalled();
+    expect(saveCableEndpointPair).not.toHaveBeenCalled();
+    await act(async () => { expect(await view.result.current.save('Confirm selected cable entry')).toBe(true); });
+    expect(vi.mocked(saveCableEndpointPair).mock.calls[0][3].endpoints).toEqual([
+      expect.objectContaining({ end: 'to', command: expect.objectContaining({
+        expectedLogicalName: 'LP-002',
+        selection: { mode: 'fixed-world', pointProjectMetres: point, derivation: 'picked-surface-point',
+          displaySdkObjectId: 55, displayObjectName: '15-RW4001' },
+      }) }),
+    ]);
+  });
+
   it.each(['SDK_OBJECT_NOT_RETAINED', 'SDK_OBJECT_GEOMETRY_NOT_RETAINED', 'SDK_OBJECT_EQUIPMENT_GEOMETRY_REQUIRED'])('stages both unprepared selected objects for %s and sends their lower-face points in one explicit Save', async reason => {
     vi.mocked(fetchCableEndpointSelection).mockImplementation(async (_project, _token, current, sdk) => ({
       schemaVersion: 'wfc.pf.cable-endpoint-selection-response.v1', projectId: project, cableId: current.cableId, end: current.end,

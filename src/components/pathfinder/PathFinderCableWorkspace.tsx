@@ -1059,7 +1059,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       // Endpoint-only Save requests no calculation or write authority. New
       // ready saves use the explicit automatic-ownership policy.
       calculation, initialFill: null, automaticPairPolicy: calculationEnabled && selectedEligible ? AUTOMATIC_PAIR_POLICY : null,
-      readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
+      readSelection: props.pf.readSelection,
+      pickEndpointPoint: props.pf.viewerPhase === 'ready' && props.pf.pickPoint
+        ? (signal, sdkObjectId) => props.pf.pickPoint({ signal, sdkObjectId }) : undefined,
+      onSaved: saved, onAuthorityLost: authorityLost,
     }} onCalculate={enabled && selectedEligible && !submittedCalculation && !waitingForSavedCalculation && !popupReview?.pending && selected && !selectedCalculationPending(selected.calculation) ? calculateSelected : undefined}
       calculationBlockedReason={calculationBlockedReason} onConfigureCalculation={props.onConfigureCalculation}
       preferVerticalApproach={verticalApproachOverride ?? selectedPreferences?.preferVerticalApproach ?? readPreferences?.preferVerticalApproach ?? true}

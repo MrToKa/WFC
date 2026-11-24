@@ -338,7 +338,7 @@ export class ViewerController {
       pending.reject?.(new ViewerAccessError(String(message.payload.code), 0, typeof message.payload.objectId === 'number' ? message.payload.objectId : undefined, typeof message.payload.fragmentId === 'number' ? message.payload.fragmentId : undefined));
       if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'MODEL_CAPTURE_MODEL_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
         this.fail(String(message.payload.code));
-      } else if (!(['READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'PICK_PLACEMENT_POINT'].includes(pending.envelope.type) && pending.quietRecoverableErrors)) this.emit('ERROR', message.payload, message.requestId, identity);
+      } else if (!(['READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'PICK_POINT', 'PICK_PLACEMENT_POINT'].includes(pending.envelope.type) && pending.quietRecoverableErrors)) this.emit('ERROR', message.payload, message.requestId, identity);
       return;
     }
     if (message.type === 'RUNTIME_READY') {
@@ -401,7 +401,8 @@ export class ViewerController {
       pending.reject?.(new Error('Location point acknowledgement mismatch')); return;
     }
     if (message.type === 'LOCATION_SHOWN' && (message.payload.sdkObjectId !== pending.envelope.payload.sdkObjectId
-      || JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds))) {
+      || JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds)
+      || JSON.stringify(message.payload.surfacePoint) !== JSON.stringify(pending.envelope.payload.surfacePoint))) {
       pending.reject?.(new Error('Location acknowledgement mismatch')); return;
     }
     if (message.type === 'TRAY_SHOWN' && JSON.stringify(message.payload) !== JSON.stringify(pending.envelope.payload)) {
@@ -683,10 +684,20 @@ export class ViewerController {
     return committed.requestId ?? null;
   }
 
-  async pickPoint(): Promise<PickedPoint> {
+  async pickPoint({ signal, sdkObjectId }: { signal?: AbortSignal; sdkObjectId?: number } = {}): Promise<PickedPoint> {
     if (this.disposed || !this.loaded || !await this.checkSelection()) throw new Error('Model is not ready');
-    const reply = await this.sendAsync('PICK_POINT', {}, 'POINT_PICKED');
-    return reply.payload as unknown as PickedPoint;
+    signal?.throwIfAborted();
+    let requestId: string | undefined;
+    const abort = () => { if (requestId) this.cancel(requestId); };
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      const reply = await new Promise<ViewerEvent>((resolve, reject) => {
+        requestId = this.send('PICK_POINT', sdkObjectId === undefined ? {} : { sdkObjectId }, 'POINT_PICKED',
+          { resolve, reject, quietRecoverableErrors: signal !== undefined });
+      });
+      signal?.throwIfAborted();
+      return reply.payload as unknown as PickedPoint;
+    } finally { signal?.removeEventListener('abort', abort); }
   }
 
   /** Pick a section surface in canonical project metres; CAD IDs are scoped to this load. */
@@ -807,8 +818,10 @@ export class ViewerController {
   }
 
   /** Reveal one logical location and all its model parts without changing route ownership. */
-  async showLocation(sdkObjectId: number, sdkObjectIds?: number[]): Promise<void> {
+  async showLocation(sdkObjectId: number, sdkObjectIds?: number[], surfacePoint?: CanonicalPoint): Promise<void> {
     if (!Number.isSafeInteger(sdkObjectId) || sdkObjectId <= 0 || sdkObjectId > 2147483647) throw new Error('Invalid location object');
+    if (surfacePoint !== undefined && !isCanonicalPoint(surfacePoint)) throw new Error('Invalid location point');
+    const point = surfacePoint && [...surfacePoint];
     if (sdkObjectIds !== undefined && (!Array.isArray(sdkObjectIds) || sdkObjectIds.length === 0 || sdkObjectIds.length > MAX_LOCATION_OBJECT_IDS))
       throw new Error('Invalid location objects');
     const ids = sdkObjectIds === undefined ? undefined : [...sdkObjectIds];
@@ -823,7 +836,7 @@ export class ViewerController {
     current();
     if (!await this.checkSelection()) throw new Error('Model is not ready');
     current();
-    await this.sendAsync('SHOW_LOCATION', { sdkObjectId, ...(ids ? { sdkObjectIds: ids } : {}) }, 'LOCATION_SHOWN');
+    await this.sendAsync('SHOW_LOCATION', { sdkObjectId, ...(ids ? { sdkObjectIds: ids } : {}), ...(point ? { surfacePoint: point } : {}) }, 'LOCATION_SHOWN');
     current();
   }
 

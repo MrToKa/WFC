@@ -366,6 +366,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           const bindings = options.routingBindings === undefined ? undefined : parseRoutingBindings(options.routingBindings, descriptor);
           if (options.routingBindings !== undefined && !bindings) throw safeError('ROUTING_BINDINGS_INVALID');
           const generation = ++displayGeneration;
+          locationPoint.clear();
           pathfinder.clear(); computedPath = trayDisplay = false; legacyPath = true;
           return routes.showRoute(text, { ...options, routingBindings: bindings }).then(result => {
             if (!finished && generation === displayGeneration) setCadRouteFilter(parseRoute(text));
@@ -383,6 +384,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         clearRoute({ preserveCamera = false, preserveSelection = false } = {}) {
           displayGeneration++;
           cancelCapture();
+          locationPoint.clear();
           // Hide and geometry preparation restore appearance at the user's
           // current camera, including repeated cleanup after the tray is gone.
           if (computedPath || trayDisplay) pathfinder.clear({ preserveSelection }); else if (legacyPath) routes.clearRoute({ preserveCamera, preserveSelection }); else { if (!preserveSelection) viewer.clearSelection(); if (!preserveCamera) viewer.fitToView(); }
@@ -393,6 +395,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },
         showComputedPath(value) {
           displayGeneration++;
+          locationPoint.clear();
           if (legacyPath) routes.clearRoute(); legacyPath = false;
           try {
             const result = pathfinder.showPath(value); computedPath = true; trayDisplay = false;
@@ -438,7 +441,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           try { locationPoint.show(point); }
           catch (error) { if (error?.name === 'AbortError' || error?.code === 'MODEL_SELECTION_CHANGED') throw error; throw safeError('LOCATION_UNAVAILABLE'); }
         },
-        async showLocation(sdkObjectId, operationSignal, beforeCommit = async () => {}, sdkObjectIds) {
+        async showLocation(sdkObjectId, operationSignal, beforeCommit = async () => {}, sdkObjectIds, surfacePoint) {
           if (!positiveObjectId(sdkObjectId)) throw safeError('LOCATION_UNAVAILABLE');
           const ids = sdkObjectIds === undefined ? [sdkObjectId] : Array.isArray(sdkObjectIds) ? [...sdkObjectIds] : [];
           if (!ids.length || ids.length > MAX_LOCATION_OBJECT_IDS || ids[0] !== sdkObjectId || !ids.every((id, at) => positiveObjectId(id) && (at === 0 || id > ids[at - 1]))) throw safeError('LOCATION_UNAVAILABLE');
@@ -450,17 +453,29 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           currentModel();
           const tree = await locationTree(loadedModel, displaySignal);
           currentModel();
-          if (!ids.every(id => containsLocation(tree, id)) || typeof viewer.show !== 'function' || typeof viewer.fitToView !== 'function') throw safeError('LOCATION_UNAVAILABLE');
+          if (!ids.every(id => containsLocation(tree, id)) || typeof viewer.fitToView !== 'function') throw safeError('LOCATION_UNAVAILABLE');
           await beforeCommit();
           currentModel();
+          const isolateEndpoint = surfacePoint !== undefined && !computedPath && !legacyPath;
+          if (!isolateEndpoint && typeof viewer.show !== 'function') throw safeError('LOCATION_UNAVAILABLE');
           try {
-            // The pinned SDK show() changes only this node's visibility. It
-            // reveals it normally under route Ghost without changing selection,
-            // global Ghost, route overlays or their saved appearance baseline.
-            viewer.show(ids, loadedModel);
+            // Keep a displayed route's appearance. Otherwise use the same
+            // reversible Ghost baseline as tray inspection.
+            if (isolateEndpoint) {
+              pathfinder.showTray(ids);
+              trayDisplay = true;
+            } else viewer.show(ids, loadedModel);
             viewer.fitToView(ids, loadedModel);
-            locationPoint.clear();
-          } catch { throw safeError('LOCATION_UNAVAILABLE'); }
+            if (surfacePoint !== undefined) locationPoint.show(surfacePoint, { focus: false });
+            else locationPoint.clear();
+          } catch (error) {
+            if (error?.code === 'APPEARANCE_RESTORE_FAILED') throw error;
+            if (isolateEndpoint) {
+              try { pathfinder.clear({ preserveSelection: true }); trayDisplay = false; }
+              catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
+            }
+            throw safeError('LOCATION_UNAVAILABLE');
+          }
         },
         async showTray(sdkObjectIds, operationSignal, beforeCommit = async () => {}) {
           if (!Array.isArray(sdkObjectIds) || sdkObjectIds.length === 0 || sdkObjectIds.length > 512) throw safeError('TRAY_UNAVAILABLE');
@@ -481,6 +496,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           currentModel();
           try {
             displayGeneration++;
+            locationPoint.clear();
             if (legacyPath) { routes.clearRoute(); legacyPath = false; }
             trayDisplay = true;
             pathfinder.showTray(ids); computedPath = false;

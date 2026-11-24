@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useFloatingCablePanel, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
-import { Button, Caption1, Checkbox, Portal, Spinner } from '@fluentui/react-components';
+import { Button, Caption1, Checkbox, MessageBar, MessageBarBody, Portal, Spinner } from '@fluentui/react-components';
 import { useCableEndpointPairSelection, type CableEndpointPairSelectionAccess } from '@/hooks/useCableEndpointPairSelection';
 import { hasVerifiedSavedCableRoute, SAVED_ROUTE_MODEL_CHANGED_NOTICE, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
@@ -30,7 +30,7 @@ export type PathFinderCableRoutingPanelProps = {
   requestedPopup?: FloatingCableWindowRequest | null;
   cable: CableWorkflowRow | null; open: boolean; onClose: () => void; anchor?: HTMLElement | null;
   onCalculate?: () => void | Promise<void>; onTogglePath?: (endpoints?: StoredEndpointContexts) => void;
-  onShowLocation?: (sdkObjectId: number, sdkObjectIds?: number[]) => Promise<boolean>;
+  onShowLocation?: (sdkObjectId: number, sdkObjectIds?: number[], surfacePoint?: CanonicalPoint) => Promise<boolean>;
   onShowLocationPoint?: (point: CanonicalPoint, current: EndpointCurrentScope) => Promise<boolean>;
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
   pathVisible?: boolean; pathReady?: boolean; endpointRefreshKey?: number; actionsBusy?: boolean; calculatedRouting?: string | null; calculatedDesignLength?: string | null;
@@ -113,13 +113,14 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   useEffect(() => { locationRequest.current = null; setLocationDisplay(null); }, [displayScope, active]);
   useEffect(() => () => { locationOwner.current.active = false; locationRequest.current = null; }, []);
   const locationWorking = locationDisplay?.scope === displayScope && locationDisplay.working;
-  const showLocation = async (end: 'from' | 'to', target: { sdkObjectId: number; sdkObjectIds?: number[] } | NonNullable<ReturnType<typeof locationPoint>>) => {
+  const showLocation = async (end: 'from' | 'to', target: { sdkObjectId: number; sdkObjectIds?: number[]; surfacePoint?: CanonicalPoint } | NonNullable<ReturnType<typeof locationPoint>>) => {
     if (('pointProjectMetres' in target ? !onShowLocationPoint : !onShowLocation) || locationRequest.current || !locationOwner.current.active || locationOwner.current.scope !== displayScope) return;
     const request = Symbol(); locationRequest.current = request;
     setLocationDisplay({ scope: displayScope, end, working: true, error: null });
     let shown = false;
     try { shown = 'pointProjectMetres' in target ? await onShowLocationPoint!(target.pointProjectMetres, target.current)
-      : await (target.sdkObjectIds ? onShowLocation!(target.sdkObjectId, target.sdkObjectIds) : onShowLocation!(target.sdkObjectId)); }
+      : await (target.surfacePoint ? onShowLocation!(target.sdkObjectId, target.sdkObjectIds, target.surfacePoint)
+        : target.sdkObjectIds ? onShowLocation!(target.sdkObjectId, target.sdkObjectIds) : onShowLocation!(target.sdkObjectId)); }
     catch { /* Display errors do not change endpoint or calculation state. */ }
     if (locationRequest.current !== request) return;
     locationRequest.current = null;
@@ -244,7 +245,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       savedDisplay = displayContext?.confirmedDisplaySelection, reopened = displayContext?.reopenedObject;
     const point = state.draft?.point ?? automatic?.pointProjectMetres ?? confirmed?.pointProjectMetres ?? savedDisplay?.pointProjectMetres ?? displayContext?.head?.pointProjectMetres;
     const selectedDraft = state.draftSource === 'selected';
-    const objectName = selectedDraft ? state.displaySelection?.name || (state.draft?.mode === 'fixed-world' ? 'Fixed point' : 'Selected model object')
+    const objectName = selectedDraft ? state.displaySelection?.name || (state.draft?.mode === 'fixed-world' && !state.draft.displaySdkObjectId ? 'Fixed point' : 'Selected model object')
       : reopened?.name ?? (reopened ? `Saved model object (ID ${reopened.sdkObjectId})` : undefined)
         ?? automatic?.name ?? confirmed?.name ?? savedDisplay?.name ?? (savedDisplay ? `Saved model object (ID ${savedDisplay.sdkObjectId})`
         : displayContext?.head ? `Saved point for ${name ?? 'this location'}` : state.error || assignment.error || assignment.retired
@@ -252,18 +253,30 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     const value = [objectName, point ? `X: ${point[0]} m; Y: ${point[1]} m; Z: ${point[2]} m` : ''].filter(Boolean).join('\n');
     const objectTarget = assignment.retired ? null : locationObjects(state, access.model);
     const pointTarget = objectTarget || assignment.retired || assignment.error || pending || legacyRecovery ? null : locationPoint(state, access.model);
-    const target = objectTarget ?? pointTarget;
+    const surfacePoint = state.draft ? state.draft.mode === 'fixed-world' && state.draft.derivation === 'picked-surface-point' ? state.draft.point : undefined
+      : state.context?.head?.derivation === 'picked-surface-point' ? state.context.head.pointProjectMetres : undefined;
+    const entryConfirmation = surfacePoint && objectTarget
+      ? selectedDraft ? 'Cable entry selected. Click Save to confirm.' : 'Cable entry saved.'
+      : null;
+    const target = objectTarget ? { ...objectTarget, surfacePoint } : pointTarget;
     const display = locationDisplay?.scope === displayScope && locationDisplay.end === end ? locationDisplay : null;
     return <section aria-label={`${side} endpoint`} className={styles.field}>
       <h4 className={styles.heading}>{side}: {name?.trim() ? name : 'Location name is missing.'}</h4>
       {!name?.trim() ? <a href={`/projects/${access.projectId}/cables/${cable.cable.id}`}>Set the {side} location name in Cable list</a> : null}
       <textarea aria-label={`${side} assigned model object`} className={styles.value} readOnly value={value} rows={3} />
-      <Caption1>{lastRead ? 'Last read location — refresh From/To before using it.' : selectedDraft ? 'Selected — not saved.' : automatic ? 'Automatically matched — confirm with Save.'
-        : displayContext?.head ? 'Saved shared location.' : 'Choose one object in the Model Browser.'}</Caption1>
+      {entryConfirmation ? <MessageBar intent="success" layout="multiline" politeness="polite"><MessageBarBody>{entryConfirmation}</MessageBarBody></MessageBar>
+        : <Caption1>{lastRead ? 'Last read location - refresh From/To before using it.' : selectedDraft ? 'Selected - not saved.' : automatic ? 'Automatically matched - confirm with Save.'
+          : displayContext?.head ? 'Saved shared location.' : 'Choose one object in the Model Browser.'}</Caption1>}
       <div className={styles.actions}>
         <Button disabled={busy || locationWorking || Boolean(pending) || !name?.trim() || !state.canSelect}
           onClick={() => void state.selectObject()}>Assign {side}</Button>
-        <Button aria-label={`Show ${side} location`} disabled={actionsBusy || state.busy || locationWorking || target === null || (pointTarget ? !onShowLocationPoint : !onShowLocation)}
+        {access.pickEndpointPoint ? <Button aria-label={`Pick ${side} cable entry in 3D`}
+          disabled={busy || locationWorking || Boolean(pending) || !name?.trim() || !state.canSelect}
+          onClick={() => {
+            const id = objectTarget?.sdkObjectIds ? undefined : objectTarget?.sdkObjectId;
+            void state.pickSurface(id, id !== undefined && !lastRead ? objectName : undefined);
+          }}>Pick cable entry</Button> : null}
+        <Button aria-label={`Show ${side} location`} disabled={busy || locationWorking || target === null || (pointTarget ? !onShowLocationPoint : !onShowLocation)}
           onClick={() => { if (target !== null) void showLocation(end, target); }}>Show location</Button>
       </div>
       {pointTarget ? <Caption1 role="status">{display?.pointShown ? 'Saved project point shown; no linked model object.' : 'Saved project point; no linked model object.'}</Caption1> : null}
@@ -294,6 +307,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       {refreshError ? <p role="alert" className={styles.note}>{refreshError}</p> : null}
       {endpointReadUnavailable ? <p role="status" className={styles.note}>From/To could not be confirmed. Last read locations remain visible. Use Refresh From/To to check them; pending commands are retained.</p> : null}
       <p className={styles.note}>Assign the selected Model Browser object to From or To. The connection starts at the centre of its bottom face. Save to confirm and reuse this location for other cables with the same location name.</p>
+      {access.pickEndpointPoint ? <p className={styles.note}>Use Pick cable entry to set the exact connection point on the equipment. Press Escape in the 3D view to cancel.</p> : null}
       {pending ? <section aria-label="Pending endpoint assignment"><h4>Pending endpoint assignment</h4>
         <p className={styles.note}>An exact Save is retained for this project. Reconcile its original cable and endpoint assignments before making another assignment.</p>
         <div className={styles.actions}><Button disabled={busy || !assignment.canRetry} onClick={() => void assignment.retry()}>Retry exact pending save</Button>

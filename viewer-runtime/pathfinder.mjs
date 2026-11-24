@@ -612,7 +612,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     if (JSON.stringify(trayRootSelectionIds(operationSignal)) !== JSON.stringify(ids)) throw fail('TRAY_ROOT_SELECTION_CHANGED');
     return { objects: ids.map(objectId => ({ objectId })) };
   }
-  function pickPoint(operationSignal, placement) {
+  function pickPoint(operationSignal, placement, sdkObjectId) {
     active(operationSignal); pick?.cancel();
     const coordinates = modelCoordinates(model), canvas = viewer.canvas;
     if (!canvas || typeof viewer.hitTest !== 'function') throw fail('PICK_UNAVAILABLE');
@@ -627,7 +627,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
         error ? reject(error) : resolve(result);
       };
       const abort = () => finish(abortError());
-      const keydown = event => { if (placement && event.key === 'Escape') { event.preventDefault(); finish(fail('PICK_CANCELLED')); } };
+      const keydown = event => { if (event.key === 'Escape') { event.preventDefault(); finish(fail('PICK_CANCELLED')); } };
       const down = event => { start = event.button === 0 ? [event.clientX, event.clientY] : undefined; };
       const click = event => {
         if (event.button !== 0 || !start || Math.hypot(event.clientX - start[0], event.clientY - start[1]) > 5) return;
@@ -643,7 +643,14 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
             else return;
           } else {
             if (hit.model !== model || !positiveId(hit.dbId)) return;
-            identity = { objectId: hit.dbId };
+            if (sdkObjectId !== undefined) {
+              const tree = model.getInstanceTree?.();
+              let node = hit.dbId;
+              for (let depth = 0; node !== sdkObjectId && positiveId(node) && depth < 256; depth++)
+                node = tree?.getNodeParentId?.(node);
+              if (node !== sdkObjectId) return;
+            }
+            identity = { objectId: sdkObjectId ?? hit.dbId };
           }
           const point = coordinates.toCanonical(hit.intersectPoint ?? hit.point);
           event.preventDefault(); event.stopImmediatePropagation();
@@ -653,9 +660,9 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       const timer = setTimeout(() => finish(fail('PICK_TIMEOUT')), 120000);
       pick = { finish, cancel: abort };
       canvas.addEventListener('pointerdown', down, true); canvas.addEventListener('click', click, true);
-      if (placement) window.document?.addEventListener('keydown', keydown, { capture: true });
+      window.document?.addEventListener('keydown', keydown, { capture: true });
       signal?.addEventListener('abort', abort, { once: true }); operationSignal?.addEventListener('abort', abort, { once: true });
     });
   }
-  return { showPath, showTray, showCadTray, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint, pickPlacementPoint: (options, resolveCad, operationSignal) => pickPoint(operationSignal, { ...options, resolveCad }), dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
+  return { showPath, showTray, showCadTray, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint: (operationSignal, sdkObjectId) => pickPoint(operationSignal, undefined, sdkObjectId), pickPlacementPoint: (options, resolveCad, operationSignal) => pickPoint(operationSignal, { ...options, resolveCad }), dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
 }

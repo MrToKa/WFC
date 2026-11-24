@@ -684,6 +684,33 @@ test('saved point focus rechecks load and authorization, then actual-object Show
   await assert.rejects(handle.showLocationPoint([1, 2, 3]), { code: 'MODEL_SELECTION_CHANGED' });
 });
 
+test('showing a picked cable entry focuses its equipment, ghosts the background and marks the exact point', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  class Vector3 { set(...values) { this.values = values; } }
+  class Disposable { dispose() {} }
+  class Mesh { constructor(geometry, material) { Object.assign(this, { geometry, material, position: new Vector3() }); } }
+  Object.assign(f.window.THREE, { Vector3, SphereGeometry: Disposable, MeshBasicMaterial: Disposable, Mesh });
+  Object.assign(f.model, { getUnitScale: () => 0.001, getUpVector: () => [0, 0, 1], getGlobalOffset: () => [1000, 2000, 3000] });
+  await f.adapter.initialize();
+  const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0], meshes = [], fits = [];
+  viewer.overlays.addMesh = mesh => meshes.push(mesh);
+  viewer.overlays.removeMesh = mesh => meshes.splice(meshes.indexOf(mesh), 1);
+  viewer.fitToView = ids => fits.push(ids);
+  await handle.showLocation(2, undefined, async () => {
+    assert.equal(meshes.length, 0);
+    assert.equal(fits.length, 0);
+  }, undefined, [1.004, 2.005, 3.006]);
+  assert.deepEqual(fits, [[2]]);
+  assert.deepEqual(f.facts.isolated, [[2]]);
+  assert.equal(viewer.impl.showGhosting, true);
+  assert.ok(meshes[0].position.values.every((n, i) => Math.abs(n - [4, 5, 6][i]) < 1e-9));
+  handle.clearRoute({ preserveCamera: true, preserveSelection: true });
+  assert.equal(meshes.length, 0);
+  assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
+});
+
 test('tray and legacy route focus suppress streamed manual CAD and Hide restores its prior visibility', async t => {
   const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });

@@ -157,10 +157,14 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
     if (!retained || retained.pending || retained.legacyPending) { if (retained?.legacyPending) update({ error: legacyNotice }); return false; }
     return true;
   }, [canAct, readStorage, update]);
-  const assign = useCallback(async (end: CableEndpointEnd) => {
+  const assign = useCallback(async (end: CableEndpointEnd, operationType: 'object' | 'surface', sdkObjectId?: number, name?: string) => {
     if (!canEdit()) return;
     const operation = {}; assigning.current = operation; update({ busy: true, error: null });
-    try { await children.current[end].assignObjectBottomCentre(); }
+    try {
+      const child = children.current[end];
+      if (operationType === 'surface') await child.pickSurface(sdkObjectId, name);
+      else await child.assignObjectBottomCentre();
+    }
     finally { if (assigning.current === operation) { assigning.current = null; update({ busy: false }); } }
   }, [canEdit, update]);
   const execute = useCallback(async (intent: PendingCableEndpointPair, abort: AbortController, mode: 'save' | 'close'): Promise<boolean> => {
@@ -262,7 +266,8 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
     return { context: visible && !current.retired ? child.context : null, draft: selection.draft, effectiveDraft: selection.draft, draftSource: selection.source,
       displaySelection: visible ? child.displaySelection : null, busy: child.busy, error: visible ? child.error : null, notice: visible ? child.notice : null,
       enabled: visible && child.enabled, canSelect: visible && child.canSelect && !current.busy && !current.pending && !current.legacyPending && !current.retired,
-      selectObject: () => assign(end), setFixedPoint: (point: Parameters<Child['setFixedPoint']>[0]) => canEdit() ? child.setFixedPoint(point) : false,
+      selectObject: () => assign(end, 'object'), pickSurface: (sdkObjectId?: number, name?: string) => assign(end, 'surface', sdkObjectId, name),
+      setFixedPoint: (point: Parameters<Child['setFixedPoint']>[0]) => canEdit() ? child.setFixedPoint(point) : false,
       chooseDisplayedPoint: () => canEdit() ? child.chooseDisplayedPoint() : false,
       refresh };
   };

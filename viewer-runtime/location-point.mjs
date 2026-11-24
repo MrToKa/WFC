@@ -20,14 +20,11 @@ export function createLocationPointController(viewer, { window, signal } = {}) {
   }
   return {
     clear,
-    show(point) {
+    show(point, { focus = true } = {}) {
       current();
       if (!isCanonicalPoint(point)) throw unavailable();
       const coordinates = modelCoordinates(model), local = coordinates.toDisplay(point), THREE = window?.THREE;
-      if (!THREE || typeof viewer.navigation?.fitBounds !== 'function') throw unavailable();
-      // Keep enough surrounding context visible, independent of the model's units.
-      const bounds = new THREE.Box3(), margin = 0.75 / coordinates.scale;
-      for (const sign of [-1, 1]) bounds.expandByPoint(new THREE.Vector3(...local.map(n => n + sign * margin)));
+      if (!THREE || (focus && typeof viewer.navigation?.fitBounds !== 'function')) throw unavailable();
       const geometry = new THREE.SphereGeometry(0.08 / coordinates.scale, 12, 8);
       const material = new THREE.MeshBasicMaterial({ color: 0x35a7ff, depthTest: false, depthWrite: false });
       const next = new THREE.Mesh(geometry, material);
@@ -36,7 +33,11 @@ export function createLocationPointController(viewer, { window, signal } = {}) {
         current(); clear();
         viewer.overlays.addScene(scene); sceneActive = true;
         marker = next; viewer.overlays.addMesh(marker, scene);
-        viewer.navigation.fitBounds(false, bounds);
+        if (focus) {
+          const bounds = new THREE.Box3(), margin = 0.75 / coordinates.scale;
+          for (const sign of [-1, 1]) bounds.expandByPoint(new THREE.Vector3(...local.map(n => n + sign * margin)));
+          viewer.navigation.fitBounds(false, bounds);
+        }
         viewer.impl.invalidate(true, true, true);
       } catch (error) {
         if (marker === next) clear(); else { geometry.dispose(); material.dispose(); }

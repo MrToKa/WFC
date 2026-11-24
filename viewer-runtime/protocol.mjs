@@ -177,9 +177,19 @@ function payload(type, value) {
       && value.objects.every(object => exact(object, ['objectId']) && positiveId(object.objectId))
       && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
     case 'SHOW_LOCATION_POINT': case 'LOCATION_POINT_SHOWN': return exact(value, ['pointProjectMetres']) && isCanonicalPoint(value.pointProjectMetres);
-    case 'SHOW_LOCATION': case 'LOCATION_SHOWN': return (exact(value, ['sdkObjectId']) || exact(value, ['sdkObjectId', 'sdkObjectIds'])
-      && boundedIds(value.sdkObjectIds, MAX_LOCATION_OBJECT_IDS) && value.sdkObjectIds.length > 0 && value.sdkObjectIds[0] === value.sdkObjectId
-      && value.sdkObjectIds.every((id, at) => at === 0 || id > value.sdkObjectIds[at - 1])) && positiveId(value.sdkObjectId);
+    case 'SHOW_LOCATION': case 'LOCATION_SHOWN': {
+      const keys = ['sdkObjectId'];
+      if (Object.hasOwn(value, 'sdkObjectIds')) {
+        keys.push('sdkObjectIds');
+        if (!boundedIds(value.sdkObjectIds, MAX_LOCATION_OBJECT_IDS) || !value.sdkObjectIds.length || value.sdkObjectIds[0] !== value.sdkObjectId
+          || !value.sdkObjectIds.every((id, at) => at === 0 || id > value.sdkObjectIds[at - 1])) return false;
+      }
+      if (Object.hasOwn(value, 'surfacePoint')) {
+        keys.push('surfacePoint');
+        if (!isCanonicalPoint(value.surfacePoint)) return false;
+      }
+      return exact(value, keys) && positiveId(value.sdkObjectId);
+    }
     case 'SET_TRAY_ASSIGNMENTS': return exact(value, ['assignments']) && validateTrayAssignments(value.assignments);
     case 'TRAY_ASSIGNMENTS_UPDATED': return exact(value, []);
     case 'SHOW_TRAY': case 'TRAY_SHOWN': if (exact(value, ['cadComponentIds'])) return Array.isArray(value.cadComponentIds) && value.cadComponentIds.length > 0 && value.cadComponentIds.length <= 200 && new Set(value.cadComponentIds).size === value.cadComponentIds.length && value.cadComponentIds.every(id => UUID.test(id)); return exact(value, ['sdkObjectIds']) && Array.isArray(value.sdkObjectIds) && value.sdkObjectIds.length > 0 && value.sdkObjectIds.length <= 512 && boundedIds([...value.sdkObjectIds]);
@@ -195,7 +205,7 @@ function payload(type, value) {
     case 'APPEND_COMPUTED_PATH': return exact(value, ['pathId', 'offset', 'points']) && isUuid(value.pathId) && integer(value.offset) && value.offset < MAX_PATH_POINTS && Array.isArray(value.points) && value.points.length > 0 && value.points.length <= MAX_PATH_CHUNK_POINTS && value.points.every(isCanonicalPoint);
     case 'COMMIT_COMPUTED_PATH': return exact(value, ['pathId']) && isUuid(value.pathId);
     case 'COMPUTED_PATH_UPDATED': return exact(value, ['pathId', 'phase', 'received']) && isUuid(value.pathId) && oneOf(value.phase, ['begun', 'appended', 'displayed']) && integer(value.received) && value.received <= MAX_PATH_POINTS;
-    case 'PICK_POINT': return exact(value, []);
+    case 'PICK_POINT': return exact(value, []) || exact(value, ['sdkObjectId']) && positiveId(value.sdkObjectId);
     case 'PICK_PLACEMENT_POINT': return (exact(value, ['allowSource']) || exact(value, ['allowSource', 'cadInstanceIds'])) && typeof value.allowSource === 'boolean' && (value.cadInstanceIds === undefined || Array.isArray(value.cadInstanceIds) && (value.allowSource || value.cadInstanceIds.length > 0) && value.cadInstanceIds.length <= 200 && new Set(value.cadInstanceIds).size === value.cadInstanceIds.length && value.cadInstanceIds.every(isUuid));
     case 'PLACEMENT_POINT_PICKED': return (exact(value, ['cadInstanceId', 'point', 'derivation']) && isUuid(value.cadInstanceId) || exact(value, ['objectId', 'point', 'derivation']) && positiveId(value.objectId)) && isCanonicalPoint(value.point) && value.derivation === 'picked-surface-point';
     case 'POINT_PICKED': return exact(value, ['objectId', 'point', 'derivation']) && positiveId(value.objectId) && isCanonicalPoint(value.point) && value.derivation === 'picked-surface-point';
