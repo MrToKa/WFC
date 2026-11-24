@@ -201,6 +201,28 @@ describe('saved CAD network preparation with verified composite and CAS publicat
     expect((await prepare()).routeCount).toBe(2);expect(mocks.inputs.mock.calls.map(call => call[3])).not.toContain(id(12));
     expect(groups[2].status).toBe('draft');
   });
+  it.each([256, 257])('enforces the saved CAD route limit with %i linked routes', async routeCount => {
+    groups = [];
+    for (let index = 0; index < routeCount; index++) {
+      const routeId = id(1000 + index);
+      const name = `LIMIT-${index}`;
+      const row = tray(2000 + index, name);
+      groups.push({id:routeId,name,tag:name,purpose:'Control',status:'draft',revision:1,project_tray_id:null,publication:null});
+      instances.set(routeId,[instance(3000 + index)]);
+      trays.set(row.id,row);
+      links.set(routeId,{row,sourceSha256:'e'.repeat(64),projection:cadTrayProjection(row)});
+    }
+
+    if (routeCount === 256) {
+      await expect(prepare()).resolves.toMatchObject({routeCount:256,publishedCount:256});
+      expect(history).toHaveLength(256);
+    } else {
+      await expect(prepare()).rejects.toMatchObject({code:'CAD_OVERLAY_LIMIT',status:409,
+        message:'A calculation network can include at most 256 saved CAD routes.'});
+      expect(mocks.execute).not.toHaveBeenCalled();
+      expect(history).toHaveLength(0);
+    }
+  });
   it('retries already verified current sources without another worker or revision/history change', async () => {
     await prepare();const before=structuredClone(groups);const result=await prepare();
     expect(result).toMatchObject({duplicate:true,publishedCount:0,revalidatedCount:0,routeCount:2});

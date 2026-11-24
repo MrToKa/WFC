@@ -21,6 +21,7 @@ import type { PublicationInstance } from './routePublication.js';
 import type { TrayRow } from '../models/tray.js';
 
 const uuid = z.string().uuid();
+const MAX_SAVED_CAD_ROUTES = 256;
 export const cadNetworkPreparationInputSchema = z.object({
   expectedArtifactId: uuid,
   expectedSnapshotSha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -131,7 +132,8 @@ async function freeze(client: PoolClient, projectId: string, designId: string, i
     const unchanged = group.status === 'published' && previous?.baseArtifactId === base.id
       && previous.networkPreparationSourceSha256 === sourceSha256 && digest(previous.overlay) === digest(overlay);
     routes.push({group,instances,transitions,traySnapshot,trayId,overlay,sourceSha256,unchanged,exported});
-    if (routes.length > 32) return refuse('CAD_OVERLAY_LIMIT', 'A calculation network can include at most 32 saved CAD routes.');
+    if (routes.length > MAX_SAVED_CAD_ROUTES)
+      return refuse('CAD_OVERLAY_LIMIT', `A calculation network can include at most ${MAX_SAVED_CAD_ROUTES} saved CAD routes.`);
   }
   const overlay = routes.length ? encodeCadOverlay({schemaVersion:'wfc.pf.cad-overlay-payload.v3',projectId,
     modelVersionId:model.model_version_id,baseSnapshotSha256:base.snapshot_sha256,segments:routes.flatMap(route => route.overlay.segments)}) : null;
