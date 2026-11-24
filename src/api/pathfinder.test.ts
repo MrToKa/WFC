@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest, parsePathFinderProposal, submitPathFinderCalculation, submitAllPathFinderCalculations } from './pathfinder';
+import { cancelPathFinderJob, fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest, parsePathFinderProposal, submitPathFinderCalculation, submitAllPathFinderCalculations } from './pathfinder';
 import { createHash } from 'node:crypto';
 import { ENGINE_IDENTITY_POLICY_VERSIONS, ENGINE_IDENTITY_VERSION, engineIdentityCanonicalBody } from '../../shared/pathfinderEngineIdentity';
 import { notEvaluatedCalculationAvailability } from '../../shared/pathfinderCalculationAvailability';
@@ -33,6 +33,23 @@ function popupCalculationBody() {
       selectionRevision: '2', captureFrameId: modelId, captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' },
     expectedRegistryRevision: '0', expectedSnapshot: null, drillThroughWalls: true } } };
 }
+describe('background calculation cancellation transport', () => {
+  it('requires confirmation on the addressed job and accepts a summary without items', async () => {
+    const job = { id: modelId, projectId, kind: 'calculate', status: 'running', total: 5, completed: 2,
+      cancelRequested: true, failure: null, attempts: 1, createdAt: '', updatedAt: '' };
+    const fetchRequest = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json(job))
+      .mockResolvedValueOnce(Response.json({ ...job, id: cableId }))
+      .mockResolvedValueOnce(Response.json({ ...job, cancelRequested: false }));
+    const signal = new AbortController().signal;
+    await expect(cancelPathFinderJob(projectId, 'token', modelId, signal)).resolves.toBeUndefined();
+    expect(fetchRequest).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(`/api/projects/${projectId}/pathfinder/jobs/${modelId}`),
+      expect.objectContaining({ method: 'DELETE', signal, headers: { Authorization: 'Bearer token' } }));
+    await expect(cancelPathFinderJob(projectId, 'token', modelId)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    await expect(cancelPathFinderJob(projectId, 'token', modelId)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+});
+
 describe('popup calculation transport phase evidence', () => {
   it('admits the whole cable list without a search/page filter and retains forced automatic output policy', async () => {
     const { cableIds: _ids, ...body } = popupCalculationBody();

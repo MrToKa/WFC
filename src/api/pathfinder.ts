@@ -245,6 +245,12 @@ export async function fetchPathFinderJob(projectId: string, token: string, jobId
   const parsed = jobSchema.extend({ items: z.array(jobItemSchema) }).safeParse(await pathFinderRequest(projectId, token, `/jobs/${jobId}`, 'GET', undefined, signal));
   if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
 }
+export async function cancelPathFinderJob(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<void> {
+  const parsed = jobSchema.safeParse(await pathFinderRequest(projectId, token, `/jobs/${jobId}`, 'DELETE', undefined, signal));
+  if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId || !parsed.data.cancelRequested) {
+    throw new PathFinderApiError('INVALID_RESPONSE', 502);
+  }
+}
 export async function fetchLegacyBulkCalculationJob(projectId: string, token: string, signal?: AbortSignal): Promise<string | null> {
   const value = z.object({ jobId: uuid.nullable() }).strict().safeParse(
     await pathFinderRequest(projectId, token, '/jobs/bulk-submission', 'GET', undefined, signal));

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button, Caption1, ProgressBar, Spinner, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, makeStyles, tokens } from '@fluentui/react-components';
-import { bulkCalculationRequestSchema, fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCalculationSubmission, type PathFinderCable, type PathFinderJob, type PathFinderPreferences, type PathFinderState } from '@/api/pathfinder';
+import { bulkCalculationRequestSchema, cancelPathFinderJob, fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCalculationSubmission, type PathFinderCable, type PathFinderJob, type PathFinderPreferences, type PathFinderState } from '@/api/pathfinder';
 import { missingCalculationLocationsMessage, type CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../../shared/pathfinderCalculationSubmission';
@@ -35,7 +35,10 @@ export function backgroundCalculationCounts(job: PathFinderJob) {
   const items = job.items ?? [];
   const saved = items.filter(item => ['written', 'already-written'].includes(item.automaticUpdate?.status ?? '')).length;
   const unchanged = items.filter(item => item.automaticUpdate?.status === 'unchanged').length;
-  const pendingUpdates = items.filter(item => ['pending', 'running', 'unknown'].includes(item.automaticUpdate?.status ?? '')).length;
+  const pendingUpdates = items.filter(item => {
+    const status = item.automaticUpdate?.status;
+    return status === 'pending' || status === 'running' || status === 'unknown' && !job.cancelRequested;
+  }).length;
   const saving = items.filter(item => item.status === 'calculated' && ['pending', 'running'].includes(item.automaticUpdate?.status ?? '')).length;
   const calculated = items.filter(item => item.status === 'calculated').length;
   const review = items.filter(item => item.automaticUpdate?.status === 'review-required' && item.retainedRoute !== 'manual').length;
@@ -155,6 +158,9 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
   const [findingMatches, setFindingMatches] = useState(false);
   const [issueSelection, setIssueSelection] = useState<IssueSelection | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
+  const stopInFlight = useRef(false);
   const lifetime = useRef(new AbortController());
   const submittingRef = useRef(false), changed = useRef(onChanged), refresh = useRef(refreshState), lastSaved = useRef(0);
   const reviewReady = useRef(onReviewReady);
@@ -188,13 +194,17 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       try {
         const next = await deadline.wait(() => fetchPathFinderJob(projectId, token, jobId, deadline.signal));
         if (controller.signal.aborted) return;
-        setJob(next); setError(null);
+        setJob(current => current?.id === next.id && current.cancelRequested
+          ? { ...next, cancelRequested: true } : next);
+        setError(null);
+        if (next.cancelRequested) setStopError(null);
         const progress = backgroundCalculationCounts(next);
         if (progress.saved !== lastSaved.current) { lastSaved.current = progress.saved; changed.current(); }
         again = ['queued', 'running'].includes(next.status) || progress.pendingUpdates > 0;
         if (!again) {
           changed.current();
-          if (next.status === 'complete' && progress.review > 0 && !filteredJob.current) reviewReady.current?.(next.id);
+          if (next.status === 'complete' && !next.cancelRequested && !stopInFlight.current
+            && progress.review > 0 && !filteredJob.current) reviewReady.current?.(next.id);
         }
       } catch (cause) {
         if (controller.signal.aborted) return;
@@ -217,6 +227,7 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     filteredJob.current = filtered;
     setDisplayFiltered(filtered);
     setIssueSelection(null);
+    setStopError(null);
     setJob(null); setJobId(id); setPending(null);
   };
   const readStoredSubmission = (value: string | null) => {
@@ -274,9 +285,30 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       if (!signal.aborted) setError('Could not check the previous recalculation. Try again when the connection is available.');
     } finally { submittingRef.current = false; if (!signal.aborted) setSubmitting(false); }
   };
-  const startDisabled = disabled || !preferences || submitting || running || Boolean(pending);
+  const canStop = job != null && running && !job.cancelRequested
+    && (job.status === 'queued' || job.status === 'running' || job.status === 'complete');
+  const stop = async () => {
+    if (!canStop || !job || stopInFlight.current) return;
+    const id = job.id;
+    const signal = lifetime.current.signal;
+    const deadline = pathFinderRequestDeadline(signal, 30_000, () => new Error('Stop request timed out.'));
+    stopInFlight.current = true;
+    setStopping(true);
+    setStopError(null);
+    try {
+      await deadline.wait(() => cancelPathFinderJob(projectId, token, id, deadline.signal));
+      if (!signal.aborted) setJob(current => current?.id === id ? { ...current, cancelRequested: true } : current);
+    } catch {
+      if (!signal.aborted) setStopError('The server did not confirm the stop request. Check the status or try again.');
+    } finally {
+      deadline.dispose();
+      stopInFlight.current = false;
+      if (!signal.aborted) setStopping(false);
+    }
+  };
+  const startDisabled = disabled || !preferences || submitting || stopping || running || Boolean(pending);
   const start = async (selection?: FilteredSelection) => {
-    if (submittingRef.current || running || pending || disabled || !preferences?.barrierRouting) return;
+    if (submittingRef.current || stopInFlight.current || running || pending || disabled || !preferences?.barrierRouting) return;
     submittingRef.current = true; setSubmitting(true); setError(null);
     const signal = lifetime.current.signal;
     try {
@@ -330,8 +362,14 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
   </>;
   const progress = <>
     {pending ? <Button disabled={submitting} onClick={() => void recover()}>{pending === 'legacy' ? 'Find previous recalculation' : 'Retry same recalculation request'}</Button> : null}
+    {canStop ? <Button type="button" disabled={stopping} onClick={() => void stop()}>Stop recalculation</Button> : null}
+    {stopError && !job?.cancelRequested ? <Caption1 block role="alert">{stopError}</Caption1> : null}
     <div role="status" aria-live="polite">
-      {submitting ? <Spinner size="tiny" label={findingMatches ? 'Finding all cables that match the filters…' : 'Starting background recalculation…'} /> : running ? <Spinner size="tiny" label={job?.status === 'complete' ? 'Saving calculated routes…' : 'Recalculating cables in the background…'} /> : job ? <Caption1 block>{job.status === 'complete' ? 'Background recalculation finished.' : `Background recalculation ${job.status}.`}</Caption1> : null}
+      {submitting ? <Spinner size="tiny" label={findingMatches ? 'Finding all cables that match the filters…' : 'Starting background recalculation…'} />
+        : stopping || running ? <Spinner size="tiny" label={stopping || job?.cancelRequested ? 'Stopping recalculation…'
+          : job?.status === 'complete' ? 'Saving calculated routes…' : 'Recalculating cables in the background…'} />
+        : job ? <Caption1 block>{job.status === 'cancelled' || (job.status === 'complete' && job.cancelRequested) ? 'Background recalculation stopped.'
+          : job.status === 'complete' ? 'Background recalculation finished.' : `Background recalculation ${job.status}.`}</Caption1> : null}
       {!submitting && !pending && job && counts ? <>
         <ProgressBar value={job.total ? job.completed / job.total : 1} />
         <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}{counts.unchanged > 0 ? `; unchanged: ${counts.unchanged}` : ''}.</Caption1>
