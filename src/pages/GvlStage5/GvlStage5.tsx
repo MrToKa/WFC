@@ -4,21 +4,10 @@ import { Button, Input, Spinner } from '@fluentui/react-components';
 import { useAuth } from '@/context/AuthContext';
 import { GVL_PILOT_ID } from './pilotId';
 import { readPilotReport, type PilotReport } from './report';
+import { label, scopeLabels } from './reportLabels';
 import './review.css';
 
 const pageSize = 25;
-const descriptions: Record<string,string> = {
-  SHARED_NAME_MULTIPLE_CABLE_LOOPS:'Общо означение за различни кабелни контури',
-  NO_OWN_TAG_OR_PROVEN_PARENT:'Липсва собствен таг или доказана връзка с оборудване',
-  DOCUMENT_RELATION_NEEDS_REVIEW:'Връзката в документа изисква проверка',
-  DOCUMENT_PARENT_NOT_IN_MODEL:'Оборудването от документа не е намерено в модела',
-  MODEL_TAG_QUESTION_MARK:'Неясно означение в модела', OBSOLETE_BINDING:'Остаряло присвояване',
-  MODEL_SCOPE_CHANGED:'Променена моделна ревизия', BINDING_MISSING:'Липсва присвояване',
-  assigned:'Потвърдено',superseded:'Заменено',unverified:'Непотвърдено','changed-scope':'Променена ревизия',
-  'model-family-tag':'Съвпадение по моделно означение', 'pid-equipment':'Връзка с оборудване от P&ID',
-  'own-tag':'Собствен таг','own-tag-notation':'Вариант на собствен таг','user-cabinet':'Потвърдено проектно правило за табло',
-};
-const label = (value: string) => descriptions[value] ?? value;
 function DocumentRefs({items}: {items: {source:string;page:number|null}[]}) {
   return items.map((d,i)=><span className="pilot-line" key={i}>{d.source}{d.page!=null && ` · стр. ${d.page}`}</span>);
 }
@@ -44,7 +33,6 @@ export function ReviewWorkspace({ report }: {report: PilotReport}) {
   const sets = { [tabs[0]]: locations, [tabs[1]]: blocked, [tabs[2]]: audit };
   const total = sets[section].length;
   const offset = page * pageSize;
-  const scopeLabels = {current:'Сверен с WFC',changed:'Установена промяна спрямо изходните данни',historical:'Исторически отчет'};
   return <>
     <p className="pilot-scope"><strong>{scopeLabels[report.scopeStatus]}</strong> · {new Date(report.capturedAt).toLocaleString('bg-BG')}<br/>{report.modelLabel}</p>
     <dl className="pilot-summary">
@@ -103,18 +91,44 @@ export function ReviewWorkspace({ report }: {report: PilotReport}) {
 export function PilotPage({ projectId, token }: {projectId:string; token:string}) {
   const [report,setReport] = useState<PilotReport|null>(null);
   const [error,setError] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [revision, refresh] = useState(0);
   useEffect(()=>{
     const controller = new AbortController();
-    setReport(null);setError('');
+    setReport(null);setError('');setExportError('');
     readPilotReport(projectId,token,controller.signal).then(value=>{
       if (!controller.signal.aborted) setReport(value);
     }).catch(e=>{if(!controller.signal.aborted) setError(e instanceof Error ? e.message : 'Грешка при зареждането.');});
     return ()=>controller.abort();
   },[projectId,token,revision]);
+
+  async function exportReport(targetDocument: Document) {
+    if (!report || exporting) return;
+    setExporting(true);
+    setExportError('');
+    try {
+      const { downloadPilotReport } = await import('./exportPilotReport');
+      await downloadPilotReport(report, targetDocument);
+    } catch (error) {
+      console.error('Failed to export pilot report', error);
+      setExportError('Отчетът не можа да се експортира. Опитайте отново.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return <section className="pilot-review" aria-labelledby="pilot-title">
     <header><h2 id="pilot-title">Отчет на пилота</h2>
-      <Button disabled={!report && !error} onClick={()=>refresh(n=>n+1)}>Обнови отчета</Button></header>
+      <div className="pilot-tools">
+        <Button disabled={(!report && !error) || exporting} onClick={()=>refresh(n=>n+1)}>Обнови отчета</Button>
+        <Button appearance="primary" disabled={!report || exporting}
+          onClick={(event) => void exportReport(event.currentTarget.ownerDocument)}>
+          {exporting ? 'Подготвя се Excel файл…' : 'Експорт в Excel'}
+        </Button>
+      </div>
+    </header>
+    {exportError && <p role="alert">{exportError}</p>}
     {error ? <p role="alert">{error}</p> : report ? <ReviewWorkspace report={report}/> : <Spinner label="Зареждане на отчета…"/>}
   </section>;
 }

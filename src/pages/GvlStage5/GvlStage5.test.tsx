@@ -1,7 +1,8 @@
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ReviewWorkspace } from './GvlStage5';
+import * as XLSX from 'xlsx';
+import { PilotPage, ReviewWorkspace } from './GvlStage5';
 import { readPilotReport, type PilotReport } from './report';
 import { GVL_PILOT_ID } from './pilotId';
 
@@ -16,7 +17,12 @@ const pilot: PilotReport = {
     impactId:'impact',jobId:'job',objectIds:[13],evidence:'Verified equipment tag'}],
   routingBlocked:[{id:'wire',tag:'Wire 1',from:'Source A',to:'Sensor A',reason:'Missing location'}],
 };
-afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+afterEach(()=>{
+  cleanup();
+  document.querySelector('iframe[data-pilot-test-popup]')?.remove();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 describe('GVL244 pilot review',()=>{
   it('shows historical checks and estimated cost separately from the current route counts',()=>{
     const quality = {schemaVersion:'wfc.gvl244.stage6.view.v1' as const, projectId:GVL_PILOT_ID,
@@ -53,5 +59,66 @@ describe('GVL244 pilot review',()=>{
     await expect(readPilotReport(GVL_PILOT_ID,'test-token',signal)).rejects.toThrow('избрания проект');
     expect(fetcher).toHaveBeenCalledWith(expect.stringContaining(`/api/projects/${GVL_PILOT_ID}/gvl-stage5/report`),
       {signal,cache:'no-store',headers:{Authorization:'Bearer test-token'}});
+  });
+
+  it('downloads all report sections from the detached panel even when the location list is filtered', async () => {
+    const locations = Array.from({ length: 26 }, (_, index) => ({
+      ...pilot.unresolved[0],
+      locationId: `location-${index}`,
+      name: index === 25 ? '=1+1' : `Sensor ${index}`,
+    }));
+    const report = {
+      ...pilot,
+      unresolved: locations,
+      summary: { ...pilot.summary, locations: 28, unresolved: 26 },
+      audit: [{ ...pilot.assigned[0], name: 'Audit entry' }],
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(report))));
+    const popup = document.createElement('iframe');
+    popup.dataset.pilotTestPopup = '';
+    document.body.append(popup);
+    const popupDocument = popup.contentDocument!;
+    const anchorPrototype = Object.getPrototypeOf(popupDocument.createElement('a')) as HTMLAnchorElement;
+    const click = vi.spyOn(anchorPrototype, 'click').mockImplementation(() => {});
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:pilot-export');
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = vi.fn();
+    });
+
+    const root = popupDocument.createElement('div');
+    popupDocument.body.append(root);
+    render(<MemoryRouter><PilotPage projectId={GVL_PILOT_ID} token="test-token" /></MemoryRouter>, {
+      container: root,
+    });
+    const panel = within(root);
+    const download = panel.getByRole('button', { name: 'Експорт в Excel' }) as HTMLButtonElement;
+    expect(download.disabled).toBe(true);
+    const query = await panel.findByRole('textbox', { name: 'Търсене в раздела' });
+    fireEvent.change(query, { target: { value: 'Sensor 0' } });
+    expect(panel.getByRole('status').textContent).toBe('1–1 от 1');
+    fireEvent.click(download);
+    await waitFor(() => expect(click).toHaveBeenCalledOnce(), { timeout: 3000 });
+    const anchor = click.mock.contexts[0] as HTMLAnchorElement;
+    expect(anchor.ownerDocument).toBe(popupDocument);
+    expect(anchor.download).toBe('GVL244-pilot-report-2026-11-21T00-00-00Z.xlsx');
+    expect(anchor.isConnected).toBe(false);
+
+    const blob = createObjectURL.mock.calls[0][0];
+    const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(blob);
+    });
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    expect(workbook.SheetNames).toEqual([
+      'Обобщение', 'Проверки и разходи', 'Локации за преглед', 'Кабели за преглед', 'История на присвояванията',
+    ]);
+    expect(workbook.Sheets['Обобщение'].B10).toMatchObject({ t: 'n', v: 26 });
+    expect(workbook.Sheets['Локации за преглед'].A27).toMatchObject({ t: 's', v: '=1+1' });
+    expect(workbook.Sheets['Локации за преглед'].A27.f).toBeUndefined();
+    expect(workbook.Sheets['Кабели за преглед'].C2.v).toBe('Sensor A');
+    expect(workbook.Sheets['История на присвояванията'].A2.v).toBe('Audit entry');
   });
 });
