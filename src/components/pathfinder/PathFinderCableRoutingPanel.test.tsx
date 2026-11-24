@@ -216,9 +216,12 @@ describe('showing the popup From/To locations without changing them', () => {
       ? { mode, sdkObjectId: 55, point: [7, 8, 9], object: context('from', 'confirmed').confirmedSelection!.object }
       : { mode, displaySdkObjectId: 55, point: [7, 8, 9], derivation: 'picked-surface-point' };
     assignment.from.displaySelection = { sdkObjectId: 55, name: 'New selected object', point: [7, 8, 9] };
-    const show = vi.fn(async () => true); render(<PathFinderCableRoutingPanel {...props()} onShowLocation={show} />);
+    const show = vi.fn(async () => true), hide = vi.fn(async () => true);
+    render(<PathFinderCableRoutingPanel {...props()} onShowLocation={show} onHideLocation={hide} />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
     if (mode === 'fixed-world') {
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Hide From location focus' })); });
+      expect(hide).toHaveBeenCalledExactlyOnceWith();
       expect(show).toHaveBeenCalledExactlyOnceWith(55, undefined, [7, 8, 9]);
       expect(screen.getByText('Cable entry selected. Click Save to confirm.')).toBeVisible();
     }

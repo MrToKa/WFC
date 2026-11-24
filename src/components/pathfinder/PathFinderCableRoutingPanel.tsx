@@ -31,6 +31,7 @@ export type PathFinderCableRoutingPanelProps = {
   cable: CableWorkflowRow | null; open: boolean; onClose: () => void; anchor?: HTMLElement | null;
   onCalculate?: () => void | Promise<void>; onTogglePath?: (endpoints?: StoredEndpointContexts) => void;
   onShowLocation?: (sdkObjectId: number, sdkObjectIds?: number[], surfacePoint?: CanonicalPoint) => Promise<boolean>;
+  onHideLocation?: () => Promise<boolean>;
   onShowLocationPoint?: (point: CanonicalPoint, current: EndpointCurrentScope) => Promise<boolean>;
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
   pathVisible?: boolean; pathReady?: boolean; endpointRefreshKey?: number; actionsBusy?: boolean; calculatedRouting?: string | null; calculatedDesignLength?: string | null;
@@ -88,7 +89,7 @@ function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable:
     scopeKey: props.owner, width: 416, preferredTop: 80, requestedPopup: props.requestedPopup });
   return <OwnedCableRoutingPanel key={props.cable.cable.id} {...props} floating={floating} />;
 }
-function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, onShowLocation, onShowLocationPoint, pathVisible = false,
+function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, onShowLocation, onShowLocationPoint, onHideLocation, pathVisible = false,
   pathReady = false, pathSource = null, endpointRefreshKey = 0, actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, calculationBlockedReason = null,
   onConfigureCalculation, drillThroughWalls = false, onDrillThroughWallsChange, preferVerticalApproach, onPreferVerticalApproachChange,
   submittedDrillThroughWalls, calculationFeedback, calculationDiagnostics,
@@ -107,26 +108,29 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   // endpoint. Keep that old display; it never supplies Save or review authority.
   const displayScope = JSON.stringify([access.accountId, access.projectId, access.token, access.model, access.preparationKey,
     cable.cable.id, cable.cable.fromLocation, cable.cable.toLocation]);
-  const [locationDisplay, setLocationDisplay] = useState<{ scope: string; end: 'from' | 'to'; working: boolean; error: string | null; pointShown?: boolean } | null>(null);
+  const [locationDisplay, setLocationDisplay] = useState<{ scope: string; end: 'from' | 'to'; working: boolean; error: string | null; pointShown?: boolean; hiding?: boolean } | null>(null);
   const locationOwner = useRef({ scope: displayScope, active }); locationOwner.current = { scope: displayScope, active };
   const locationRequest = useRef<symbol | null>(null);
   useEffect(() => { locationRequest.current = null; setLocationDisplay(null); }, [displayScope, active]);
   useEffect(() => () => { locationOwner.current.active = false; locationRequest.current = null; }, []);
   const locationWorking = locationDisplay?.scope === displayScope && locationDisplay.working;
-  const showLocation = async (end: 'from' | 'to', target: { sdkObjectId: number; sdkObjectIds?: number[]; surfacePoint?: CanonicalPoint } | NonNullable<ReturnType<typeof locationPoint>>) => {
-    if (('pointProjectMetres' in target ? !onShowLocationPoint : !onShowLocation) || locationRequest.current || !locationOwner.current.active || locationOwner.current.scope !== displayScope) return;
+  const changeLocationFocus = async (end: 'from' | 'to', target: { sdkObjectId: number; sdkObjectIds?: number[]; surfacePoint?: CanonicalPoint } | NonNullable<ReturnType<typeof locationPoint>> | null) => {
+    const action = target === null ? onHideLocation : 'pointProjectMetres' in target
+      ? onShowLocationPoint && (() => onShowLocationPoint(target.pointProjectMetres, target.current))
+      : onShowLocation && (() => target.surfacePoint ? onShowLocation(target.sdkObjectId, target.sdkObjectIds, target.surfacePoint)
+        : target.sdkObjectIds ? onShowLocation(target.sdkObjectId, target.sdkObjectIds) : onShowLocation(target.sdkObjectId));
+    if (!action || locationRequest.current || !locationOwner.current.active || locationOwner.current.scope !== displayScope) return;
     const request = Symbol(); locationRequest.current = request;
-    setLocationDisplay({ scope: displayScope, end, working: true, error: null });
+    setLocationDisplay({ scope: displayScope, end, working: true, error: null, hiding: target === null });
     let shown = false;
-    try { shown = 'pointProjectMetres' in target ? await onShowLocationPoint!(target.pointProjectMetres, target.current)
-      : await (target.surfacePoint ? onShowLocation!(target.sdkObjectId, target.sdkObjectIds, target.surfacePoint)
-        : target.sdkObjectIds ? onShowLocation!(target.sdkObjectId, target.sdkObjectIds) : onShowLocation!(target.sdkObjectId)); }
+    try { shown = await action(); }
     catch { /* Display errors do not change endpoint or calculation state. */ }
     if (locationRequest.current !== request) return;
     locationRequest.current = null;
     if (locationOwner.current.active && locationOwner.current.scope === displayScope) setLocationDisplay({ scope: displayScope, end, working: false,
-      pointShown: shown && 'pointProjectMetres' in target,
-      error: shown ? null : 'This location could not be shown. Check that the current model is loaded, then try again.' });
+      pointShown: shown && target !== null && 'pointProjectMetres' in target,
+      error: shown ? null : target === null ? 'The model visibility could not be restored. Try again.'
+        : 'This location could not be shown. Check that the current model is loaded, then try again.' });
   };
   const retained = useRef<{ scope: string; from: Endpoint['context']; to: Endpoint['context'] }>({ scope: displayScope, from: null, to: null });
   if (retained.current.scope !== displayScope || !assignment.enabled) retained.current = { scope: displayScope, from: null, to: null };
@@ -265,7 +269,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       {!name?.trim() ? <a href={`/projects/${access.projectId}/cables/${cable.cable.id}`}>Set the {side} location name in Cable list</a> : null}
       <textarea aria-label={`${side} assigned model object`} className={styles.value} readOnly value={value} rows={3} />
       {entryConfirmation ? <MessageBar intent="success" layout="multiline" politeness="polite"><MessageBarBody>{entryConfirmation}</MessageBarBody></MessageBar>
-        : <Caption1>{lastRead ? 'Last read location - refresh From/To before using it.' : selectedDraft ? 'Selected - not saved.' : automatic ? 'Automatically matched - confirm with Save.'
+        : <Caption1>{lastRead ? 'Last read location — refresh From/To before using it.' : selectedDraft ? 'Selected — not saved.' : automatic ? 'Automatically matched — confirm with Save.'
           : displayContext?.head ? 'Saved shared location.' : 'Choose one object in the Model Browser.'}</Caption1>}
       <div className={styles.actions}>
         <Button disabled={busy || locationWorking || Boolean(pending) || !name?.trim() || !state.canSelect}
@@ -277,11 +281,13 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
             void state.pickSurface(id, id !== undefined && !lastRead ? objectName : undefined);
           }}>Pick cable entry</Button> : null}
         <Button aria-label={`Show ${side} location`} disabled={busy || locationWorking || target === null || (pointTarget ? !onShowLocationPoint : !onShowLocation)}
-          onClick={() => { if (target !== null) void showLocation(end, target); }}>Show location</Button>
+          onClick={() => { if (target !== null) void changeLocationFocus(end, target); }}>Show location</Button>
+        {surfacePoint && objectTarget && onHideLocation && <Button aria-label={`Hide ${side} location focus`}
+          disabled={busy || locationWorking} onClick={() => { void changeLocationFocus(end, null); }}>Hide</Button>}
       </div>
       {pointTarget ? <Caption1 role="status">{display?.pointShown ? 'Saved project point shown; no linked model object.' : 'Saved project point; no linked model object.'}</Caption1> : null}
       {target === null && point && !lastRead && !state.busy ? <Caption1>This location has no current model object to show. Assign an object or refresh From/To.</Caption1> : null}
-      {display?.working ? <Spinner size="tiny" label={`Showing ${side} location…`} /> : null}
+      {display?.working ? <Spinner size="tiny" label={display.hiding ? 'Restoring model visibility.' : `Showing ${side} location…`} /> : null}
       {display?.error ? <p role="alert" className={styles.note}>{display.error}</p> : null}
       {!busy && !pending && name?.trim() && !state.canSelect && !state.error ? <p className={styles.note} role="status">Prepare the current model and refresh this endpoint before assigning an object.</p> : null}
       {state.busy ? <Spinner size="tiny" label={`Checking ${side} selection…`} /> : null}

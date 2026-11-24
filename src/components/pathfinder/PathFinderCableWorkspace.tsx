@@ -1080,6 +1080,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       onTogglePath={preferStoredRoute?toggleStoredRoute:selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
       onShowLocation={props.pf.viewerPhase === 'ready' ? props.pf.showLocation : undefined}
       onShowLocationPoint={props.pf.viewerPhase === 'ready' ? props.pf.showLocationPoint : undefined}
+      onHideLocation={props.pf.viewerPhase === 'ready' ? props.pf.hideLocation : undefined}
       onEndpointForegroundContexts={props.onEndpointForegroundContexts}
       pathVisible={preferStoredRoute?Boolean(ownedStoredDisplay?.visible):Boolean(displayMatches && props.display?.visible)}
       pathReady={preferStoredRoute?storedDisplayReady:displayMatches} pathSource={displayTextMatches ? props.display?.source : null} endpointRefreshKey={endpointRefreshKey}

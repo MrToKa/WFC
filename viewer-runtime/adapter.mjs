@@ -244,7 +244,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       locationPoint = createLocationPointController(viewer, { window, signal });
       const loadedModel = viewer.model;
       multipart = createBarrierMultipartRuntime(viewer, { descriptor, signal, isCurrent: () => !finished && viewer.model != null });
-      let computedPath = false, legacyPath = false, trayDisplay = false;
+      let computedPath = false, legacyPath = false, focusDisplay = false;
       async function captureEvent(captureId, index, operationSignal, onProgress, maxEvents = 1) {
         if (!capture || capture.id !== captureId || capture.index !== index || capture.reading) throw safeError('EXTRACTION_FAILED');
         const currentCapture = capture; currentCapture.reading = true; currentCapture.onProgress = onProgress;
@@ -303,7 +303,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         // Restore only our route appearance. Ghost/isolation must not become an
         // automatic endpoint exclusion, and a failed restoration must refuse.
         routes.prepareForVisibilityObservation(); legacyPath = false;
-        pathfinder.prepareForVisibilityObservation(); computedPath = trayDisplay = false;
+        pathfinder.prepareForVisibilityObservation(); computedPath = focusDisplay = false;
         setCadRouteFilter(null);
       }
       async function inputAck(state, request, operationSignal) {
@@ -367,7 +367,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           if (options.routingBindings !== undefined && !bindings) throw safeError('ROUTING_BINDINGS_INVALID');
           const generation = ++displayGeneration;
           locationPoint.clear();
-          pathfinder.clear(); computedPath = trayDisplay = false; legacyPath = true;
+          pathfinder.clear(); computedPath = focusDisplay = false; legacyPath = true;
           return routes.showRoute(text, { ...options, routingBindings: bindings }).then(result => {
             if (!finished && generation === displayGeneration) setCadRouteFilter(parseRoute(text));
             return result;
@@ -387,9 +387,9 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           locationPoint.clear();
           // Hide and geometry preparation restore appearance at the user's
           // current camera, including repeated cleanup after the tray is gone.
-          if (computedPath || trayDisplay) pathfinder.clear({ preserveSelection }); else if (legacyPath) routes.clearRoute({ preserveCamera, preserveSelection }); else { if (!preserveSelection) viewer.clearSelection(); if (!preserveCamera) viewer.fitToView(); }
-          if (trayDisplay && !preserveCamera) viewer.fitToView();
-          computedPath = legacyPath = trayDisplay = false;
+          if (computedPath || focusDisplay) pathfinder.clear({ preserveSelection }); else if (legacyPath) routes.clearRoute({ preserveCamera, preserveSelection }); else { if (!preserveSelection) viewer.clearSelection(); if (!preserveCamera) viewer.fitToView(); }
+          if (focusDisplay && !preserveCamera) viewer.fitToView();
+          computedPath = legacyPath = focusDisplay = false;
           setCadRouteFilter(null);
         },
         fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },
@@ -398,12 +398,12 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           locationPoint.clear();
           if (legacyPath) routes.clearRoute(); legacyPath = false;
           try {
-            const result = pathfinder.showPath(value); computedPath = true; trayDisplay = false;
+            const result = pathfinder.showPath(value); computedPath = true; focusDisplay = false;
             // CAD sections are not native model object IDs. Focus them by the
             // engine's route names, retaining user visibility for older callers.
             setCadRouteFilter(value.routeNames ?? null); return result;
           } catch (error) {
-            try { pathfinder.clear({ preserveSelection: true }); setCadRouteFilter(null); computedPath = trayDisplay = false; }
+            try { pathfinder.clear({ preserveSelection: true }); setCadRouteFilter(null); computedPath = focusDisplay = false; }
             catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
             throw error;
           }
@@ -463,7 +463,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
             // reversible Ghost baseline as tray inspection.
             if (isolateEndpoint) {
               pathfinder.showTray(ids);
-              trayDisplay = true;
+              focusDisplay = 'location';
             } else viewer.show(ids, loadedModel);
             viewer.fitToView(ids, loadedModel);
             if (surfacePoint !== undefined) locationPoint.show(surfacePoint, { focus: false });
@@ -471,11 +471,16 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           } catch (error) {
             if (error?.code === 'APPEARANCE_RESTORE_FAILED') throw error;
             if (isolateEndpoint) {
-              try { pathfinder.clear({ preserveSelection: true }); trayDisplay = false; }
+              try { pathfinder.clear({ preserveSelection: true }); focusDisplay = false; }
               catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
             }
             throw safeError('LOCATION_UNAVAILABLE');
           }
+        },
+        hideLocation() {
+          if (focusDisplay !== 'location') return;
+          pathfinder.clear({ preserveSelection: true });
+          focusDisplay = false;
         },
         async showTray(sdkObjectIds, operationSignal, beforeCommit = async () => {}) {
           if (!Array.isArray(sdkObjectIds) || sdkObjectIds.length === 0 || sdkObjectIds.length > 512) throw safeError('TRAY_UNAVAILABLE');
@@ -498,12 +503,12 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
             displayGeneration++;
             locationPoint.clear();
             if (legacyPath) { routes.clearRoute(); legacyPath = false; }
-            trayDisplay = true;
+            focusDisplay = 'tray';
             pathfinder.showTray(ids); computedPath = false;
             setCadRouteFilter([]);
             viewer.fitToView(ids, loadedModel);
           } catch {
-            try { pathfinder.clear({ preserveSelection: true }); setCadRouteFilter(null); computedPath = trayDisplay = false; }
+            try { pathfinder.clear({ preserveSelection: true }); setCadRouteFilter(null); computedPath = focusDisplay = false; }
             catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
             throw safeError('TRAY_UNAVAILABLE');
           }
@@ -516,10 +521,10 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           try {
             displayGeneration++;
             if (legacyPath) { routes.clearRoute(); legacyPath = false; }
-            trayDisplay = true; pathfinder.showCadTray(); computedPath = false;
+            focusDisplay = 'tray'; pathfinder.showCadTray(); computedPath = false;
             setCadRouteFilter(null); scene.setTrayPeek(componentIds); scene.focusTray(componentIds);
           } catch {
-            try { pathfinder.clear({ preserveSelection: true }); setCadRouteFilter(null); computedPath = trayDisplay = false; }
+            try { pathfinder.clear({ preserveSelection: true }); setCadRouteFilter(null); computedPath = focusDisplay = false; }
             catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
             throw safeError('TRAY_UNAVAILABLE');
           }

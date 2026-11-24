@@ -620,6 +620,10 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         return true;
       })) === true;
     },
+    hideLocation: async (): Promise<boolean> => (await viewerAction(async viewer => {
+      await viewer.hideLocation();
+      return true;
+    })) === true,
     showLocationPoint: async (point: CanonicalPoint, expected: Pick<PreparationScope, 'modelVersionId' | 'selectionRevision' | 'contentFingerprint'>): Promise<boolean> => {
       runRef.current?.storedRoute?.clear();
       const target = { ...expected }, savedPoint = [...point] as CanonicalPoint;

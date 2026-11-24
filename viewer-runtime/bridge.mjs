@@ -194,7 +194,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     computed = undefined;
     for (const [id, controller] of capabilities) {
       const entry = requests.get(id);
-      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type.includes('BARRIER_CAPTURE') || ['PICK_POINT', 'PICK_PLACEMENT_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY'].includes(entry?.command.type))) {
+      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type.includes('BARRIER_CAPTURE') || ['PICK_POINT', 'PICK_PLACEMENT_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'HIDE_LOCATION', 'SHOW_TRAY'].includes(entry?.command.type))) {
         if (entry?.status === 'pending') entry.status = 'cancelled';
         if (['START_MODEL_CAPTURE', 'START_BARRIER_CAPTURE'].includes(entry?.command.type)) releaseCapture(entry.captureScope, true);
         controller.abort();
@@ -304,6 +304,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         });
         if (!live()) return;
         emit(command, 'PATH_TRANSPARENCY_UPDATED', command.payload);
+      } else if (command.type === 'HIDE_LOCATION') {
+        handle.hideLocation();
+        if (!emit(command, 'LOCATION_HIDDEN', {})) throw failure('INVALID_MESSAGE');
       } else if (command.type === 'SHOW_LOCATION_POINT') {
         await handle.showLocationPoint(command.payload.pointProjectMetres, signal, async () => {
           await requirePathFinder(command, signal);
@@ -571,7 +574,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     try { switch (command.type) {
-      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'PICK_PLACEMENT_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'RESOLVE_TRAY_IDENTITIES': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'READ_OBJECT_GUID': case 'SHOW_LOCATION': case 'SHOW_LOCATION_POINT': case 'SHOW_TRAY': case 'SET_TRAY_ASSIGNMENTS': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'PICK_PLACEMENT_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'RESOLVE_TRAY_IDENTITIES': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'READ_OBJECT_GUID': case 'SHOW_LOCATION': case 'SHOW_LOCATION_POINT': case 'HIDE_LOCATION': case 'SHOW_TRAY': case 'SET_TRAY_ASSIGNMENTS': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
       case 'READ_BARRIER_MULTIPART_FRAME': case 'START_BARRIER_MULTIPART': case 'STATUS_BARRIER_MULTIPART': case 'CANCEL_BARRIER_MULTIPART': case 'RECONCILE_BARRIER_MULTIPART':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;

@@ -706,9 +706,19 @@ test('showing a picked cable entry focuses its equipment, ghosts the background 
   assert.deepEqual(f.facts.isolated, [[2]]);
   assert.equal(viewer.impl.showGhosting, true);
   assert.ok(meshes[0].position.values.every((n, i) => Math.abs(n - [4, 5, 6][i]) < 1e-9));
-  handle.clearRoute({ preserveCamera: true, preserveSelection: true });
-  assert.equal(meshes.length, 0);
+  const marker = meshes[0];
+  viewer.clearSelection = () => { throw Error('Hide must preserve selection'); };
+  viewer.navigation = { fitBounds() { throw Error('Hide must preserve the camera'); } };
+  handle.hideLocation();
+  handle.hideLocation();
+  assert.deepEqual(fits, [[2]]);
+  assert.deepEqual(meshes, [marker]);
   assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
+  await handle.showTray([2, 3]);
+  const trayVisibility = f.model.visibilityManager.getVisibility();
+  handle.hideLocation();
+  assert.deepEqual(f.model.visibilityManager.getVisibility(), trayVisibility);
+  assert.deepEqual(fits, [[2], [2, 3]]);
 });
 
 test('tray and legacy route focus suppress streamed manual CAD and Hide restores its prior visibility', async t => {

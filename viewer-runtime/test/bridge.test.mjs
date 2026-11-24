@@ -218,6 +218,26 @@ test('location display is protected and acknowledges the exact target without re
   assert.equal(f.facts.fits, 1); assert.equal(f.messages('ERROR').length, 0); f.bridge.dispose();
 });
 
+test('hiding endpoint focus keeps a committed route available for zoom', async () => {
+  let hidden = 0;
+  const f = fixture();
+  f.handle.hideLocation = () => { hidden++; };
+  await f.loaded();
+  const pathId = uuid(9800);
+  f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 1, objectIds: [2] }); await turn();
+  f.send('APPEND_COMPUTED_PATH', { pathId, offset: 0, points: [[1, 2, 3]] }); await turn();
+  const committed = f.send('COMMIT_COMPUTED_PATH', { pathId }); await turn();
+  const clears = f.facts.clears;
+  const command = f.send('HIDE_LOCATION', {}); await turn();
+  assert.equal(hidden, 1);
+  assert.equal(f.facts.clears, clears);
+  assert.deepEqual(f.messages('LOCATION_HIDDEN').at(-1), { ...command, type: 'LOCATION_HIDDEN' });
+  f.send('ZOOM_ROUTE', { routeRequestId: committed.requestId }); await turn();
+  assert.equal(f.facts.fits, 1);
+  assert.equal(f.messages('ERROR').length, 0);
+  f.bridge.dispose();
+});
+
 test('location display passes every group member to the adapter and echoes its exact bounded request',async()=>{
   let target;
   const f=fixture({showLocation:async(id,_signal,beforeCommit,ids)=>{await beforeCommit();target={id,ids};}});
