@@ -176,6 +176,22 @@ test('the actual clear-data HTTP route leaves model metadata, explicit selection
   assert.deepEqual(await s.storage.verifyResources(old.version.storagePrefix,old.version.manifest.resources),{ resourceCount:old.version.resourceCount,totalBytes:old.version.totalBytes });
 });
 
+test('selecting the same active model keeps the selection revision and timestamp', async t => {
+  const s = await setup(t);
+  const initial = (await s.repository.listVersions(s.projectId)).selection;
+  assert.deepEqual(await s.service.selectModel(s.projectId, null, initial.selectionRevision, s.requestedBy), initial);
+
+  const { version } = await s.baseline();
+  const selected = (await s.repository.listVersions(s.projectId)).selection;
+  assert.deepEqual(await s.service.selectModel(s.projectId, version.id, selected.selectionRevision, s.requestedBy), selected);
+  assert.deepEqual((await s.repository.listVersions(s.projectId)).selection, selected);
+
+  const cleared = await s.service.selectModel(s.projectId, null, selected.selectionRevision, s.requestedBy);
+  assert.equal(cleared.activeModelVersionId, null);
+  assert.equal(cleared.selectionRevision, selected.selectionRevision + 1);
+  await assert.rejects(s.service.selectModel(s.projectId, null, selected.selectionRevision, s.requestedBy), { code: 'SELECTION_CONFLICT' });
+});
+
 for (const revocation of ['assignment', 'role'] as const) {
   test(`active-model HTTP rechecks current ${revocation} after waiting for the project lock`, async t => {
     const s = await setup(t), old = await s.baseline();

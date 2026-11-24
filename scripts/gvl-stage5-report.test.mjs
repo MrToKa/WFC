@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {projectId,buildReport,captureSnapshot} from './gvl-stage5-report.mjs';
 import {compactEvidence} from './gvl-stage5-generate.mjs';
 
-const current={modelVersionId:'M1',selectionRevision:'4',aggregateId:'A',artifactId:'V',captureFrameId:'F',traceId:'T'};
+const current={modelVersionId:'M1',contentFingerprint:'hash1',selectionRevision:'4',aggregateId:'A',artifactId:'V',captureFrameId:'F',traceId:'T'};
 function data() {
   const cables=[{id:'C1',tag:'power',from:'Alias 1',to:'End 2'},{id:'C2',tag:'control',from:'End 2',to:'End 3'}];
   const baseline={projectId,current,modelLabel:'test',resultsSha256:'source',cables,
@@ -24,11 +24,34 @@ test('distinct locations and exact receipts reconcile, unchanged sources replay 
   assert.equal(report.unresolved[0].cables[0].side,'to');
   assert.equal(report.routingBlocked[0].latestJobId,'J2');
 });
-test('new scope retains audit while retiring prior bindings and candidate object IDs',()=>{
+test('a selection counter change with identical model and preparation preserves pilot evidence',()=>{
+  const {baseline,snapshot}=data();
+  const expected=buildReport(baseline,snapshot);
+  snapshot.current={...current,selectionRevision:'5'};
+  const report=buildReport(baseline,snapshot);
+  assert.deepEqual(report,{...expected,provenance:{...expected.provenance,current:snapshot.current}});
+});
+test('new preparation retains audit while retiring prior bindings and candidate object IDs',()=>{
   const {baseline,snapshot}=data();snapshot.current={...current,traceId:'new'};snapshot.locations[0].ready=false;snapshot.locations[0].bindingStatus='confirmed';
   const report=buildReport(baseline,snapshot);
   assert.equal(report.scopeStatus,'changed');assert.equal(report.assigned.length,0);assert.equal(report.audit[0].status,'changed-scope');
+  assert.equal(report.modelLabel,baseline.modelLabel);
+  assert.ok(report.unresolved.every(r=>r.reason==='PREPARATION_SCOPE_CHANGED'));
   assert.ok(report.unresolved.some(r=>r.status==='obsolete'));assert.ok(report.unresolved.every(r=>r.candidates.length===0));
+});
+test('model identity changes and missing routing scope have distinct review reasons',()=>{
+  for(const [scope,reason] of [
+    [{...current,modelVersionId:'M2'},'MODEL_SCOPE_CHANGED'],
+    [{...current,contentFingerprint:'hash2'},'MODEL_SCOPE_CHANGED'],
+    [null,'MODEL_SCOPE_UNAVAILABLE'],
+  ]){
+    const {baseline,snapshot}=data();snapshot.current=scope;
+    const report=buildReport(baseline,snapshot);
+    assert.equal(report.scopeStatus,'changed');
+    assert.equal(report.assigned.length,0);
+    assert.equal(report.unresolved[0].reason,reason);
+    assert.deepEqual(report.unresolved[0].candidates,[]);
+  }
 });
 test('a saved receipt only counts if both the location and live binding match',()=>{
   for(const x of [{bindingId:'wrong'},{locationId:'wrong'}]){

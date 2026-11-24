@@ -2,7 +2,16 @@
 export const projectId = 'da667921-1f13-4c1d-9f87-063d127b98ce';
 const normalize = text => text?.normalize('NFC').trim().toUpperCase() ?? '';
 const keyById = rows => new Map(rows.map(row => [row.id, row]));
-const scopeFields = ['modelVersionId','contentFingerprint','selectionRevision','aggregateId','artifactId','projectionSha256','captureFrameId','geometryRevision','traceId'];
+const preparationFields = ['aggregateId','artifactId','projectionSha256','captureFrameId','geometryRevision','traceId'];
+
+function scopeChangeReason(original, current) {
+  if (!current) return 'MODEL_SCOPE_UNAVAILABLE';
+  if (current.modelVersionId !== original.modelVersionId || current.contentFingerprint !== original.contentFingerprint) {
+    return 'MODEL_SCOPE_CHANGED';
+  }
+  // Selection revisions fence writes. Pilot evidence depends on the model and preparation it references.
+  return preparationFields.some(field => current[field] !== original[field]) ? 'PREPARATION_SCOPE_CHANGED' : null;
+}
 
 export async function captureSnapshot(pool, project, repository) {
   if (project !== projectId) throw Error('GVL244_PROJECT_MISMATCH');
@@ -63,12 +72,15 @@ const actions = {
   MODEL_TAG_QUESTION_MARK:'Проверете маркирания като несигурен таг и потвърдете правилния моделен обект.',
   OBSOLETE_BINDING:'Проверете отново обекта и точката в текущия модел.',
   MODEL_SCOPE_CHANGED:'Повторете търсенето в индекса на текущия модел.',
+  PREPARATION_SCOPE_CHANGED:'Проверете локацията спрямо текущата подготовка за маршрутизиране.',
+  MODEL_SCOPE_UNAVAILABLE:'Проверете дали има активен модел с налична подготовка за маршрутизиране.',
   BINDING_MISSING:'Потвърдете обекта за тази локация в текущия модел.'
 };
 
 export function buildReport(baseline, snapshot) {
   if (baseline.projectId!==projectId || snapshot.projectId!==projectId) throw Error('GVL244_PROJECT_MISMATCH');
-  const currentScope=!!snapshot.current && scopeFields.every(field=>snapshot.current[field]===baseline.current[field]);
+  const scopeReason=scopeChangeReason(baseline.current,snapshot.current);
+  const currentScope=scopeReason===null;
   const locations=keyById(snapshot.locations), prior=keyById(baseline.locations);
   const source=new Map(baseline.evidence.map(row=>[row.locationId,row]));
   const receipts=new Map(snapshot.receipts.map(r=>[r.impactId,r]));
@@ -125,14 +137,15 @@ export function buildReport(baseline, snapshot) {
       continue;
     }
     const obsolete=!!loc?.bindingId&&['confirmed','stale'].includes(loc.bindingStatus);
-    const reason=!currentScope?'MODEL_SCOPE_CHANGED':obsolete?'OBSOLETE_BINDING':evidence?.reason??'BINDING_MISSING';
+    const reason=scopeReason??(obsolete?'OBSOLETE_BINDING':evidence?.reason??'BINDING_MISSING');
     unresolved.push({...group,status:obsolete?'obsolete':!currentScope?'recheck':evidence?.status==='not-found'?'not-found':'review',
       reason,nextAction:actions[reason]??actions.BINDING_MISSING,candidates:currentScope?evidence?.candidates??[]:[],
       documents:evidence?.documents??[],conflictingCableLoops:evidence?.conflictingCableLoops??[]});
   }
   const nowIds=new Set(snapshot.cables.map(c=>c.id));
   return {schemaVersion:'wfc.gvl244.stage5.v1',projectId,capturedAt:snapshot.capturedAt,
-    modelLabel:currentScope?baseline.modelLabel:snapshot.current?.modelVersionId??'Липсва готов модел',scopeStatus:currentScope?'current':'changed',
+    modelLabel:currentScope||scopeReason==='PREPARATION_SCOPE_CHANGED'?baseline.modelLabel:snapshot.current?.modelVersionId??'Липсва готов модел за маршрутизиране',
+    scopeStatus:currentScope?'current':'changed',
     summary:{locations:groups.size,assigned:assigned.length,preserved:counts.preserved,otherReady:counts.otherReady,unresolved:unresolved.length,
       cables:snapshot.cables.length,routed,unrouted:routingBlocked.length,manualProtected,changedTags:changedNames.length,blankSides},
     unresolved,assigned,audit,routingBlocked,provenance:{pilotSha256:baseline.resultsSha256,baselineCapturedAt:baseline.capturedAt,

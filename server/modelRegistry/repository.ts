@@ -443,11 +443,13 @@ export function createModelRegistryRepository(pool: Pool) {
         await requireCurrentEditor(client, { projectId, requestedBy: actor });
         const selection = (await client.query<Row>('SELECT * FROM project_model_selections WHERE project_id=$1 FOR UPDATE', [projectId])).rows[0];
         if (!selection || number(selection.selection_revision) !== expectedRevision) throw new ModelRegistryError('SELECTION_CONFLICT', 409);
-        if (id !== null) {
-          const version = (await client.query<Row>("SELECT id FROM model_versions WHERE project_id=$1 AND id=$2 AND state='ready' AND health='healthy' FOR UPDATE", [projectId,uuid(id)])).rows[0];
+        const modelId = id === null ? null : uuid(id);
+        if (modelId !== null) {
+          const version = (await client.query<Row>("SELECT id FROM model_versions WHERE project_id=$1 AND id=$2 AND state='ready' AND health='healthy' FOR UPDATE", [projectId,modelId])).rows[0];
           if (!version) throw new ModelRegistryError('MODEL_NOT_SELECTABLE', 409);
         }
-        const result = await client.query<Row>('UPDATE project_model_selections SET active_model_version_id=$1,selection_revision=selection_revision+1,updated_at=NOW() WHERE project_id=$2 RETURNING *', [id,projectId]);
+        if (selection.active_model_version_id === modelId) return selectionRecord(selection);
+        const result = await client.query<Row>('UPDATE project_model_selections SET active_model_version_id=$1,selection_revision=selection_revision+1,updated_at=NOW() WHERE project_id=$2 RETURNING *', [modelId,projectId]);
         return selectionRecord(result.rows[0]);
       });
     },

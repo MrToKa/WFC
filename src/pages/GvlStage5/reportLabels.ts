@@ -6,6 +6,8 @@ const descriptions: Record<string, string> = {
   MODEL_TAG_QUESTION_MARK: 'Неясно означение в модела',
   OBSOLETE_BINDING: 'Остаряло присвояване',
   MODEL_SCOPE_CHANGED: 'Променена моделна ревизия',
+  PREPARATION_SCOPE_CHANGED: 'Променена подготовка за маршрутизиране',
+  MODEL_SCOPE_UNAVAILABLE: 'Липсва готов модел за маршрутизиране',
   BINDING_MISSING: 'Липсва присвояване',
   assigned: 'Потвърдено',
   superseded: 'Заменено',
