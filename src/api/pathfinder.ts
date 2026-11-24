@@ -25,7 +25,7 @@ const location = z.object({ id: uuid, name: z.string(), aliases: z.array(z.strin
   matching: z.object({ status: z.enum(['missing', 'ambiguous', 'unverified']), candidateObjectIds: z.array(z.string()) }).optional(),
   binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb', ENDPOINT_MODEL_MATCH_DERIVATION, ENDPOINT_MODEL_CENTRE_DERIVATION]).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
 const numeric = z.union([z.string(), z.number().finite()]).nullable();
-const jobSchema = z.object({ id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup', 'preview']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
+const jobSchema = z.object({ preparation: z.object({phase:z.enum(['waiting','preparing','failed','cancelled']), stage:z.enum(['reading','validating']), prepared:z.number().int().nonnegative(), total:z.number().int().nonnegative(), attempt:z.number().int().nonnegative()}).optional(), id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup', 'preview']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
 const jobAutomaticUpdateSchema = z.object({ status: z.enum(automaticPairStatuses), receiptId: uuid.nullable(), reasonCode: recalculationReasonSchema.nullable() }).strict()
   .refine(value => ['written', 'already-written'].includes(value.status) === (value.receiptId !== null));
 const jobItemSchema = z.object({ cableId: uuid, status: z.string(), state: z.string(), message: z.string().nullable(), proposalId: uuid.nullable().optional(),
@@ -136,7 +136,7 @@ export type PathFinderPreview = z.infer<typeof previewSchema>;
 export type PathFinderPreferences = { secondaryDistanceMeters: number; preferVerticalApproach: boolean; barrierRouting?: BarrierAdmissionIntent };
 export type PathFinderCalculationSubmission =
   | { kind: 'not-submitted'; code: string }
-  | { kind: 'rejected'; status: 400 | 409; code: string }
+  | { kind: 'rejected'; status: 400 | 409 | 503; code: string }
   | { kind: 'acknowledged'; jobId: string; registryRevision: string; duplicate: boolean }
   | { kind: 'unknown'; code: string };
 const popupCalculationRequestSchema = z.object({ cableIds: z.array(uuid).min(1).max(10_000), expectedRegistryRevision: revision, force: z.literal(true),
@@ -210,7 +210,7 @@ async function submitCalculation(projectId: string, token: string, body: unknown
   } catch { return { kind: 'not-submitted', code: 'INVALID_REQUEST' }; }
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/jobs`, { method: 'POST', signal: options.signal,
-      cache: 'no-store', credentials: 'same-origin', redirect: 'error', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: encoded });
+      cache: 'no-store', credentials: 'same-origin', redirect: 'error', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(allCables ? {Prefer:'respond-async'} : {}) }, body: encoded });
     const value = await read(response, 8192, true);
     if (response.status === 202) {
       const acknowledgement = popupCalculationAcknowledgementSchema.safeParse(value);
@@ -218,6 +218,8 @@ async function submitCalculation(projectId: string, token: string, body: unknown
         ? { kind: 'acknowledged', ...acknowledgement.data } : { kind: 'unknown', code: 'INVALID_CALCULATION_ACKNOWLEDGEMENT' };
     }
     const confirmedRefusal = calculationSubmissionRefusalSchema.safeParse(value);
+    if (response.status === 503 && confirmedRefusal.success && confirmedRefusal.data.code === 'ACCEPTED_BASELINES_TIMEOUT')
+      return { kind: 'rejected', status: 503, code: confirmedRefusal.data.code };
     if (response.status === 409 && confirmedRefusal.success)
       return { kind: 'rejected', status: 409, code: confirmedRefusal.data.code };
     const refused = popupCalculationRefusalSchema.safeParse(value);

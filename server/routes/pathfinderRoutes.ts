@@ -72,15 +72,23 @@ const matchSchema = z.object({expectedRegistryRevision:revision}).strict();
 pathfinderRouter.post('/match',async (req,res) => {
   try {const {projectId} = identity(req); res.json(await repository.match(projectId,principal(req),matchSchema.parse(req.body).expectedRegistryRevision));} catch(error){failure(res,error);}
 });
-pathfinderRouter.post('/jobs',createJobSubmissionHandler((projectId, who, input) => getPathFinderRuntime().jobs.create(projectId,who,input)));
+pathfinderRouter.post('/jobs',createJobSubmissionHandler(
+  (projectId, who, input) => getPathFinderRuntime().jobs.create(projectId,who,input),
+  (projectId, who, input) => getPathFinderRuntime().bulkPreparations.enqueue(projectId,who,input)));
 pathfinderRouter.get('/jobs/bulk-submission',async (req,res) => {
   try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.legacyBulkSubmission(projectId,principal(req)));} catch(error){failure(res,error);}
 });
 pathfinderRouter.get('/jobs/:jobId',async (req,res) => {
-  try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.get(projectId,principal(req),uuid.parse(req.params.jobId)));} catch(error){failure(res,error);}
+  try {
+    const {projectId}=identity(req), who=principal(req), id=uuid.parse(req.params.jobId), runtime=getPathFinderRuntime();
+    res.json(await runtime.jobs.get(projectId,who,id));
+  } catch(error){failure(res,error);}
 });
 pathfinderRouter.delete('/jobs/:jobId',async (req,res) => {
-  try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.cancel(projectId,principal(req),uuid.parse(req.params.jobId)));} catch(error){failure(res,error);}
+  try {
+    const {projectId}=identity(req), who=principal(req), id=uuid.parse(req.params.jobId), runtime=getPathFinderRuntime();
+    res.json(await runtime.bulkPreparations.pending(projectId,who,id,true) ?? await runtime.jobs.cancel(projectId,who,id));
+  } catch(error){failure(res,error);}
 });
 pathfinderRouter.get('/proposals/:proposalId',async (req,res) => {
   try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.proposal(projectId,principal(req),uuid.parse(req.params.proposalId)));} catch(error){failure(res,error);}

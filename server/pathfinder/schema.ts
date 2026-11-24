@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { bulkPreparationSql } from './bulkPreparation.js';
 import { initializeCableRoutingControlSchema } from './cableRoutingControlSchema.js';
 import { initializeManualRoutingSchema } from './manualRoutingSchema.js';
 import { CABLE_ENDPOINT_SELECTION_INDEX_SQL } from './cableEndpointSelectionSchema.js';
@@ -134,6 +135,7 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
   finally { client.release(); }
   await initializePathFinderJobs(pool);
+  await pool.query(bulkPreparationSql);
   await initializePurposePolicySchema(pool);
   await initializeRoutingPolicySchema(pool);
   await initializeDrawingPolicySchema(pool);

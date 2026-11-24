@@ -14,6 +14,16 @@ function fixture() {
   return { req, res, response: res as unknown as Response };
 }
 describe('calculation submission phase evidence', () => {
+  it('distinguishes a rolled-back baseline timeout from an uncertain commit', async () => {
+    const f=fixture(), calls:string[]=[];
+    const pool={connect:async()=>({query:async(sql:string)=>{calls.push(sql);},release:vi.fn()})} as unknown as Pool;
+    await createJobSubmissionHandler(async()=>transaction(pool,async()=>{
+      throw new PathFinderError('ACCEPTED_BASELINES_TIMEOUT',503,'Timed out reading accepted routes.');
+    }))(f.req,f.response);
+    expect(calls).toEqual(['BEGIN','ROLLBACK']);
+    expect(f.res.status).toHaveBeenCalledWith(503);
+    expect(f.res.json).toHaveBeenCalledWith(expect.objectContaining({code:'ACCEPTED_BASELINES_TIMEOUT',calculationSubmitted:false}));
+  });
   it('returns the committed acknowledgement unchanged', async () => {
     const f = fixture(), result = { jobId: projectId, registryRevision: '7', duplicate: false }, create = vi.fn(async () => result);
     await createJobSubmissionHandler(create)(f.req, f.response);

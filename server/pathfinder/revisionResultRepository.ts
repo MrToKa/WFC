@@ -1,3 +1,4 @@
+import { readAcceptedRows, isStatementTimeout, type AcceptedRows } from './acceptedBaselineRows.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
@@ -81,37 +82,14 @@ function protectedManualBaseline(row: Row, dependencies: DependencySnapshot, out
   return exactObstacleRemarksTransition(before, after, output) && equal(Object.keys(before).sort(), Object.keys(after).sort())
     && Object.keys(before).every(key => changed.has(key) || equal(before[key], after[key]));
 }
-async function acceptedBaselines(client: PoolClient, projectId: string, ids: string[]): Promise<Map<string, RevisionBaseline['lastAcceptedApply']>> {
+type BaselineProgress = { cache?: AcceptedRows; chunk: number; report: (done: number, total: number) => Promise<void> };
+async function acceptedBaselines(client: PoolClient, projectId: string, ids: string[], progress?: BaselineProgress): Promise<Map<string, RevisionBaseline['lastAcceptedApply']>> {
   const result = new Map<string, RevisionBaseline['lastAcceptedApply']>();
-  const retainedWriteBody = `r.provenance->>'schemaVersion' IN('pathfinder.initial-fill.v1','pathfinder.initial-fill.v2','pathfinder.apply.v3','pathfinder.automatic-pair.v1','pathfinder.automatic-pair-capacity-clear.v1') AND
-    octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)
-      +octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144`;
-  for (let at = 0; at < ids.length; at += REVISION_RESULTS_LIMITS.chunk) {
+  const chunk = progress?.chunk ?? REVISION_RESULTS_LIMITS.chunk;
+  if (progress) await progress.report(0, ids.length);
+  for (let at = 0; at < ids.length; at += chunk) {
     const initialFillReceipt = createInitialFillReceiptProofReader(client);
-    const values = (await client.query<Row>(`SELECT DISTINCT ON (r.cable_id) r.id AS receipt_id,r.cable_id,r.proposal_id,r.applied_at,
-      r.after_snapshot->>'cable_write_revision' AS after_revision,r.after_snapshot->>'routing' AS after_routing,
-      r.after_snapshot->>'design_length' AS after_design_length,p.proposal_hash,p.dependency_hash,p.dependencies->'model' AS model_ref,
-      p.result#>>'{route,routeText}' AS route_text,p.result#>'{route,lengthMeters}' AS raw_length,
-      p.result#>>'{design,designLengthMeters}' AS design_length,p.result#>>'{design,unroundedLengthMeters}' AS unrounded_length,
-      s.record_sha256 AS sealed_hash,s.engine_result_sha256,s.ledger_sha256,
-      coalesce(r.provenance->>'schemaVersion' LIKE 'pathfinder.initial-fill.%',false) AS initial_fill_kind,
-      coalesce(r.provenance->>'schemaVersion' IN('pathfinder.automatic-pair.v1','pathfinder.automatic-pair-capacity-clear.v1'),false) AS automatic_pair_kind,
-      coalesce(r.provenance->>'schemaVersion' LIKE 'pathfinder.apply.%' AND (r.provenance->>'schemaVersion' NOT IN('pathfinder.apply.v1','pathfinder.apply.v2')
-        OR p.dependencies->>'schemaVersion'='pathfinder.dependencies.v8' OR r.provenance ? 'barrierEvidence'),false) AS protected_apply_kind,
-      r.actor_id AS receipt_actor_id,r.idempotency_key AS receipt_idempotency_key,r.payload_hash AS receipt_payload_hash,
-      CASE WHEN ${retainedWriteBody} THEN r.before_snapshot ELSE NULL END AS accepted_before,
-      CASE WHEN ${retainedWriteBody} THEN r.after_snapshot ELSE NULL END AS accepted_after,
-      CASE WHEN ${retainedWriteBody} THEN r.provenance ELSE NULL END AS accepted_provenance,
-      CASE WHEN ${retainedWriteBody} THEN p.dependencies ELSE NULL END AS accepted_dependencies,
-      CASE WHEN ${retainedWriteBody} THEN p.result ELSE NULL END AS accepted_result,
-      v.id AS accepted_review_id,v.actor_id AS accepted_review_actor,v.proposal_id AS accepted_review_proposal,
-      v.proposal_hash AS accepted_review_proposal_hash,v.validation_method AS accepted_validation_method,
-      v.revision_result_sha256 AS accepted_review_result_sha256,v.review_dependency_sha256 AS accepted_review_dependency_sha256,
-      v.review_login_id AS accepted_review_login_id
-      FROM pf_apply_receipts r JOIN pf_proposals p ON p.project_id=r.project_id AND p.id=r.proposal_id AND p.cable_id=r.cable_id
-      LEFT JOIN pf_revision_results s ON s.project_id=p.project_id AND s.proposal_id=p.id
-      LEFT JOIN pf_reviews v ON v.project_id=r.project_id AND v.id::text=r.provenance->>'reviewId'
-      WHERE r.project_id=$1 AND r.cable_id=ANY($2::uuid[]) ORDER BY r.cable_id,r.applied_at DESC,r.id DESC`, [projectId, ids.slice(at, at + REVISION_RESULTS_LIMITS.chunk)])).rows;
+    const values = await readAcceptedRows(client, projectId, ids.slice(at, at + chunk), progress?.cache);
     for (const row of values) {
       const cableId = policyUuidSchema.parse(row.cable_id); if (result.has(cableId) || !ids.includes(cableId)) return fail('REVISION_ACCEPTED_BASELINE_SCOPE', 500);
       if (row.initial_fill_kind || row.protected_apply_kind || row.automatic_pair_kind) {
@@ -138,6 +116,7 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
             if (!fact || !equal(fact.before,row.accepted_before) || !equal(fact.after,row.accepted_after)) continue;
           }
         } catch (error) {
+          if (isStatementTimeout(error)) throw error;
           if (error instanceof PathFinderError && /DEADLINE|READ_LIMIT|DATABASE_BUSY|ABORT/.test(error.code) || error instanceof Error && error.name === 'AbortError') throw error;
           continue;
         }
@@ -152,6 +131,7 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
           afterDesignLength: nullableString(row.after_design_length) } }).lastAcceptedApply;
       result.set(cableId, value);
     }
+    if (progress) await progress.report(Math.min(at + chunk, ids.length), ids.length);
   }
   return result;
 }
@@ -160,7 +140,7 @@ export async function readAcceptedCableApply(client: PoolClient, projectId: stri
   return (await acceptedBaselines(client, policyUuidSchema.parse(projectId), [policyUuidSchema.parse(cableId)])).get(cableId) ?? null;
 }
 /** Caller owns the existing project, authority, dependency and sorted cable locks. */
-export async function persistRevisionAdmission(client: PoolClient, input: RevisionAdmissionInput): Promise<string> {
+export async function persistRevisionAdmission(client: PoolClient, input: RevisionAdmissionInput, progress?: BaselineProgress): Promise<string> {
   const projectId = policyUuidSchema.parse(input.projectId), jobId = input.jobId === null ? null : policyUuidSchema.parse(input.jobId),
     generation = input.generation === null ? null : policyRevisionSchema.parse(input.generation), options = optionsSchema.parse(input.options);
   if (input.kind === 'automatic' ? generation === null : generation !== null || jobId === null) return fail('REVISION_ADMISSION_SCOPE_INVALID', 500);
@@ -177,7 +157,12 @@ export async function persistRevisionAdmission(client: PoolClient, input: Revisi
     if (identities.length !== snapshots.length || identities.some((row, at) => row.cable_id !== snapshots[at].id)) return fail('REVISION_ADMISSION_CONFLICT');
     return policyUuidSchema.parse(old[0].id);
   }
-  const accepted = await acceptedBaselines(client, projectId, snapshots.map(c => c.id)), observedEvents = generation === null ? [] :
+  const accepted = await acceptedBaselines(client, projectId, snapshots.map(c => c.id), progress).catch(error => {
+    if (isStatementTimeout(error)) throw new PathFinderError('ACCEPTED_BASELINES_TIMEOUT', 503,
+      'The database timed out while reading the last accepted cable routes.');
+    throw error;
+  });
+  const observedEvents = generation === null ? [] :
     (await client.query<Row>('SELECT generation::text,domain,reason,source_revision FROM pf_recalculation_events WHERE project_id=$1 AND generation=$2::bigint ORDER BY generation LIMIT 65', [projectId, generation])).rows
       .map(row => ({ generation: row.generation, domain: row.domain, reason: row.reason, sourceRevisionSha256: row.source_revision === null ? null : revisionResultHash(row.source_revision) }));
   revisionResultEnvelopeSchema.shape.observedEvents.parse(observedEvents);

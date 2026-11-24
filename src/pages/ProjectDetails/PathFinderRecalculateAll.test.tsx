@@ -172,6 +172,15 @@ describe('whole-project background pass', () => {
     expect(screen.getByRole('button', { name: 'Retry same recalculation request' })).toBeEnabled();
     expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(vi.mocked(submitAllPathFinderCalculations).mock.calls[0][2]);
   });
+  it('shows verified preparation progress and keeps Stop available before job publication',async()=>{
+    const props=setup();
+    vi.mocked(fetchPathFinderJob).mockResolvedValue({...makeJob('queued'),preparation:{phase:'preparing',stage:'validating',prepared:200,total:1223,attempt:2}});
+    render(<PathFinderRecalculateAll {...props}/>);
+    fireEvent.click(screen.getByRole('button',{name:'Recalculate all the cables'}));
+    expect(await screen.findByText('Verified accepted routes for 200 of 1223 cables.')).toBeVisible();
+    expect(screen.getByRole('button',{name:'Stop recalculation'})).toBeEnabled();
+    expect(screen.queryByText(/Processed:/)).not.toBeInTheDocument();
+  });
   it('does not call manual or uncertain output saved', () => {
     expect(backgroundCalculationCounts(makeJob('complete', [item('calculated'), item('calculated', 'unknown'), item('calculated', 'review-required')]))).toMatchObject({ saved: 0, review: 1, unsaved: 2 });
     expect(backgroundCalculationCounts(makeJob('complete', [{ ...item('locations_required'), state: 'blocked' }]))).toMatchObject({ blocked: 1, calculated: 0 });

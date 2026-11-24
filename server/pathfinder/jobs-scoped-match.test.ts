@@ -130,7 +130,7 @@ describe('manual calculation uses the same exact cable scope for matching and ad
     const renewed={...who,loginId:id(42)};
     expect(await f.jobs.create(projectId,renewed,input)).toEqual({jobId:submissionId,duplicate:true,registryRevision:'8'});
     expect(f.match).toHaveBeenCalledOnce();
-    expect(seams.transaction).toHaveBeenLastCalledWith(expect.anything(),projectId,renewed,expect.any(Function));
+    expect(seams.transaction).toHaveBeenLastCalledWith(expect.anything(),projectId,renewed,expect.any(Function),{persistedLogin:false});
     expect(seams.persist).toHaveBeenCalledOnce();
     expect(seams.automatic).toHaveBeenCalledOnce();
     await expect(f.jobs.create(projectId,who,{...input,expectedRegistryRevision:'9'})).rejects.toMatchObject({code:'BULK_SUBMISSION_CONFLICT'});

@@ -21,15 +21,15 @@ export async function requireCurrentLogin(client:PoolClient,who:JobPrincipal,log
   if (!binding || binding.user_id !== who.userId || binding.revoked_at || new Date(binding.expires_at).getTime() !== who.loginExpiresAt) throw new PathFinderError('LOGIN_REVOKED',401);
 }
 /** Authority locks and final expiry checks are retained; status snapshots use compatible project locks. */
-export async function principalTransaction<T>(pool:Pool,projectId:string,who:JobPrincipal,operation:(client:PoolClient)=>Promise<T>,options:{snapshot?:boolean}={}):Promise<T> {
+export async function principalTransaction<T>(pool:Pool,projectId:string,who:JobPrincipal,operation:(client:PoolClient)=>Promise<T>,options:{snapshot?:boolean;sharedProject?:boolean;persistedLogin?:boolean}={}):Promise<T> {
   return transaction(pool,async client => {
     // A coherent status snapshot must not queue behind the publication it observes.
     // Authority rows stay share-locked through COMMIT in both modes.
     if(options.snapshot)await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-    if (!(await client.query(`SELECT id FROM projects WHERE id=$1 FOR ${options.snapshot?'KEY SHARE':'NO KEY UPDATE'}`,[projectId])).rows.length) throw new PathFinderError('PROJECT_NOT_FOUND',404);
+    if (!(await client.query(`SELECT id FROM projects WHERE id=$1 FOR ${options.snapshot || options.sharedProject?'KEY SHARE':'NO KEY UPDATE'}`,[projectId])).rows.length) throw new PathFinderError('PROJECT_NOT_FOUND',404);
     const user=(await client.query<{is_admin:boolean}>('SELECT is_admin FROM users WHERE id=$1 FOR SHARE',[who.userId])).rows[0];
     if (user?.is_admin !== true) throw new PathFinderError('ADMIN_REQUIRED',403,'Administrator access required.');
-    await requireCurrentLogin(client,who);
+    await requireCurrentLogin(client,who,options.persistedLogin?'persisted-grant':'request');
     const value=await operation(client);assertLoginNotExpired(who);return value;
   });
 }

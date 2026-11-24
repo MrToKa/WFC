@@ -1,4 +1,7 @@
 import { pool } from '../db.js';
+import { createBulkPreparationQueue } from './bulkPreparation.js';
+import { Pool } from 'pg';
+import { config } from '../config.js';
 import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacityProfileSchema } from '../../shared/pathfinderCapacity.js';
 import { createPathFinderRepository } from './repository.js';
 import { createPathFinderJobs } from './jobs.js';
@@ -46,6 +49,7 @@ function createRuntime() {
   const sameEndpointReuse=createVerifiedSameEndpointReuse({request:buildCableEngineRequest});
   const registry = createPathFinderRepository(pool),jobs = createPathFinderJobs(pool,registry),apply = createPathFinderApply(pool),worker = createPathFinderWorker(pool,jobs,undefined,undefined,sameEndpointReuse);
   const recalculations=createRecalculationRepository(pool,jobs);
+  const bulkPreparations=createBulkPreparationQueue(pool,jobs.create,()=>new Pool({connectionString:config.databaseUrl,max:1,connectionTimeoutMillis:5000}));
   const producer=createRecalculationProducer(recalculations,{beforeTick:createCalculationEngineObserver(pool,()=>worker.failureCode)});
   const grantProducer=createGrantRecalculationProducer(pool,jobs);
   const locationImpacts=createLocationImpactRepository(pool,{admitInTransaction:locationImpactAdmission});
@@ -82,7 +86,7 @@ function createRuntime() {
       await preparedMaintenance.onPrepared({candidate:{projectId:candidate.projectId,grant:candidate.grant,...candidate.model},result},signal);
     }});
   return {registry,jobs,apply,worker,recalculations,producer,grantProducer,locationImpacts,locationImpactProducer,initialFillAttempts,initialFillWriter,initialFillProducer,initialFillProgress,automaticPairDispatch,automaticPairWriter,automaticPairProducer,manualRoutingWorker,managedControl,producerQualification,calculationGrants,producerResources,
-    preparedMaintenance,managedPreparationProducer,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
+    bulkPreparations,preparedMaintenance,managedPreparationProducer,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
     preparations,geometryTraces,trayAutoLengths,revisionComparisons,endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters()),modelLocationMatch:createModelLocationMatchRepository(pool)};
 }
 export function getPathFinderRuntime() {return runtime ??= createRuntime();}
@@ -90,8 +94,10 @@ export async function initializePathFinderRuntime():Promise<void> {
   if (!process.env.PF_ROOT || !process.env.PF_ENGINE_DLL) return;
   await pathFinderRoot();const active=getPathFinderRuntime();active.worker.start();active.producer.start();active.managedPreparationProducer.start();active.grantProducer.start();active.locationImpactProducer.start();active.initialFillProducer.start();active.automaticPairProducer.start();
   active.manualRoutingWorker.start();
+  active.bulkPreparations.start();
 }
 export async function stopPathFinderRuntime():Promise<void> {
+  await runtime?.bulkPreparations.stop();
   await runtime?.manualRoutingWorker.stop();
   await runtime?.managedPreparationProducer.stop();
   runtime?.managedControl.stop();runtime?.producerResources.service.close();

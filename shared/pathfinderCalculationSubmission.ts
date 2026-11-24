@@ -16,6 +16,13 @@ export const calculationSubmissionRefusalSchema = z.object({
 }).strict();
 
 export function calculationSubmissionRefusalMessage(code: string): string {
+  if (code === 'ACCEPTED_BASELINES_TIMEOUT')
+    return 'The database timed out while reading the last accepted cable routes. This attempt did not start a calculation. You can retry.';
+  if (code === 'LOGIN_EXPIRED' || code === 'LOGIN_REVOKED' || code === 'LOGIN_REFRESH_REQUIRED')
+    return 'The login that authorized this calculation is no longer active. Sign in again and start a new recalculation.';
+  if (code === 'ADMIN_REQUIRED') return 'Preparing this calculation requires current administrator access.';
+  if (code === 'RECALCULATION_COLLECTION_DEADLINE')
+    return 'The preparation time limit was reached before calculation started. You can start another recalculation.';
   if (code === 'ENDPOINT_PREPARATION_REQUIRED' || code === 'ROUTING_PREPARATION_REQUIRED')
     return 'The current model preparation needs to be refreshed before this cable can be calculated. No calculation job was created.';
   if (code.startsWith('BARRIER_'))

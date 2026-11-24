@@ -96,7 +96,7 @@ function fixture() {
     if (sql.startsWith('SELECT id FROM projects')) return { rows: [{ id: pid }] };
     if (sql.startsWith('SELECT is_admin FROM users')) return { rows: [{ is_admin: admin }] };
     if (sql.startsWith('SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings')) return { rows: [{ user_id: who.userId, expires_at: new Date(who.loginExpiresAt), revoked_at: null }] };
-    if (sql.includes('SELECT DISTINCT ON (r.cable_id)')) return { rows: accepted.filter(r => (values[1] as string[]).includes(String(r.cable_id))) };
+    if (sql.includes('revision:latest-accepted')) return { rows: accepted.filter(r => (values[1] as string[]).includes(String(r.cable_id))) };
     if (sql.startsWith('SELECT generation::text,domain,reason,source_revision')) return { rows: events };
     if (sql.startsWith('INSERT INTO pf_revision_admissions')) {
       admissions.push({ id: values[0], project_id: values[1], job_id: values[2], generation: values[3], kind: values[4], input_sha256: values[5], options: values[6], model_ref: values[7], total: values[8], observed_events: JSON.parse(String(values[9])), created_at: '2026-10-19T12:00:00.123Z', cursor_created_at: '2026-10-19T12:00:00.123456Z' }); return { rows: [] };
@@ -377,7 +377,7 @@ describe('immutable admission snapshots and revision envelopes', () => {
       revisionResultSha256: value.seal.revisionResultSha256, routeText: '/A', rawLengthMeters: 5, designLengthMeters: '7',
       afterCableWriteRevision: '9007199254740994', afterRouting: '/A', afterDesignLength: '7.0000' });
     expect(value.after.install_length).toBe(value.before.install_length); expect(initialFillProof).not.toHaveBeenCalled();
-    const sql = value.f.calls.find(call => call.sql.includes('SELECT DISTINCT ON'))!.sql;
+    const sql = value.f.calls.find(call => call.sql.includes('revision:latest-accepted'))!.sql;
     expect(sql).toContain("LEFT JOIN pf_reviews v ON v.project_id=r.project_id AND v.id::text=r.provenance->>'reviewId'");
     for (const alias of ['accepted_before', 'accepted_after', 'accepted_provenance', 'accepted_dependencies', 'accepted_result', 'accepted_review_login_id',
       'accepted_review_proposal_hash', 'accepted_review_result_sha256', 'accepted_review_dependency_sha256']) expect(sql).toContain(`AS ${alias}`);
@@ -429,7 +429,7 @@ describe('immutable admission snapshots and revision envelopes', () => {
       if (kind === 'missing-before') row.accepted_before = null;
       if (kind === 'legacy-version') provenance.schemaVersion = 'pathfinder.apply.v2';
       expect((await value.run()).lastAcceptedApply).toBeNull(); expect(initialFillProof).not.toHaveBeenCalled();
-      expect(value.f.calls.filter(call => call.sql.includes('SELECT DISTINCT ON'))).toHaveLength(2);
+      expect(value.f.calls.filter(call => call.sql.includes('revision:latest-accepted'))).toHaveLength(2);
     });
   it('partitions current collection explicitly into v5, v7 and v8 without leaking a v8 row into legacy collection',async()=>{
     const f=fixture(),input=f.input(3),admission=await persistRevisionAdmission(f.client,input);
@@ -493,7 +493,7 @@ describe('immutable admission snapshots and revision envelopes', () => {
     const b = await readRevisionBaseline(f.client, { projectId: pid, jobId: jid, cableId: id(10) });
     expect(b.admissionId).toBe(admission); expect(b.baseline.currentCable).toMatchObject({ designLength: '4.0000', installLength: '3.12500', cableWriteRevision: '9007199254740993' });
     expect(b.baseline.lastAcceptedApply).toBeNull(); expect(b.baseline.acceptedMatchesCurrent).toBe(false);
-    expect(f.calls.find(c => c.sql.includes('SELECT DISTINCT ON'))?.sql).toContain("r.after_snapshot->>'design_length'");
+    expect(f.calls.find(c => c.sql.includes('revision:latest-accepted'))?.sql).toContain("r.after_snapshot->>'design_length'");
   });
   it('refuses missing fields and numeric coercion before creating any admission', async () => {
     const f = fixture(), input = f.input(); input.items[0].cable.design_length = 4;
@@ -533,7 +533,7 @@ describe('immutable admission snapshots and revision envelopes', () => {
     expect(row.lastAcceptedApply !== null).toBe(valid); expect(row.acceptedMatchesCurrent).toBe(valid);
     expect(initialFillProof).toHaveBeenCalledOnce(); expect(initialFillProof.mock.calls[0][0]).toMatchObject({ projectId: pid, cableId: id(10), seal,
       dependencies: p.deps, result: p.result });
-    const sql = f.calls.find(call => call.sql.includes('SELECT DISTINCT ON'))!.sql;
+    const sql = f.calls.find(call => call.sql.includes('revision:latest-accepted'))!.sql;
     expect(sql).toContain('octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144');
     expect(sql).toContain("IN('pathfinder.initial-fill.v1','pathfinder.initial-fill.v2','pathfinder.apply.v3','pathfinder.automatic-pair.v1','pathfinder.automatic-pair-capacity-clear.v1')");
   });
@@ -613,19 +613,19 @@ describe('immutable admission snapshots and revision envelopes', () => {
       accepted_dependencies: p.deps, accepted_result: p.result, proposal_hash: seal.proposalHash });
     const input = f.input(); input.jobId = id(99); const admissionId = await persistRevisionAdmission(f.client, input);
     expect((f.baselines.find(row => row.admission_id === admissionId)!.baseline as { lastAcceptedApply: unknown }).lastAcceptedApply).toBeNull();
-    expect(initialFillProof).not.toHaveBeenCalled(); expect(f.calls.filter(call => call.sql.includes('SELECT DISTINCT ON'))).toHaveLength(2);
+    expect(initialFillProof).not.toHaveBeenCalled(); expect(f.calls.filter(call => call.sql.includes('revision:latest-accepted'))).toHaveLength(2);
   });
   it('refuses an oversized or unknown new-kind newest receipt without silently selecting older accepted data', async () => {
     const f = fixture(); f.accepted.push({ receipt_id: id(30), cable_id: id(10), proposal_id: id(31), initial_fill_kind: true,
       accepted_result: null, accepted_provenance: null });
     const admissionId = await persistRevisionAdmission(f.client, f.input());
     expect((f.baselines.find(row => row.admission_id === admissionId)!.baseline as { lastAcceptedApply: unknown }).lastAcceptedApply).toBeNull();
-    expect(initialFillProof).not.toHaveBeenCalled(); expect(f.calls.filter(call => call.sql.includes('SELECT DISTINCT ON'))).toHaveLength(1);
+    expect(initialFillProof).not.toHaveBeenCalled(); expect(f.calls.filter(call => call.sql.includes('revision:latest-accepted'))).toHaveLength(1);
   });
   it('reuses the original baseline on exact admission replay and refuses a changed scope', async () => {
     const f = fixture(), input = f.input(), a = await persistRevisionAdmission(f.client, input); f.accepted.push({ invalid: 'later receipt must not be consulted' });
     expect(await persistRevisionAdmission(f.client, input)).toBe(a); expect(f.admissions).toHaveLength(1);
-    expect(f.calls.filter(c => c.sql.includes('SELECT DISTINCT ON'))).toHaveLength(1);
+    expect(f.calls.filter(c => c.sql.includes('revision:latest-accepted'))).toHaveLength(1);
     const changed = f.input(); changed.items[0].cable.id = id(50); await expect(persistRevisionAdmission(f.client, changed)).rejects.toMatchObject({ code: 'REVISION_ADMISSION_CONFLICT' });
   });
   it('retains an all-blocked automatic generation without manufacturing a job', async () => {

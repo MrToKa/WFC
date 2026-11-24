@@ -3,7 +3,7 @@ import { Button, Caption1, ProgressBar, Spinner, Table, TableBody, TableCell, Ta
 import { bulkCalculationRequestSchema, cancelPathFinderJob, fetchLegacyBulkCalculationJob, fetchPathFinderJob, PathFinderApiError, submitAllPathFinderCalculations, type PathFinderCalculationSubmission, type PathFinderCable, type PathFinderJob, type PathFinderPreferences, type PathFinderState } from '@/api/pathfinder';
 import { missingCalculationLocationsMessage, type CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
-import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../../shared/pathfinderCalculationSubmission';
+import { BULK_CALCULATION_SUBMISSION_LIMITS, calculationSubmissionRefusalMessage } from '../../../shared/pathfinderCalculationSubmission';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
 import { collectFilteredCableIds, PathFinderCableWorkflowApiError, type CableWorkflowQuery } from '@/api/pathfinderCableWorkflow';
 import { generateId } from '@/utils/generateId';
@@ -249,6 +249,9 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
           localStorage.setItem(storageKey, filtered ? filteredJobPrefix + result.jobId : result.jobId);
       } catch { /* The persisted request still identifies the same job. */ }
       observeJob(result.jobId, filtered);
+    } else if (result.kind === 'rejected' && result.code === 'ACCEPTED_BASELINES_TIMEOUT') {
+      setJob(null); setJobId(null); setPending(body);
+      setError(calculationSubmissionRefusalMessage(result.code));
     } else if (result.kind === 'unknown') {
       setJob(null); setJobId(null); setPending(body);
       setError(result.code === 'RECALCULATION_COLLECTION_DEADLINE'
@@ -367,10 +370,17 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
     <div role="status" aria-live="polite">
       {submitting ? <Spinner size="tiny" label={findingMatches ? 'Finding all cables that match the filters…' : 'Starting background recalculation…'} />
         : stopping || running ? <Spinner size="tiny" label={stopping || job?.cancelRequested ? 'Stopping recalculation…'
-          : job?.status === 'complete' ? 'Saving calculated routes…' : 'Recalculating cables in the background…'} />
+          : job?.preparation?.phase === 'waiting' ? 'Recalculation request saved. Waiting to prepare cables.'
+          : job?.preparation ? 'Preparing background recalculation.' : job?.status === 'complete' ? 'Saving calculated routes…' : 'Recalculating cables in the background…'} />
         : job ? <Caption1 block>{job.status === 'cancelled' || (job.status === 'complete' && job.cancelRequested) ? 'Background recalculation stopped.'
           : job.status === 'complete' ? 'Background recalculation finished.' : `Background recalculation ${job.status}.`}</Caption1> : null}
-      {!submitting && !pending && job && counts ? <>
+      {job?.preparation && running && <div>
+        <ProgressBar value={job.preparation.total ? job.preparation.prepared / job.preparation.total : undefined} />
+        {job.preparation.total > 0 && <Caption1 block>{job.preparation.stage === 'reading' ? 'Read accepted routes for' : 'Verified accepted routes for'} {job.preparation.prepared} of {job.preparation.total} cables.</Caption1>}
+        {job.preparation.attempt > 1 && <Caption1 block>Preparation attempt {job.preparation.attempt}.</Caption1>}
+      </div>}
+      {job?.preparation && job.failure && <Caption1 block role="alert">{calculationSubmissionRefusalMessage(job.failure)} ({job.failure})</Caption1>}
+      {!submitting && !pending && job && !job.preparation && counts ? <>
         <ProgressBar value={job.total ? job.completed / job.total : 1} />
         <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}{counts.unchanged > 0 ? `; unchanged: ${counts.unchanged}` : ''}.</Caption1>
         {blockedReasons.length > 0 ? <><Caption1 block>Current calculation issues</Caption1><ul aria-label="Skipped or failed calculations">

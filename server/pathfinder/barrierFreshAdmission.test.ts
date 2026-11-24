@@ -116,7 +116,7 @@ describe('fresh barrier admission boundaries', () => {
     expect(seams.current.mock.invocationCallOrder[0]).toBeLessThan(seams.collect.mock.invocationCallOrder[0]);
     expect(seams.collect.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(f.input.beforeInsert).mock.invocationCallOrder[0]);
     expect(seams.persist).toHaveBeenCalledWith(f.client, expect.objectContaining({ jobId: result.jobId, kind: 'automatic', generation: '9',
-      options: expect.objectContaining({ barrierRouting: current }) }));
+      options: expect.objectContaining({ barrierRouting: current }) }), undefined);
     expect(result).toMatchObject({ readyCables: 1, blockedCables: 0, total: 1 }); expect(preferences).toEqual(original);
   });
   it('successive background admissions reread publication rather than caching a prior scope', async () => {

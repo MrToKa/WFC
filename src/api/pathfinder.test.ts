@@ -121,6 +121,14 @@ describe('popup calculation transport phase evidence', () => {
     expect(await submitPathFinderCalculation(projectId, 'token', popupCalculationBody())).toEqual({ kind: 'rejected', status: 409, code });
     expect(fetch).toHaveBeenCalledOnce();
   });
+  it('recognizes a pre-commit accepted-routes timeout only with explicit server evidence', async () => {
+    const code = 'ACCEPTED_BASELINES_TIMEOUT';
+    const fetch = vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(Response.json({code,error:'Timeout.'},{status:503}))
+      .mockResolvedValueOnce(Response.json({schemaVersion:'wfc.pf.calculation-submission-refusal.v1',calculationSubmitted:false,code,error:'Timeout.'},{status:503}));
+    expect(await submitPathFinderCalculation(projectId,'token',popupCalculationBody())).toMatchObject({kind:'unknown'});
+    expect(await submitPathFinderCalculation(projectId,'token',popupCalculationBody())).toEqual({kind:'rejected',status:503,code});
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
   it.each(['wrong-status', 'wrong-version', 'submitted', 'extra-field', 'duplicate-member'] as const)('keeps a malformed %s refusal marker unknown', async kind => {
     const body = { schemaVersion: kind === 'wrong-version' ? 'wfc.pf.calculation-submission-refusal.v2' : 'wfc.pf.calculation-submission-refusal.v1',
       calculationSubmitted: kind === 'submitted', code: 'ENDPOINT_PREPARATION_REQUIRED', error: 'Synthetic refusal.', ...(kind === 'extra-field' ? { unexpected: true } : {}) };
