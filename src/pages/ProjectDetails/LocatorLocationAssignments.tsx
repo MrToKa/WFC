@@ -154,7 +154,9 @@ function LocationEditor({ target, pf, accountId, projectId, loadedProjectId, tok
     access={{ projectId, loadedProjectId, accountId, token, isAdmin, active: true, model: popupModel,
       preparationKey: JSON.stringify([pf.preparationViewerGeneration, pf.data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
       locationTarget: { name: target.name, end: target.end }, calculation, initialFill: null,
-      automaticPairPolicy: calculation ? AUTOMATIC_PAIR_POLICY : null, readSelection: pf.readSelection, onSaved, onAuthorityLost: pf.refresh }}
-    onShowLocation={pf.showLocation} onShowLocationPoint={pf.showLocationPoint}
+      automaticPairPolicy: calculation ? AUTOMATIC_PAIR_POLICY : null, readSelection: pf.readSelection,
+      pickEndpointPoint: (signal, sdkObjectId) => pf.pickPoint({ signal, sdkObjectId }),
+      onSaved, onAuthorityLost: pf.refresh }}
+    onShowLocation={pf.showLocation} onShowLocationPoint={pf.showLocationPoint} onHideLocation={pf.hideLocation}
     calculationBlockedReason={calculation ? null : 'Routing settings or barriers are unavailable. Check the current routing configuration in Path Finder and reopen this location.'} />;
 }

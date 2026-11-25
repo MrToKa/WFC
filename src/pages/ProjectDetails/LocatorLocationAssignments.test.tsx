@@ -11,8 +11,8 @@ import { useModelLocationMatch } from './hooks/useModelLocationMatch';
 import type { usePathFinder } from './hooks/usePathFinder';
 import type { EndpointCurrentScope } from '../../../shared/pathfinderEndpointBindings';
 
-const { closeWindow, requestWindow, waitForSave } = vi.hoisted(() => ({
-  closeWindow: vi.fn(), requestWindow: vi.fn(), waitForSave: vi.fn<() => Promise<void>>(),
+const { closeWindow, requestWindow, waitForSave, pointPickAbort } = vi.hoisted(() => ({
+  closeWindow: vi.fn(), requestWindow: vi.fn(), waitForSave: vi.fn<() => Promise<void>>(), pointPickAbort: new AbortController(),
 }));
 
 vi.mock('@/api/pathfinderBarriers', () => ({ getBarrierRegistry: vi.fn() }));
@@ -23,9 +23,11 @@ vi.mock('@/hooks/useFloatingCablePanel', () => ({
 }));
 vi.mock('./hooks/useModelLocationMatch', () => ({ useModelLocationMatch: vi.fn() }));
 vi.mock('@/components/pathfinder/PathFinderCableRoutingPanel', () => ({
-  PathFinderCableRoutingPanel: ({ access, cable, onLocationWriteChange }: PathFinderCableRoutingPanelProps) => {
+  PathFinderCableRoutingPanel: ({ access, cable, onLocationWriteChange, onHideLocation }: PathFinderCableRoutingPanelProps) => {
     const name = access.locationTarget!.name;
     return <section role="dialog" aria-label={name}>
+      {cable && access.pickEndpointPoint ? <button onClick={() => void access.pickEndpointPoint?.(pointPickAbort.signal, 42)}>Pick cable entry</button> : null}
+      {cable && onHideLocation ? <button onClick={() => void onHideLocation()}>Hide</button> : null}
       {cable ? <button disabled={!access.calculation} onClick={async () => {
         onLocationWriteChange?.(true);
         await waitForSave();
@@ -57,9 +59,9 @@ it('updates the same editor before and after saving, without waiting for recalcu
   vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({
     row: { cable: { fromLocation: '+HE', toLocation: '+NSHV' } },
   } as Awaited<ReturnType<typeof fetchPathFinderCableWorkflowDetail>>);
-  const refresh = vi.fn();
+  const refresh = vi.fn(), pickPoint = vi.fn(), hideLocation = vi.fn();
   const pf = {
-    viewerPhase: 'ready', preparationViewerGeneration: 1, refresh,
+    viewerPhase: 'ready', preparationViewerGeneration: 1, refresh, pickPoint, hideLocation,
     preparationAccess: { projectId: scope.projectId, loadedProjectId: scope.projectId, token: 'token', isAdmin: true },
     data: { activeModel: scope, artifacts: [], cables: [{ id: 'cable', fromLocation: '+HE', toLocation: '+NSHV' }] },
   } as unknown as ReturnType<typeof usePathFinder>;
@@ -69,6 +71,10 @@ it('updates the same editor before and after saving, without waiting for recalcu
 
   fireEvent.click(screen.getByRole('button', { name: '+HE' }));
   await screen.findByRole('button', { name: 'Confirm Save' });
+  fireEvent.click(screen.getByRole('button', { name: 'Pick cable entry' }));
+  expect(pickPoint).toHaveBeenCalledExactlyOnceWith({ signal: pointPickAbort.signal, sdkObjectId: 42 });
+  fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+  expect(hideLocation).toHaveBeenCalledOnce();
   const first = screen.getByRole('button', { name: '+HE' });
   const next = screen.getByRole('button', { name: '+NSHV' });
   expect(next).toBeEnabled();
