@@ -8,6 +8,7 @@ import { saveCableEndpointPair, closePendingCableEndpointPair, type CableEndpoin
 import { readPendingCableEndpointPair } from './cableEndpointPairPendingStore';
 import { retainPendingCableEndpoint, readPendingCableEndpoint } from './cableEndpointPendingStore';
 import { useCableEndpointPairSelection, type CableEndpointPairSelectionAccess } from './useCableEndpointPairSelection';
+import { AUTOMATIC_PAIR_POLICY } from '../../shared/pathfinderAutomaticPair';
 
 vi.mock('@/api/pathfinderCableEndpoints', async original => ({ ...(await original<typeof import('@/api/pathfinderCableEndpoints')>()),
   fetchCableEndpointContext: vi.fn(), fetchCableEndpointSelection: vi.fn(), saveCableEndpoint: vi.fn(), closePendingCableEndpoint: vi.fn() }));
@@ -68,6 +69,35 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(
 async function ready(view: { result: { current: ReturnType<typeof useCableEndpointPairSelection> } }) { await waitFor(() => expect(view.result.current.from.context && view.result.current.to.context && view.result.current.storageReady && !view.result.current.busy).toBeTruthy()); }
 
 describe('one explicit From/To Save', () => {
+  it('saves only the selected Locator location even when both cable ends have automatic candidates', async () => {
+    automatic = true;
+    const props = { ...access(), locationTarget: { end: 'to' as const, name: ' lp-002 ' },
+      initialFill: null, automaticPairPolicy: AUTOMATIC_PAIR_POLICY };
+    const view = renderHook(() => useCableEndpointPairSelection(props));
+    await ready(view);
+    expect(view.result.current.from.canSelect).toBe(false);
+    expect(view.result.current.canSave).toBe(false);
+    await act(async () => { await view.result.current.from.selectObject(); });
+    expect(props.readSelection).not.toHaveBeenCalled();
+    await act(async () => { await view.result.current.to.selectObject(); });
+    await act(async () => { expect(await view.result.current.save('Confirm Locator assignment')).toBe(true); });
+    const command = vi.mocked(saveCableEndpointPair).mock.calls[0][3];
+    expect(command.endpoints).toHaveLength(1);
+    expect(command.endpoints[0]).toMatchObject({ end: 'to', command: {
+      expectedLogicalName: 'LP-002', calculation, automaticPairPolicy: AUTOMATIC_PAIR_POLICY,
+      selection: { mode: 'object-derived', sdkObjectId: 55 },
+    } });
+  });
+
+  it('rejects a Locator assignment when the reference cable endpoint was renamed', async () => {
+    const props = { ...access(), locationTarget: { end: 'from' as const, name: 'OLD-NAME' } };
+    const view = renderHook(() => useCableEndpointPairSelection(props));
+    await ready(view);
+    expect(view.result.current.from.canSelect).toBe(false);
+    await act(async () => { expect(await view.result.current.save('Confirm stale location')).toBe(false); });
+    expect(saveCableEndpointPair).not.toHaveBeenCalled();
+  });
+
   it('saves newly assigned From with existing saved To and queues calculation on HTTP without Web Locks', async () => {
     Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
     vi.stubGlobal('indexedDB', new IDBFactory());

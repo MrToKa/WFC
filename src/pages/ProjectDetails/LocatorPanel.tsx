@@ -3,9 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { ProjectLocationReview } from '../ProjectLocationReview';
 import { PilotPage } from '../GvlStage5/GvlStage5';
 import { GVL_PILOT_ID } from '../GvlStage5/pilotId';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 
-export function LocatorPanel(props: ComponentProps<typeof ProjectLocationReview>) {
+export function LocatorPanel({ assignmentPanel, ...props }: ComponentProps<typeof ProjectLocationReview> & { assignmentPanel?: ReactNode }) {
   const [params, setParams] = useSearchParams();
   const pilot = params.get('panel') === 'pilot';
   return (
@@ -43,7 +43,7 @@ export function LocatorPanel(props: ComponentProps<typeof ProjectLocationReview>
             <p>Няма достъпен пилотен отчет за този проект.</p>
           )
         ) : (
-          <ProjectLocationReview {...props} />
+          <>{assignmentPanel}<ProjectLocationReview {...props} /></>
         )}
       </div>
     </>

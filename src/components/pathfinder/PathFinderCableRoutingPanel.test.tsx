@@ -60,6 +60,32 @@ function reviewController(p: PathFinderCableRoutingPanelProps): PathFinderWorkfl
 }
 beforeEach(() => { assignment = pair(); vi.mocked(useCableEndpointPairSelection).mockReset().mockImplementation(() => assignment); vi.mocked(useCableEndpointSelection).mockReset(); });
 
+describe('Locator location editor', () => {
+  it('offers the existing selection and save actions for just the report location', () => {
+    const p = props();
+    p.access.locationTarget = { end: 'to', name: 'Motor 002' };
+    assignment.canSave = true;
+    render(<PathFinderCableRoutingPanel {...p} />);
+    const dialog = within(screen.getByRole('dialog', { name: 'Motor 002' }));
+    expect(dialog.queryByRole('region', { name: 'From endpoint' })).toBeNull();
+    expect(dialog.queryByRole('button', { name: 'Calculate routing' })).toBeNull();
+    fireEvent.click(dialog.getByRole('button', { name: 'Assign selected object' }));
+    expect(assignment.to.selectObject).toHaveBeenCalledOnce();
+    expect(assignment.from.selectObject).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole('button', { name: 'Save' }));
+    expect(assignment.save).toHaveBeenCalledOnce();
+  });
+
+  it('keeps Save disabled if recalculation cannot be submitted with the current routing configuration', () => {
+    const p = props();
+    p.access.locationTarget = { end: 'to', name: 'Motor 002' };
+    assignment.canSave = true;
+    render(<PathFinderCableRoutingPanel {...p} calculationBlockedReason="Routing settings or barriers are unavailable." />);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByText('Routing settings or barriers are unavailable.')).toBeVisible();
+  });
+});
+
 describe('verified live popup endpoint foreground publisher', () => {
   it('publishes one matching live pair and retracts it when retired or unmounted', () => {
     assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
@@ -948,6 +974,31 @@ describe('selected bounding-box point presentation', () => {
   });
 });
 describe('Path Finder detached window integration', () => {
+  it('keeps the Locator browser window and updates its title through a location switch', () => {
+    const p = props(), frame = document.createElement('iframe'); document.body.appendChild(frame);
+    const popup = frame.contentWindow!;
+    Object.defineProperty(popup, 'closed', { configurable: true, value: false });
+    popup.focus = vi.fn(); popup.close = vi.fn();
+    const request = { window: popup, blocked: false, id: 'locator-window' };
+    const from = { ...p.access, locationTarget: { end: 'from' as const, name: 'Panel 001' } };
+    const to = { ...p.access, locationTarget: { end: 'to' as const, name: 'Motor 002' } };
+    const view = render(<PathFinderCableRoutingPanel {...p} access={from} requestedPopup={request} />,
+      { wrapper: ({ children }) => <FluentProvider theme={webDarkTheme}>{children}</FluentProvider> });
+    const popupBody = within(popup.document.body);
+    expect(popupBody.getByRole('dialog', { name: 'Panel 001' })).toBeVisible();
+    view.rerender(<PathFinderCableRoutingPanel {...p} access={to} cable={null} requestedPopup={request} />);
+    expect(popupBody.getByRole('dialog', { name: 'Motor 002' })).toBeVisible();
+    expect(popupBody.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(popup.document.title).toBe('Motor 002');
+    view.rerender(<PathFinderCableRoutingPanel {...p} access={to} requestedPopup={request} />);
+    expect(popupBody.getByRole('region', { name: 'To endpoint' })).toBeVisible();
+    expect(popupBody.getByRole('button', { name: 'Save' })).toBeVisible();
+    expect(popup.close).not.toHaveBeenCalled();
+    view.unmount();
+    expect(popup.close).toHaveBeenCalledOnce();
+    frame.remove();
+  });
+
   it('shows the assigned location from the separate window', async () => {
     const p = props(), frame = document.createElement('iframe'); document.body.appendChild(frame); const popup = frame.contentWindow!;
     Object.defineProperty(popup, 'closed', { configurable: true, value: false }); popup.focus = vi.fn(); popup.close = vi.fn();

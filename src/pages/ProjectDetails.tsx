@@ -26,6 +26,7 @@ import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { DetailsTab } from './ProjectDetails/DetailsTab';
 import { RoutingsViewerTab } from './ProjectDetails/RoutingsViewerTab';
+import { LocatorViewerTab } from './ProjectDetails/LocatorViewerTab';
 import { PathFinderTab } from './ProjectDetails/PathFinderTab';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
@@ -1435,7 +1436,12 @@ export const ProjectDetails = () => {
       </TabList>
       </ControlPanelPart>
 
-      {modelTab === 'routings-viewer' || (modelTab === 'locator' && canReadAssistant && projectId && token) ? (
+      {modelTab === 'locator' && canReadAssistant && projectId && token && user?.isAdmin ? (
+        <LocatorViewerTab key={controlScope} projectId={projectId} loadedProjectId={project.id} token={token}
+          accountId={user.id} active={selectedTab === 'locator'} admin writable={canEdit}
+          cables={cables} cableError={cablesError} cablesLoading={cablesLoading}
+          secondaryDistanceMeters={project.secondaryTriggerDistance ?? 2} onRoutesChanged={handleCableReportRefresh} />
+      ) : modelTab === 'routings-viewer' || (modelTab === 'locator' && canReadAssistant && projectId && token) ? (
         <RoutingsViewerTab controlsVisible={selectedTab === modelTab}
           locatorPanel={modelTab === 'locator' && projectId && token ? <LocatorPanel key={controlScope}
             projectId={projectId} token={token} writable={canEdit} admin={Boolean(user?.isAdmin)}

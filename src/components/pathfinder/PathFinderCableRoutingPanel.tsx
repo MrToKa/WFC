@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useFloatingCablePanel, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
 import { Button, Caption1, Checkbox, MessageBar, MessageBarBody, Portal, Spinner } from '@fluentui/react-components';
@@ -29,6 +29,8 @@ export type PathFinderCableRoutingPanelProps = {
   access: Omit<CableEndpointPairSelectionAccess, 'cableId'>;
   requestedPopup?: FloatingCableWindowRequest | null;
   cable: CableWorkflowRow | null; open: boolean; onClose: () => void; anchor?: HTMLElement | null;
+  locationLoadError?: string | null;
+  onLocationWriteChange?: (writing: boolean) => void;
   onCalculate?: () => void | Promise<void>; onTogglePath?: (endpoints?: StoredEndpointContexts) => void;
   onShowLocation?: (sdkObjectId: number, sdkObjectIds?: number[], surfacePoint?: CanonicalPoint) => Promise<boolean>;
   onHideLocation?: () => Promise<boolean>;
@@ -80,25 +82,59 @@ function locationPoint(state: Endpoint, model: PathFinderCableRoutingPanelProps[
 export function PathFinderCableRoutingPanel(props: PathFinderCableRoutingPanelProps) {
   const { access, cable } = props;
   if (!access.isAdmin || !access.accountId || !access.token || !access.projectId || access.projectId !== access.loadedProjectId
-    || !cable || cable.projectId !== access.projectId || !isPathFinderCableEligible(cable.mto)) return null;
+    || (cable ? cable.projectId !== access.projectId || !isPathFinderCableEligible(cable.mto) : !access.locationTarget)) return null;
   const owner = JSON.stringify([access.accountId, access.projectId, access.token, access.model]);
-  return <FloatingRoutingPanel key={owner} {...props} cable={cable} owner={owner} />;
+  return <FloatingRoutingPanel key={owner} {...props} owner={owner} />;
 }
-function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; owner: string }) {
-  const floating = useFloatingCablePanel({ open: props.open && props.access.active, title: props.cable.cable.tag || 'Cable routing',
+function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { owner: string }) {
+  const target = props.access.locationTarget;
+  const name = target?.name ?? (props.cable?.cable.tag || 'Cable routing');
+  const open = props.open && props.access.active;
+  const floating = useFloatingCablePanel({ open, title: name,
     scopeKey: props.owner, width: 416, preferredTop: 80, requestedPopup: props.requestedPopup });
-  return <OwnedCableRoutingPanel key={props.cable.cable.id} {...props} floating={floating} />;
+  const { cable } = props;
+  if (cable) return <OwnedCableRoutingPanel key={JSON.stringify([cable.cable.id, target])} {...props} cable={cable} floating={floating} />;
+  return open ? <LoadingLocationPanel name={name} error={props.locationLoadError} onClose={props.onClose} floating={floating} /> : null;
+}
+type FloatingPanel = ReturnType<typeof useFloatingCablePanel>;
+function renderFloatingContent(floating: FloatingPanel, content: ReactNode) {
+  return floating.portalTarget ? <>
+    <Button onClick={floating.returnToPage}>Return cable panel to page</Button>
+    {createPortal(content, floating.portalTarget)}
+  </> : <Portal>{content}</Portal>;
+}
+function LoadingLocationPanel({ name, error, onClose, floating }: {
+  name: string; error?: string | null; onClose: () => void; floating: FloatingPanel;
+}) {
+  const title = useId();
+  return renderFloatingContent(floating, <CablePopupSurface targetDocument={floating.portalTarget?.ownerDocument}>{styles =>
+    <div ref={floating.panelRef} className={styles.panel} style={floating.panelStyle} role="dialog" aria-modal="false" aria-labelledby={title}>
+      <div {...floating.dragHandleProps}><h3 id={title} className={styles.heading}>{name}</h3></div>
+      {error ? <p role="alert">{error}</p> : <Spinner size="tiny" label="Loading location." />}
+      <Button onClick={onClose}>Close</Button>
+    </div>
+  }</CablePopupSurface>);
 }
 function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, onShowLocation, onShowLocationPoint, onHideLocation, pathVisible = false,
   pathReady = false, pathSource = null, endpointRefreshKey = 0, actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, calculationBlockedReason = null,
   onConfigureCalculation, drillThroughWalls = false, onDrillThroughWallsChange, preferVerticalApproach, onPreferVerticalApproachChange,
   submittedDrillThroughWalls, calculationFeedback, calculationDiagnostics,
   onRefresh, refreshing = false, refreshError = null, onEndpointForegroundContexts,storedRouteSelected=false,storedRouteWorking=false,storedRouteMessage,
-  floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
+  floating, onLocationWriteChange }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: FloatingPanel }) {
   const title = useId(), panel = floating.panelRef;
   const [collapsed, setCollapsed] = useState(false), previousOpen = useRef(false), focusReturn = useRef<HTMLElement | null>(null);
   const active = access.active && open && !collapsed;
   const assignment = useCableEndpointPairSelection({ ...access, cableId: cable.cable.id, active });
+  const locationTarget = access.locationTarget;
+  const locationWrite = useRef(false);
+  async function runEndpointWrite(write: () => Promise<boolean>) {
+    if (!onLocationWriteChange) return write();
+    if (locationWrite.current) return false;
+    locationWrite.current = true;
+    onLocationWriteChange(true);
+    try { return await write(); }
+    finally { locationWrite.current = false; onLocationWriteChange(false); }
+  }
   const previousEndpointRefresh = useRef(endpointRefreshKey);
   const previousEndpointRevisionRead = useRef<string | null>(null);
   const { from, to, pending, legacyRecovery } = assignment, busy = assignment.busy || actionsBusy;
@@ -226,7 +262,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     if (revisionRefresh) previousEndpointRevisionRead.current = revisionKey;
     assignment.refresh();
   }, [endpointRefreshKey, active, assignment, pending, legacyRecovery, unsaved, displayScope, cable.cable.cableWriteRevision, from.context, to.context, from.error, to.error]);
-  const close = () => { onClose(); const target = anchor?.isConnected ? anchor : focusReturn.current; if (target?.isConnected) target.focus({ preventScroll: true }); };
+  const close = () => { if (locationWrite.current) return; onClose(); const target = anchor?.isConnected ? anchor : focusReturn.current; if (target?.isConnected) target.focus({ preventScroll: true }); };
   const callbacks = useRef(close); callbacks.current = close;
   useLayoutEffect(() => {
     if (open && !previousOpen.current) {
@@ -273,7 +309,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
           : displayContext?.head ? 'Saved shared location.' : 'Choose one object in the Model Browser.'}</Caption1>}
       <div className={styles.actions}>
         <Button disabled={busy || locationWorking || Boolean(pending) || !name?.trim() || !state.canSelect}
-          onClick={() => void state.selectObject()}>Assign {side}</Button>
+          onClick={() => void state.selectObject()}>{locationTarget ? 'Assign selected object' : `Assign ${side}`}</Button>
         {access.pickEndpointPoint ? <Button aria-label={`Pick ${side} cable entry in 3D`}
           disabled={busy || locationWorking || Boolean(pending) || !name?.trim() || !state.canSelect}
           onClick={() => {
@@ -297,13 +333,15 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   };
   const content = <CablePopupSurface targetDocument={floating.portalTarget?.ownerDocument}>{styles => <div ref={panel} className={styles.panel} style={floating.panelStyle} role="dialog" aria-modal="false" aria-labelledby={title}
     tabIndex={-1} data-cable-id={cable.cable.id} data-collapsed={String(collapsed)} onClick={event => event.stopPropagation()}>
-    <div {...floating.dragHandleProps}><h3 id={title} className={styles.heading}>{cable.cable.tag?.trim() ? cable.cable.tag : 'Cable routing'}</h3></div>
+    <div {...floating.dragHandleProps}><h3 id={title} className={styles.heading}>{locationTarget?.name ?? (cable.cable.tag?.trim() ? cable.cable.tag : 'Cable routing')}</h3></div>
+    {!locationTarget ? <>
     <p className={styles.note} aria-label="Cable type">Type: {cable.displayMetadata?.typeName?.trim() || '—'}</p>
     <p className={styles.note} aria-label="Cable purpose">Purpose: {cable.displayMetadata?.purpose?.trim() || '—'}</p>
+    </> : null}
     <div className={styles.actions}><Button onClick={floating.isPoppedOut ? floating.returnToPage : floating.openInWindow}>{floating.isPoppedOut ? 'Return to page' : 'Open in separate window'}</Button>
       {!floating.isPoppedOut ? <Button onClick={floating.resetPosition}>Reset position</Button> : null}</div>
     {floating.notice ? <p role="status" className={styles.note}>{floating.notice}</p> : null}
-    <div className={styles.actions}><Button aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>{collapsed ? 'Expand' : 'Collapse'}</Button><Button onClick={close}>Close</Button></div>
+    <div className={styles.actions}><Button aria-expanded={!collapsed} disabled={locationWrite.current} onClick={() => setCollapsed(value => !value)}>{collapsed ? 'Expand' : 'Collapse'}</Button><Button disabled={locationWrite.current} onClick={close}>Close</Button></div>
     {collapsed ? <p className={styles.note}>Cable routing is collapsed. The model remains available; any pending save is retained.</p> : <>
       <div className={styles.actions}>
         {onRefresh ? <Button disabled={refreshing} onClick={() => void onRefresh()}>Refresh cable status</Button> : null}
@@ -316,14 +354,24 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       {access.pickEndpointPoint ? <p className={styles.note}>Use Pick cable entry to set the exact connection point on the equipment. Press Escape in the 3D view to cancel.</p> : null}
       {pending ? <section aria-label="Pending endpoint assignment"><h4>Pending endpoint assignment</h4>
         <p className={styles.note}>An exact Save is retained for this project. Reconcile its original cable and endpoint assignments before making another assignment.</p>
-        <div className={styles.actions}><Button disabled={busy || !assignment.canRetry} onClick={() => void assignment.retry()}>Retry exact pending save</Button>
-          <Button disabled={busy || !assignment.canRetry} onClick={() => void assignment.closePending()}>Close pending assignment</Button></div>
+        <div className={styles.actions}><Button disabled={busy || !assignment.canRetry} onClick={() => void runEndpointWrite(assignment.retry)}>Retry exact pending save</Button>
+          <Button disabled={busy || !assignment.canRetry} onClick={() => void runEndpointWrite(assignment.closePending)}>Close pending assignment</Button></div>
       </section> : null}
       {legacyRecovery ? <section aria-label="Earlier endpoint recovery"><h4>Earlier endpoint recovery</h4>
         <p className={styles.note}>An earlier {legacyRecovery.end ?? 'endpoint'} assignment is unconfirmed{legacyRecovery.cableId ? ` for cable ${legacyRecovery.cableId}` : ''}. These controls reconcile its exact saved command.</p>
-        <div className={styles.actions}><Button disabled={busy || !legacyRecovery.canRetry} onClick={() => void legacyRecovery.retry()}>Retry earlier endpoint save</Button>
-          <Button disabled={busy || !legacyRecovery.canRetry} onClick={() => void legacyRecovery.close()}>Close earlier endpoint command</Button></div>
+        <div className={styles.actions}><Button disabled={busy || !legacyRecovery.canRetry} onClick={() => void runEndpointWrite(legacyRecovery.retry)}>Retry earlier endpoint save</Button>
+          <Button disabled={busy || !legacyRecovery.canRetry} onClick={() => void runEndpointWrite(legacyRecovery.close)}>Close earlier endpoint command</Button></div>
       </section> : null}
+      {locationTarget ? <>
+        {endpoint(locationTarget.end, assignment[locationTarget.end], styles)}
+        {assignment[locationTarget.end].draftSource === 'selected' ? <Caption1>Save this selection before switching to another location.</Caption1> : null}
+        <Button appearance="primary" disabled={busy || !assignment.canSave || Boolean(calculationBlockedReason)}
+          onClick={() => void runEndpointWrite(() => assignment.save('Confirm shared location model assignment from Locator.'))}>Save</Button>
+        {calculationBlockedReason ? <p role="status" className={styles.note}>{calculationBlockedReason}</p> : null}
+        {assignment.busy ? <Spinner size="tiny" label="Checking or saving the location." /> : null}
+        {assignment.error ? <p role="alert" className={styles.note}>{assignment.error}</p> : null}
+        {assignment.notice ? <p role="status" className={styles.note}>{assignment.notice}</p> : null}
+      </> : <>
       {endpoint('from', from, styles)}{endpoint('to', to, styles)}
       <section className={styles.field} aria-label="Cable routing actions">
         <h4 className={styles.heading}>{routingHeading}</h4>
@@ -449,10 +497,8 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       </section>
       <details><summary>Endpoint details</summary><p className={styles.note}>The connection point is the bounding-box bottom centre in project metres. Manually assigned points must be checked again after a model revision.</p>
       </details>
+      </>}
     </>}
   </div>}</CablePopupSurface>;
-  return floating.portalTarget ? <>
-    <Button onClick={floating.returnToPage}>Return cable panel to page</Button>
-    {createPortal(content, floating.portalTarget)}
-  </> : <Portal>{content}</Portal>;
+  return renderFloatingContent(floating, content);
 }

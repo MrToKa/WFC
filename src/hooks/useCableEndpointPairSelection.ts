@@ -6,6 +6,7 @@ import { cableEndpointPairCommandSchema, type CableEndpointPairReceipt } from '.
 import { locationImpactCalculationSchema } from '../../shared/pathfinderLocationImpacts';
 import { initialFillPolicySchema } from '../../shared/pathfinderInitialFill';
 import { automaticPairPolicySchema, type AutomaticPairPolicy } from '../../shared/pathfinderAutomaticPair';
+import { normalizeEndpointLocation } from '../../shared/pathfinderEndpointBindings';
 import { CableEndpointApiError, type CableEndpointEnd } from '@/api/pathfinderCableEndpoints';
 import { saveCableEndpointPair, closePendingCableEndpointPair } from '@/api/pathfinderCableEndpointPairs';
 import { endpointDisplayNameHint, useCableEndpointSelection, type CableEndpointSelectionAccess } from './useCableEndpointSelection';
@@ -13,7 +14,10 @@ import { CABLE_ENDPOINT_PENDING_PREFIX, readPendingCableEndpoint } from './cable
 import { CABLE_ENDPOINT_PAIR_PENDING_PREFIX, CableEndpointPairStorageError, readPendingCableEndpointPair,
   retainPendingCableEndpointPair, verifyPendingCableEndpointPair, clearPendingCableEndpointPair, type PendingCableEndpointPair } from './cableEndpointPairPendingStore';
 
-export type CableEndpointPairSelectionAccess = Omit<CableEndpointSelectionAccess, 'end'> & { automaticPairPolicy?: AutomaticPairPolicy | null };
+export type CableEndpointPairSelectionAccess = Omit<CableEndpointSelectionAccess, 'end'> & {
+  automaticPairPolicy?: AutomaticPairPolicy | null;
+  locationTarget?: { end: CableEndpointEnd; name: string };
+};
 type Child = ReturnType<typeof useCableEndpointSelection>;
 type Draft = NonNullable<Child['draft']>;
 type State = { identity: string; pending: PendingCableEndpointPair | null; legacyPending: boolean; storageReady: boolean;
@@ -31,6 +35,10 @@ function effectiveDraft(child: Child): { draft: Draft | null; source: 'selected'
   if (automatic && child.context?.canBind && !child.context.head && child.context.current?.traceId === automatic.object.traceId)
     return { draft: { mode: 'object-derived', sdkObjectId: automatic.sdkObjectId, object: automatic.object, point: [...automatic.pointProjectMetres] }, source: 'automatic' };
   return { draft: null, source: null };
+}
+function matchesLocationTarget(access: CableEndpointPairSelectionAccess, end: CableEndpointEnd, child: Child) {
+  const target = access.locationTarget;
+  return !target || (end === target.end && child.context?.logicalKey === normalizeEndpointLocation(target.name));
 }
 function sameCurrentScope(from: CableEndpointContext | null, to: CableEndpointContext | null, access: CableEndpointPairSelectionAccess) {
   return Boolean(from && to && from.projectId === access.projectId && to.projectId === access.projectId && from.cableId === access.cableId && to.cableId === access.cableId
@@ -63,7 +71,7 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
     : automaticPolicy.success && access.initialFill === null && (automaticPolicy.data === null || calculation.success && calculation.data !== null)
       ? canonicalPurposeJson(automaticPolicy.data) : null;
   const account = JSON.stringify([access.projectId, access.loadedProjectId, access.accountId, access.token, access.isAdmin]);
-  const identity = JSON.stringify([account, access.cableId, access.model, access.preparationKey, calculationKey, policyKey, automaticPolicyKey]);
+  const identity = JSON.stringify([account, access.cableId, access.model, access.preparationKey, calculationKey, policyKey, automaticPolicyKey, access.locationTarget]);
   const allowed = Boolean(access.isAdmin && access.token && policyUuidSchema.safeParse(access.accountId).success && policyUuidSchema.safeParse(access.projectId).success
     && access.projectId === access.loadedProjectId && policyUuidSchema.safeParse(access.cableId).success);
   const [state, setState] = useState<State>(() => initial(identity));
@@ -158,6 +166,7 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
     return true;
   }, [canAct, readStorage, update]);
   const assign = useCallback(async (end: CableEndpointEnd, operationType: 'object' | 'surface', sdkObjectId?: number, name?: string) => {
+    if (!matchesLocationTarget(callbacks.current, end, children.current[end])) return;
     if (!canEdit()) return;
     const operation = {}; assigning.current = operation; update({ busy: true, error: null });
     try {
@@ -203,7 +212,9 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
     if (!reason.trim() || reason.length > 2048 || /[\u0000-\u001f\u007f-\u009f]/u.test(reason)) { update({ error: 'Enter a nonempty confirmation reason without control characters.' }); return false; }
     const endpoints: Array<{end: CableEndpointEnd; command: CableEndpointCommand}> = [];
     for (const [side, child] of [['from', start], ['to', end]] as const) {
-      const context = child.context!, draft = effectiveDraft(child).draft;
+      if (!matchesLocationTarget(callbacks.current, side, child)) continue;
+      const context = child.context!;
+      const draft = callbacks.current.locationTarget ? child.draft : effectiveDraft(child).draft;
       if (!draft) continue;
       if (!context.canBind || !context.logicalName || !context.current) { update({ error: 'Resolve the current logical endpoint before saving its assignment.' }); return false; }
       const command = cableEndpointCommandSchema.parse({ ...(automaticPolicyKey === 'unspecified'
@@ -263,22 +274,27 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
   }, [canAct, update]);
   const expose = (end: CableEndpointEnd, child: Child) => {
     const visible = allowed && denied.current !== account, selection = visible && !current.retired ? effectiveDraft(child) : { draft: null, source: null };
+    const editable = matchesLocationTarget(access, end, child);
     return { context: visible && !current.retired ? child.context : null, draft: selection.draft, effectiveDraft: selection.draft, draftSource: selection.source,
       displaySelection: visible ? child.displaySelection : null, busy: child.busy, error: visible ? child.error : null, notice: visible ? child.notice : null,
-      enabled: visible && child.enabled, canSelect: visible && child.canSelect && !current.busy && !current.pending && !current.legacyPending && !current.retired,
+      enabled: visible && child.enabled, canSelect: editable && visible && child.canSelect && !current.busy && !current.pending && !current.legacyPending && !current.retired,
       selectObject: () => assign(end, 'object'), pickSurface: (sdkObjectId?: number, name?: string) => assign(end, 'surface', sdkObjectId, name),
-      setFixedPoint: (point: Parameters<Child['setFixedPoint']>[0]) => canEdit() ? child.setFixedPoint(point) : false,
-      chooseDisplayedPoint: () => canEdit() ? child.chooseDisplayedPoint() : false,
+      setFixedPoint: (point: Parameters<Child['setFixedPoint']>[0]) => editable && canEdit() ? child.setFixedPoint(point) : false,
+      chooseDisplayedPoint: () => editable && canEdit() ? child.chooseDisplayedPoint() : false,
       refresh };
   };
   const start = expose('from', from), end = expose('to', to), busy = current.busy || from.busy || to.busy;
+  const target = access.locationTarget;
+  const hasDraft = target
+    ? matchesLocationTarget(access, target.end, children.current[target.end]) && Boolean(children.current[target.end].draft)
+    : Boolean(start.draft || end.draft);
   return { from: start, to: end, ...current, busy, enabled: allowed && denied.current !== account,
     legacyRecovery: current.legacyPending ? { cableId: from.pending?.cableId ?? null, end: from.pending?.end ?? null,
       canRetry: allowed && denied.current !== account && access.active && current.storageReady && !busy && !current.pending && from.canRetry,
       retry: () => reconcileLegacy('save'), close: () => reconcileLegacy('close') } : null,
     notice: current.notice ?? (current.legacyPending ? legacyNotice : current.pending ? pendingNotice : null),
     canSave: allowed && denied.current !== account && access.active && current.storageReady && !busy && !current.pending && !current.legacyPending && !current.retired
-      && calculationKey !== null && policyKey !== null && automaticPolicyKey !== null && sameContexts(from.context, to.context, access) && Boolean(start.draft || end.draft),
+      && calculationKey !== null && policyKey !== null && automaticPolicyKey !== null && sameContexts(from.context, to.context, access) && hasDraft,
     canRetry: allowed && denied.current !== account && access.active && current.storageReady && !busy && Boolean(current.pending) && !current.legacyPending,
     save, retry: () => reconcile('save'), closePending: () => reconcile('close'),
     refresh };

@@ -1,14 +1,15 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelLocationMatchPanel } from './ModelLocationMatchPanel';
 import { useModelLocationMatch } from './hooks/useModelLocationMatch';
 import type { usePathFinder } from './hooks/usePathFinder';
 vi.mock('./hooks/useModelLocationMatch', () => ({ useModelLocationMatch: vi.fn() }));
-function setup(change: Partial<ReturnType<typeof useModelLocationMatch>> = {}) {
+function setup(change: Partial<ReturnType<typeof useModelLocationMatch>> = {}, props: Partial<ComponentProps<typeof ModelLocationMatchPanel>> = {}) {
   const state = { owner: 'scope', storageReady: true, busy: false, phase: 'idle', progress: null, error: null, notice: null,
     pending: null, results: [], totalNames: 0, complete: false, summaryLoading: false, allowed: true, canStart: true, start: vi.fn(), retry: vi.fn(), cancel: vi.fn(), ...change } as ReturnType<typeof useModelLocationMatch>;
   vi.mocked(useModelLocationMatch).mockReturnValue(state);
-  render(<ModelLocationMatchPanel pf={{} as ReturnType<typeof usePathFinder>} accountId="account" active />);
+  render(<ModelLocationMatchPanel pf={{} as ReturnType<typeof usePathFinder>} accountId="account" active {...props} />);
   return state;
 }
 beforeEach(() => vi.clearAllMocks());
@@ -68,5 +69,19 @@ describe('independent From/To control', () => {
   });
   it('does not show the write control without current administrator access', () => {
     setup({ allowed: false, canStart: false }); expect(screen.queryByRole('button', { name: 'Find and assign From/To' })).not.toBeInTheDocument();
+  });
+  it('offers the Locator action and opens both assigned and unassigned report rows by name', () => {
+    const onOpen = vi.fn();
+    const state = setup({ complete: true, totalNames: 2, results: [
+      { name: 'PUMP-A', status: 'assigned', candidateObjectIds: [1], locationId: null, bindingId: null, reasonCode: null },
+      { name: 'PUMP-B', status: 'missing', candidateObjectIds: [], locationId: null, bindingId: null, reasonCode: 'MISSING' },
+    ] }, { locationReport: { editing: false, canOpen: () => true, onOpen } });
+    fireEvent.click(screen.getByRole('button', { name: 'Assign from/to locations' }));
+    expect(state.start).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'PUMP-B' }));
+    expect(onOpen).toHaveBeenCalledWith('PUMP-B', expect.any(HTMLButtonElement));
+    fireEvent.click(screen.getByText('Assigned locations (1)'));
+    fireEvent.click(screen.getByRole('button', { name: 'PUMP-A' }));
+    expect(onOpen).toHaveBeenCalledWith('PUMP-A', expect.any(HTMLButtonElement));
   });
 });

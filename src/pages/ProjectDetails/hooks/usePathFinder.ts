@@ -32,7 +32,7 @@ export type ProjectPreparationViewer = {
 };
 
 type Options = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; container: RefObject<HTMLDivElement | null>; automaticStatePolling?: boolean };
-type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string };
+type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string; modelLabel?: string };
 type Run = { assignmentsVersion: number; closed: boolean; abort: AbortController; viewer: ViewerController | null; storedRoute: StoredRouteDisplay | null; publishedCad: PublishedCadDisplay | null; cadTrayPreview?: boolean; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
 // Cosmetic text only. Capture protocol, geometry assembly and terminal/auth
 // updates retain their original delivery; dropping progress needs no timer.
@@ -169,6 +169,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         const model = models.versions.find(value => value.id === run.modelVersionId);
         if (!run.modelVersionId) { update(run, { viewerPhase: 'no-model', viewerMessage: 'Select a prepared model in Project Details.' }); return; }
         if (!model || model.health !== 'healthy' || models.selection.activeModelVersionId !== run.modelVersionId || String(models.selection.selectionRevision) !== run.selectionRevision) throw new Error('Active model unavailable');
+        update(run, { modelLabel: model.label });
         const onEvent = (event: ViewerEvent) => {
           if (!live(run)) return;
           run.storedRoute?.onEvent(event);
