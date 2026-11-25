@@ -828,6 +828,25 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
     expect(p.onCalculate).not.toHaveBeenCalled(); expect(p.onTogglePath).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
   });
+  it('identifies the stored manual route independently from an automatic calculation', () => {
+    const p = props();
+    p.cable!.cable.routing = '/MANUAL';
+    p.cable!.savedManualRoute = true;
+
+    const view = render(<PathFinderCableRoutingPanel {...p} />);
+    const route = screen.getByRole('textbox', { name: 'Cable routing' });
+    expect(route).toHaveValue('/MANUAL');
+    expect(route).toHaveAccessibleDescription('Manually routed');
+    expect(screen.getByText('Manually routed')).toBeVisible();
+
+    view.rerender(<PathFinderCableRoutingPanel {...p} calculatedRouting="/AUTO" />);
+    expect(route).toHaveValue('/AUTO');
+    expect(screen.queryByText('Manually routed')).toBeNull();
+
+    view.rerender(<PathFinderCableRoutingPanel {...p} calculatedRouting="/AUTO" storedRouteSelected />);
+    expect(route).toHaveValue('/MANUAL');
+    expect(route).toHaveAccessibleDescription('Manually routed');
+  });
   it('warns next to the saved route when its recorded Model version differs from the active selection', () => {
     const p = props();
     p.cable!.cable.routing = '/SAVED';

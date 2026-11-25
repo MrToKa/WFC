@@ -1,9 +1,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useFloatingCablePanel, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
-import { Button, Caption1, Checkbox, MessageBar, MessageBarBody, Portal, Spinner } from '@fluentui/react-components';
+import { Button, Caption1, Checkbox, MessageBar, MessageBarBody, Portal, Spinner, tokens } from '@fluentui/react-components';
 import { useCableEndpointPairSelection, type CableEndpointPairSelectionAccess } from '@/hooks/useCableEndpointPairSelection';
 import { hasVerifiedSavedCableRoute, SAVED_ROUTE_MODEL_CHANGED_NOTICE, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
+import { CABLE_ROUTING_PALETTE } from '../../../shared/cableRoutingControl';
 import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
 import { CablePopupSurface, type CablePopupSurfaceStyles } from '@/components/CablePopupSurface';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
@@ -238,6 +239,8 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     saved: cable.savedRoute ?? (hasVerifiedSavedCableRoute(cable) ? cable.calculation : null) });
   const storedRouting = cable.cable.routing?.trim() ? cable.cable.routing : null;
   const showingStoredRouting = (storedRouteSelected||!hasCalculatedRouting) && storedRouting !== null;
+  const showingManualRouting = showingStoredRouting && cable.savedManualRoute === true;
+  const manualRoutingDescriptionId = `${title}-manual-routing`;
   const previousStoredRouting = !storedRouteSelected&&showingStoredRouting && (calculationPending || unsaved || Boolean(calculationFeedback)
     || calculatedRouting !== undefined);
   const routingHeading = storedRouteSelected?'Cable list routing':usingSavedExactPath ? 'Cable list routing' : hasCalculatedRouting || !showingStoredRouting ? 'Calculated routing'
@@ -376,7 +379,19 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       <section className={styles.field} aria-label="Cable routing actions">
         <h4 className={styles.heading}>{routingHeading}</h4>
         {cable.savedRouteModelChanged ? <p role="status" className={styles.note}>{SAVED_ROUTE_MODEL_CHANGED_NOTICE}</p> : null}
-        <textarea aria-label="Cable routing" className={styles.value} readOnly value={storedRouteSelected?storedRouting??'':hasCalculatedRouting ? calculatedRouting : storedRouting ?? ''} placeholder={calculationPending ? 'Calculating this cable’s new route…' : 'No routing saved in Cable list'} rows={3} />
+        <textarea
+          aria-label="Cable routing"
+          aria-describedby={showingManualRouting ? manualRoutingDescriptionId : undefined}
+          className={styles.value}
+          style={showingManualRouting ? {
+            backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1} 70%, ${CABLE_ROUTING_PALETTE.manual.light} 30%)`,
+          } : undefined}
+          readOnly
+          value={storedRouteSelected ? storedRouting ?? '' : hasCalculatedRouting ? calculatedRouting : storedRouting ?? ''}
+          placeholder={calculationPending ? 'Calculating this cable’s new route…' : 'No routing saved in Cable list'}
+          rows={3}
+        />
+        {showingManualRouting ? <Caption1 id={manualRoutingDescriptionId}>Manually routed</Caption1> : null}
         {showingStoredRouting ? <>
           <p className={styles.note}>{previousStoredRouting ? 'Previous Cable list' : 'Cable list'} design length: {cable.cable.designLength === null ? 'Not set' : cable.cable.designLength === '' ? 'Empty stored value' : `${cable.cable.designLength} m`}</p>
           <Caption1>{storedRouteSelected?'Show opens the recorded path when available. Otherwise it previews the saved route using current model trays.':previousStoredRouting ? calculationPending
