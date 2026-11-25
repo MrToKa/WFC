@@ -146,9 +146,11 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   const displayScope = JSON.stringify([access.accountId, access.projectId, access.token, access.model, access.preparationKey,
     cable.cable.id, cable.cable.fromLocation, cable.cable.toLocation]);
   const [locationDisplay, setLocationDisplay] = useState<{ scope: string; end: 'from' | 'to'; working: boolean; error: string | null; pointShown?: boolean; hiding?: boolean } | null>(null);
-  const locationOwner = useRef({ scope: displayScope, active }); locationOwner.current = { scope: displayScope, active };
+  const [focusedLocation, setFocusedLocation] = useState<{ scope: string; end: 'from' | 'to' } | null>(null);
+  const locationOwner = useRef({ scope: displayScope, active, pathVisible }); locationOwner.current = { scope: displayScope, active, pathVisible };
   const locationRequest = useRef<symbol | null>(null);
   useEffect(() => { locationRequest.current = null; setLocationDisplay(null); }, [displayScope, active]);
+  useEffect(() => { setFocusedLocation(null); }, [displayScope, pathVisible]);
   useEffect(() => () => { locationOwner.current.active = false; locationRequest.current = null; }, []);
   const locationWorking = locationDisplay?.scope === displayScope && locationDisplay.working;
   const changeLocationFocus = async (end: 'from' | 'to', target: { sdkObjectId: number; sdkObjectIds?: number[]; surfacePoint?: CanonicalPoint } | NonNullable<ReturnType<typeof locationPoint>> | null) => {
@@ -157,6 +159,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       : onShowLocation && (() => target.surfacePoint ? onShowLocation(target.sdkObjectId, target.sdkObjectIds, target.surfacePoint)
         : target.sdkObjectIds ? onShowLocation(target.sdkObjectId, target.sdkObjectIds) : onShowLocation(target.sdkObjectId));
     if (!action || locationRequest.current || !locationOwner.current.active || locationOwner.current.scope !== displayScope) return;
+    if (target === null && (pathVisible || focusedLocation?.scope !== displayScope || focusedLocation.end !== end)) return;
     const request = Symbol(); locationRequest.current = request;
     setLocationDisplay({ scope: displayScope, end, working: true, error: null, hiding: target === null });
     let shown = false;
@@ -164,7 +167,11 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     catch { /* Display errors do not change endpoint or calculation state. */ }
     if (locationRequest.current !== request) return;
     locationRequest.current = null;
-    if (locationOwner.current.active && locationOwner.current.scope === displayScope) setLocationDisplay({ scope: displayScope, end, working: false,
+    if (!locationOwner.current.active || locationOwner.current.scope !== displayScope) return;
+    if (shown && target === null) setFocusedLocation(null);
+    else if (shown && target && 'sdkObjectId' in target && target.surfacePoint && !pathVisible && !locationOwner.current.pathVisible)
+      setFocusedLocation({ scope: displayScope, end });
+    setLocationDisplay({ scope: displayScope, end, working: false,
       pointShown: shown && target !== null && 'pointProjectMetres' in target,
       error: shown ? null : target === null ? 'The model visibility could not be restored. Try again.'
         : 'This location could not be shown. Check that the current model is loaded, then try again.' });
@@ -322,7 +329,8 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <Button aria-label={`Show ${side} location`} disabled={busy || locationWorking || target === null || (pointTarget ? !onShowLocationPoint : !onShowLocation)}
           onClick={() => { if (target !== null) void changeLocationFocus(end, target); }}>Show location</Button>
         {surfacePoint && objectTarget && onHideLocation && <Button aria-label={`Hide ${side} location focus`}
-          disabled={busy || locationWorking} onClick={() => { void changeLocationFocus(end, null); }}>Hide</Button>}
+          disabled={busy || locationWorking || pathVisible || focusedLocation?.scope !== displayScope || focusedLocation.end !== end}
+          onClick={() => { void changeLocationFocus(end, null); }}>Hide</Button>}
       </div>
       {pointTarget ? <Caption1 role="status">{display?.pointShown ? 'Saved project point shown; no linked model object.' : 'Saved project point; no linked model object.'}</Caption1> : null}
       {target === null && point && !lastRead && !state.busy ? <Caption1>This location has no current model object to show. Assign an object or refresh From/To.</Caption1> : null}

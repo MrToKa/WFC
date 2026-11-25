@@ -244,10 +244,19 @@ describe('showing the popup From/To locations without changing them', () => {
     assignment.from.displaySelection = { sdkObjectId: 55, name: 'New selected object', point: [7, 8, 9] };
     const show = vi.fn(async () => true), hide = vi.fn(async () => true);
     render(<PathFinderCableRoutingPanel {...props()} onShowLocation={show} onHideLocation={hide} />);
+    const hideButton = screen.queryByRole('button', { name: 'Hide From location focus' });
+    if (mode === 'fixed-world') expect(hideButton).toBeDisabled();
+    else expect(hideButton).toBeNull();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
     if (mode === 'fixed-world') {
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Hide From location focus' })); });
-      expect(hide).toHaveBeenCalledExactlyOnceWith();
+      expect(hideButton).toBeEnabled();
+      hide.mockResolvedValueOnce(false);
+      await act(async () => { fireEvent.click(hideButton!); });
+      expect(hideButton).toBeEnabled();
+      await act(async () => { fireEvent.click(hideButton!); });
+      expect(hideButton).toBeDisabled();
+      await act(async () => { fireEvent.click(hideButton!); });
+      expect(hide).toHaveBeenCalledTimes(2);
       expect(show).toHaveBeenCalledExactlyOnceWith(55, undefined, [7, 8, 9]);
       expect(screen.getByText('Cable entry selected. Click Save to confirm.')).toBeVisible();
     }
