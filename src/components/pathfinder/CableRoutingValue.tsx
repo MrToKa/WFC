@@ -46,13 +46,27 @@ export function cableRoutingPresentation(cable: Cable) {
   return { tone, control, automatic, reasons, label: CABLE_ROUTING_PALETTE[tone].label };
 }
 
-/** Theme-neutral base keeps the shared pastel hue subdued in both Fluent themes. */
-export function routingCellAppearance(cable: Cable): CSSProperties {
-  const { tone } = cableRoutingPresentation(cable);
-  return {
-    backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1} 80%, ${CABLE_ROUTING_PALETTE[tone].light} 20%)`,
+const routingCellStyles = {
+  automatic: {
+    backgroundColor: tokens.colorPaletteBlueBackground2,
+    color: tokens.colorPaletteBlueForeground2,
+  },
+  manual: {
+    backgroundColor: tokens.colorPaletteGreenBackground2,
+    color: tokens.colorPaletteGreenForeground2,
+  },
+  execution: {
+    backgroundColor: tokens.colorNeutralBackground5,
     color: tokens.colorNeutralForeground1,
-  };
+  },
+  warning: {
+    backgroundColor: tokens.colorPaletteDarkOrangeBackground2,
+    color: tokens.colorPaletteDarkOrangeForeground2,
+  },
+} satisfies Record<keyof typeof CABLE_ROUTING_PALETTE, CSSProperties>;
+
+export function routingCellAppearance(cable: Cable): CSSProperties {
+  return routingCellStyles[cableRoutingPresentation(cable).tone];
 }
 
 export function CableRoutingValue({ cable }: { cable: Cable }) {
