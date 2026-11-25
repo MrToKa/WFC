@@ -20,6 +20,7 @@ import {requireCalculationLengthLedger} from './lengthLedger.js';
 import {requireVersionedCalculationScope} from './routingScope.js';
 import {designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences,type DependencySnapshot} from './jobContracts.js';
 import {normalizeLocation} from './matching.js';
+import { RETAINED_PROPOSAL_BYTES, RETAINED_WRITE_RECEIPT_BYTES } from './retainedProposalLimits.js';
 import {readSnapshot} from './storage.js';
 import {recordPathFinderCableHistory} from './cableWriteHistory.js';
 import {PathFinderError} from './errors.js';
@@ -36,16 +37,16 @@ export type InitialFillWriterAdapters={collect?:typeof collectDependenciesForVer
 /** Recognition of a committed immutable receipt does not renew its expired mandate. */
 async function previousReceipt(client:PoolClient,projectId:string,request:InitialFillApplyRequest,proof:typeof readInitialFillReceiptProof,sealResult:typeof verifyRevisionResultForProposal){
   const rows=(await client.query<Row>(`/* initial-fill:receipt */ SELECT id,project_id,actor_id,idempotency_key,payload_hash,proposal_id,cable_id,
-    CASE WHEN octet_length(before_snapshot::text)+octet_length(after_snapshot::text)+octet_length(provenance::text)<=262144 THEN before_snapshot ELSE NULL END AS before_snapshot,
-    CASE WHEN octet_length(before_snapshot::text)+octet_length(after_snapshot::text)+octet_length(provenance::text)<=262144 THEN after_snapshot ELSE NULL END AS after_snapshot,
-    CASE WHEN octet_length(before_snapshot::text)+octet_length(after_snapshot::text)+octet_length(provenance::text)<=262144 THEN provenance ELSE NULL END AS provenance
+    CASE WHEN octet_length(before_snapshot::text)+octet_length(after_snapshot::text)+octet_length(provenance::text)<=${RETAINED_WRITE_RECEIPT_BYTES} THEN before_snapshot ELSE NULL END AS before_snapshot,
+    CASE WHEN octet_length(before_snapshot::text)+octet_length(after_snapshot::text)+octet_length(provenance::text)<=${RETAINED_WRITE_RECEIPT_BYTES} THEN after_snapshot ELSE NULL END AS after_snapshot,
+    CASE WHEN octet_length(before_snapshot::text)+octet_length(after_snapshot::text)+octet_length(provenance::text)<=${RETAINED_WRITE_RECEIPT_BYTES} THEN provenance ELSE NULL END AS provenance
     FROM pf_apply_receipts WHERE project_id=$1 AND idempotency_key=$2
     AND actor_id=(SELECT actor_id FROM pf_initial_fill_mandates WHERE project_id=$1 AND id=$3) LIMIT 2`,[projectId,request.idempotencyKey,request.mandateId])).rows;
   if(!rows.length)return null;if(rows.length!==1)return fail('INITIAL_FILL_RECEIPT_CONFLICT');
   const row=rows[0],parsed=initialFillProvenanceSchema.safeParse(row.provenance);
   if(!parsed.success||row.payload_hash!==hash(initialFillRequestHashInput(request))||canonicalPurposeJson(parsed.data.request)!==canonicalPurposeJson(request))return fail('INITIAL_FILL_RECEIPT_CONFLICT');
-  const proposal=(await client.query<Row>(`SELECT CASE WHEN octet_length(dependencies::text)+octet_length(result::text)<=262144 THEN dependencies ELSE NULL END AS dependencies,
-    CASE WHEN octet_length(dependencies::text)+octet_length(result::text)<=262144 THEN result ELSE NULL END AS result,proposal_hash
+  const proposal=(await client.query<Row>(`SELECT CASE WHEN octet_length(dependencies::text)+octet_length(result::text)<=${RETAINED_PROPOSAL_BYTES} THEN dependencies ELSE NULL END AS dependencies,
+    CASE WHEN octet_length(dependencies::text)+octet_length(result::text)<=${RETAINED_PROPOSAL_BYTES} THEN result ELSE NULL END AS result,proposal_hash
     FROM pf_proposals WHERE project_id=$1 AND id=$2 AND cable_id=$3`,[projectId,request.proposalId,row.cable_id])).rows[0];
   if(!proposal)return fail('INITIAL_FILL_RECEIPT_INTEGRITY');
   const seal=await sealResult(client,{projectId,proposalId:request.proposalId,dependencies:proposal.dependencies,result:proposal.result,proposalHash:proposal.proposal_hash});
@@ -70,8 +71,8 @@ export function createInitialFillWriter(pool:Pool,adapters:InitialFillWriterAdap
     const committed=await endpointBindingTransaction(pool,projectId,who,async client=>{
       await fence(client);const previous=await previousReceipt(client,projectId,request,proof,sealResult);if(previous)return previous;
       const proposal=(await client.query<Row>(`/* initial-fill:proposal */ SELECT p.id,p.project_id,p.cable_id,p.job_id,p.status,p.proposal_hash,p.dependency_hash,
-        CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 THEN p.dependencies ELSE NULL END AS dependencies,
-        CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 THEN p.result ELSE NULL END AS result,j.state AS job_state,j.cancel_requested FROM pf_proposals p
+        CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES} THEN p.dependencies ELSE NULL END AS dependencies,
+        CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES} THEN p.result ELSE NULL END AS result,j.state AS job_state,j.cancel_requested FROM pf_proposals p
         JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id WHERE p.project_id=$1 AND p.id=$2 FOR SHARE OF p,j`,[projectId,request.proposalId])).rows[0];
       if(!proposal)return fail('PROPOSAL_NOT_FOUND',404);
       const dependencies=proposal.dependencies as DependencySnapshot,result=proposal.result;
@@ -125,7 +126,7 @@ export function createInitialFillWriter(pool:Pool,adapters:InitialFillWriterAdap
         proposalId:request.proposalId,proposalHash:proposal.proposal_hash,dependencies,barrierEvidence,mandate:initialFillMandateReference(currentMandate),request,
         revisionResult:{admissionId:sealed.admissionId,revisionResultSha256:sealed.revisionResultSha256,baselineHash:sealed.baselineHash,engineResultSha256:sealed.engineResultSha256,ledgerHash:sealed.ledgerHash,dependencyHash:sealed.dependencyHash},
         authorized:{actorId:who.userId,loginId:who.loginId,installationEpoch:currentMandate.installationEpoch,targetGeneration:member.data.generation,authorizedAt:new Date().toISOString()}});
-      if(Buffer.byteLength(canonicalPurposeJson({before,after,provenance}))>262144)return fail('INITIAL_FILL_RECEIPT_LIMIT');
+      if(Buffer.byteLength(canonicalPurposeJson({before,after,provenance}))>RETAINED_WRITE_RECEIPT_BYTES)return fail('INITIAL_FILL_RECEIPT_LIMIT');
       await recordPathFinderCableHistory(client,{projectId,cableId:proposal.cable_id,actorId:who.userId});
       const receiptId=randomUUID();await client.query(`INSERT INTO pf_apply_receipts(id,project_id,actor_id,idempotency_key,payload_hash,proposal_id,cable_id,before_snapshot,after_snapshot,provenance)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[receiptId,projectId,who.userId,request.idempotencyKey,hash(initialFillRequestHashInput(request)),request.proposalId,proposal.cable_id,before,after,provenance]);

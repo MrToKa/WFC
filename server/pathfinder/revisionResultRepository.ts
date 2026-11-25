@@ -1,4 +1,4 @@
-import { readAcceptedRows, isStatementTimeout, type AcceptedRows } from './acceptedBaselineRows.js';
+import { readAcceptedRows, isStatementTimeout, MAX_ACCEPTED_BASELINE_BATCH, type AcceptedRows } from './acceptedBaselineRows.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
@@ -85,7 +85,7 @@ function protectedManualBaseline(row: Row, dependencies: DependencySnapshot, out
 type BaselineProgress = { cache?: AcceptedRows; chunk: number; report: (done: number, total: number) => Promise<void> };
 async function acceptedBaselines(client: PoolClient, projectId: string, ids: string[], progress?: BaselineProgress): Promise<Map<string, RevisionBaseline['lastAcceptedApply']>> {
   const result = new Map<string, RevisionBaseline['lastAcceptedApply']>();
-  const chunk = progress?.chunk ?? REVISION_RESULTS_LIMITS.chunk;
+  const chunk = Math.min(progress?.chunk ?? REVISION_RESULTS_LIMITS.chunk, MAX_ACCEPTED_BASELINE_BATCH);
   if (progress) await progress.report(0, ids.length);
   for (let at = 0; at < ids.length; at += chunk) {
     const initialFillReceipt = createInitialFillReceiptProofReader(client);

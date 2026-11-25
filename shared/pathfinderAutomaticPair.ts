@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { canonicalPurposeJson, policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
 
-export const AUTOMATIC_PAIR_LIMITS = Object.freeze({ cables: 10000, recordBytes: 65536, receiptBytes: 262144,
+export const AUTOMATIC_PAIR_LIMITS = Object.freeze({ cables: 10000, recordBytes: 65536,
   proofBytes: 32 * 1024 * 1024, lineage: 512, authorityMilliseconds: 1800000,
   bulkAuthorityMilliseconds: 48 * 60 * 60 * 1000, attempts: 3, leaseMilliseconds: 60000 });
 const timestamp = z.string().datetime().refine(value => value.endsWith('Z'));

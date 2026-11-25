@@ -6,16 +6,20 @@ import { encodeCadOverlay } from './cadOverlay.js';
 import { hash } from './dependencies.js';
 import { readAutomaticPairProposalApplicability, readProposalApplicability, type ProposalApplicabilityInput } from './proposalApplicability.js';
 import type { AutomaticPairMandate } from '../../shared/pathfinderAutomaticPair.js';
+import { readWorkflowVerifiedProposal } from './cableWorkflowProof.js';
+import { RETAINED_PROPOSAL_BYTES } from './retainedProposalLimits.js';
 
 const authority=vi.hoisted(()=>vi.fn());
 const outputAuthority=vi.hoisted(()=>vi.fn());
+const verifySeal=vi.hoisted(()=>vi.fn());
 vi.mock('./locationImpactRepository.js',()=>({readLocationImpactJobAuthority:authority}));
 vi.mock('./recalculationRepository.js',()=>({readRecalculationJobAuthority:async()=>({enrolled:false})}));
 vi.mock('./automaticPairMandates.js',()=>({requireCurrentAutomaticPairMandate:outputAuthority}));
+vi.mock('./revisionResultRepository.js',()=>({verifyRevisionResultForProposal:verifySeal}));
 
 const url=process.env.PF_APPLICABILITY_SQL_URL;
 let pool:Pool,client:PoolClient;
-const limit=256*1024;
+const previousLimit=256*1024;
 function fixture(pointCount=2500){
   const {dependencies,result,id}=syntheticBarrierWriteInputs();
   if(pointCount){
@@ -64,7 +68,7 @@ describe.runIf(Boolean(url))('actual applicability SQL with connection-owned tem
     const size=(await client.query(`SELECT octet_length(p.dependencies::text)+octet_length(p.result::text) AS single_bytes,
       octet_length(i.dependencies::text)+octet_length(p.dependencies::text)+octet_length(p.result::text) AS duplicate_bytes
       FROM pg_temp.pf_job_items i JOIN pg_temp.pf_proposals p USING(project_id,job_id,cable_id)`)).rows[0];
-    expect(size.single_bytes).toBeLessThan(limit);expect(size.duplicate_bytes).toBeGreaterThan(limit);
+    expect(size.single_bytes).toBeLessThan(previousLimit);expect(size.duplicate_bytes).toBeGreaterThan(previousLimit);
     expect((await readProposalApplicability(client,f.input)).applicable).toBe(true);
     expect((await readAutomaticPairProposalApplicability(client,f.input,f.mandate)).applicable).toBe(true);
     expect(outputAuthority).toHaveBeenCalledOnce();
@@ -75,20 +79,30 @@ describe.runIf(Boolean(url))('actual applicability SQL with connection-owned tem
     expect((await readAutomaticPairProposalApplicability(client,f.input,f.mandate)).applicable).toBe(false);
     expect(authority).not.toHaveBeenCalled();expect(outputAuthority).not.toHaveBeenCalled();
   });
-  it('retains the original bound for the single dependency and result, without authority fallback',async()=>{
+  it('can verify and use a sealed result larger than the former 256 KiB limit',async()=>{
     const f=fixture(5000);await seed(f);
     const size=(await client.query('SELECT octet_length(dependencies::text)+octet_length(result::text) AS bytes FROM pg_temp.pf_proposals')).rows[0];
-    expect(size.bytes).toBeGreaterThan(limit);
+    expect(size.bytes).toBeGreaterThan(previousLimit);
+    expect(size.bytes).toBeLessThan(RETAINED_PROPOSAL_BYTES);
+    verifySeal.mockResolvedValueOnce({...f.input.seal, ledgerHash:hash(f.result.lengthLedger)});
+    expect(await readWorkflowVerifiedProposal(client,f.input.projectId,f.input.cableId,f.input.proposalId)).not.toBeNull();
+    expect((await readProposalApplicability(client,f.input)).applicable).toBe(true);
+    expect((await readAutomaticPairProposalApplicability(client,f.input,f.mandate)).applicable).toBe(true);
+  });
+  it('rejects an oversized stored result before verifying the seal or authority',async()=>{
+    const f=fixture(0);await seed(f);
+    await client.query("UPDATE pg_temp.pf_proposals SET result = result || jsonb_build_object('padding',repeat('x',$1))",[RETAINED_PROPOSAL_BYTES]);
+    expect(await readWorkflowVerifiedProposal(client,f.input.projectId,f.input.cableId,f.input.proposalId)).toBeNull();
     expect((await readProposalApplicability(client,f.input)).applicable).toBe(false);
     expect((await readAutomaticPairProposalApplicability(client,f.input,f.mandate)).applicable).toBe(false);
-    expect(authority).not.toHaveBeenCalled();expect(outputAuthority).not.toHaveBeenCalled();
+    expect(verifySeal).not.toHaveBeenCalled();expect(authority).not.toHaveBeenCalled();expect(outputAuthority).not.toHaveBeenCalled();
   });
   it('does not turn missing item dependencies into a match',async()=>{
     const f=fixture(0);await seed(f,null);
     expect((await readProposalApplicability(client,f.input)).applicable).toBe(false);expect(authority).not.toHaveBeenCalled();
   });
   it('bounds the item copy independently even when the returned proposal body is small',async()=>{
-    const f=fixture(0);await seed(f,fixture(5000).dependencies);
+    const f=fixture(0);await seed(f,{...f.dependencies,padding:'x'.repeat(RETAINED_PROPOSAL_BYTES)});
     expect((await readProposalApplicability(client,f.input)).applicable).toBe(false);
     expect((await readAutomaticPairProposalApplicability(client,f.input,f.mandate)).applicable).toBe(false);
     expect(authority).not.toHaveBeenCalled();expect(outputAuthority).not.toHaveBeenCalled();

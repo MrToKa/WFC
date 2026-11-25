@@ -10,6 +10,7 @@ import type { AutomaticPairMandate } from '../../shared/pathfinderAutomaticPair.
 import { requireCurrentAutomaticPairMandate } from './automaticPairMandates.js';
 import { routingEngineCategory } from '../../shared/pathfinderCableEligibility.js';
 import { isPermittedCablePurposeRoute } from '../../shared/routingCablePurposes.js';
+import { RETAINED_PROPOSAL_BYTES } from './retainedProposalLimits.js';
 
 type Seal = { projectId: string; jobId: string; cableId: string; proposalId: string; dependencyHash: string;
   proposalHash?: string; engineResultSha256?: string; baselineHash?: string };
@@ -72,9 +73,9 @@ async function readBarrierProposalApplicability(client: PoolClient, input: Propo
   const row = (await client.query<{ state: string; status: string; dependencies: unknown; item_dependencies_match: boolean | null; result: unknown;
     proposal_hash: string; dependency_hash: string; proposal_status: string; job_state: string; cancel_requested: boolean }>(
     `/* pathfinder:barrier-sealed-item-applicability */ SELECT i.state,i.status,
-      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 THEN p.dependencies ELSE NULL END AS dependencies,
-      CASE WHEN octet_length(i.dependencies::text)<=262144 THEN i.dependencies=p.dependencies ELSE false END AS item_dependencies_match,
-      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 THEN p.result ELSE NULL END AS result,
+      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES} THEN p.dependencies ELSE NULL END AS dependencies,
+      CASE WHEN octet_length(i.dependencies::text)<=${RETAINED_PROPOSAL_BYTES} THEN i.dependencies=p.dependencies ELSE false END AS item_dependencies_match,
+      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES} THEN p.result ELSE NULL END AS result,
       p.proposal_hash,p.dependency_hash,p.status AS proposal_status,j.state AS job_state,j.cancel_requested
       FROM pf_job_items i JOIN pf_jobs j ON j.project_id=i.project_id AND j.id=i.job_id
       JOIN pf_proposals p ON p.project_id=i.project_id AND p.job_id=i.job_id AND p.cable_id=i.cable_id AND p.id=$4

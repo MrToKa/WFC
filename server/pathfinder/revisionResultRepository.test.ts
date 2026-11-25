@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { RETAINED_PROPOSAL_BYTES, RETAINED_WRITE_RECEIPT_BYTES } from './retainedProposalLimits.js';
 import type { Pool, PoolClient } from 'pg';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LengthLedger } from '../../shared/pathfinderLengthLedger.js';
@@ -234,7 +235,7 @@ async function automaticBaselineChains(cables: number, depth: number, displaySco
         payload_hash: hash(request), proposal_id: proposalId, before_snapshot: before, after_snapshot: after, provenance, dependencies: deps,
         result, proposal_hash: proposalHash, dependency_hash: hash(deps), job_id: jobId, status: 'calculated', applied_at_exact: new Date(now).toISOString() };
       // PostgreSQL's existing per-receipt body gate is respected by this fixture.
-      expect(Buffer.byteLength(JSON.stringify(before) + JSON.stringify(after) + JSON.stringify(provenance))).toBeLessThan(AUTOMATIC_PAIR_LIMITS.receiptBytes);
+      expect(Buffer.byteLength(JSON.stringify(before) + JSON.stringify(after) + JSON.stringify(provenance))).toBeLessThan(RETAINED_WRITE_RECEIPT_BYTES);
       receipts.set(receiptId, row); mandates.set(mandate.id, { record: mandate, record_sha256: mandate.contentSha256 });
       histories.set(history.id, { ...after, id: history.id, version: history.version, change_source: 'pathfinder', changed_by: who.userId, cable_number: at + 1 });
       const receiptSha256 = hash({ id: row.id, projectId: pid, cableId, actorId: row.actor_id, idempotencyKey: row.idempotency_key,
@@ -534,7 +535,7 @@ describe('immutable admission snapshots and revision envelopes', () => {
     expect(initialFillProof).toHaveBeenCalledOnce(); expect(initialFillProof.mock.calls[0][0]).toMatchObject({ projectId: pid, cableId: id(10), seal,
       dependencies: p.deps, result: p.result });
     const sql = f.calls.find(call => call.sql.includes('revision:latest-accepted'))!.sql;
-    expect(sql).toContain('octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144');
+    expect(sql).toContain(`octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES}`);
     expect(sql).toContain("IN('pathfinder.initial-fill.v1','pathfinder.initial-fill.v2','pathfinder.apply.v3','pathfinder.automatic-pair.v1','pathfinder.automatic-pair-capacity-clear.v1')");
   });
   it('delegates the newest protected initial-fill baseline to the complete historical receipt reader', async () => {
