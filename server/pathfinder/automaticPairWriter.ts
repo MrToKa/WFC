@@ -23,6 +23,7 @@ import { readVerifiedSameEndpointCurrent, type VerifiedSameEndpointCurrent } fro
 import { isCapacityNoPathResult, automaticPairCapacityClearTransition, readCurrentCapacityClearEvidence, capacityClearItemApplicable,
   validCapacityClearEvidence, readCurrentPositiveCapacity, type CapacityClearEvidence } from './capacityClearWrite.js';
 import { automaticPairBaselineSnapshot, automaticPairMaterialBaselineCurrent, automaticPairMaterialObservation } from './automaticPairSnapshot.js';
+import { RETAINED_PROPOSAL_BYTES, RETAINED_WRITE_RECEIPT_BYTES } from './retainedProposalLimits.js';
 
 type Row = Record<string, any>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Automatic routing and Design length update was refused; current values are retained.'); };
@@ -54,7 +55,7 @@ export function createAutomaticPairWriter(pool: Pool, adapters: AutomaticPairWri
       JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id
       JOIN pf_job_items i ON i.project_id=p.project_id AND i.job_id=p.job_id AND i.cable_id=p.cable_id
       WHERE p.project_id=$1 AND p.job_id=$2 AND p.cable_id=$3
-      AND octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144 FOR SHARE OF p,i,j`, [claim.projectId, claim.jobId, claim.cableId])).rows;
+      AND octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES} FOR SHARE OF p,i,j`, [claim.projectId, claim.jobId, claim.cableId])).rows;
     if (rows.length !== 1) return fail('AUTOMATIC_PAIR_EXACT_RESULT_REQUIRED'); const p = rows[0];
     if (p.job_id !== mandate.jobId || p.cable_id !== mandate.cableId || p.request_hash !== mandate.requestSha256)
       return fail('AUTOMATIC_PAIR_EXACT_REQUEST_REQUIRED');
@@ -189,7 +190,7 @@ export function createAutomaticPairWriter(pool: Pool, adapters: AutomaticPairWri
           validationMethod: 'automatic-owned-capacity-clear', capacityEvidence })
         : automaticPairProvenanceSchema.parse({ ...provenanceBody, schemaVersion: 'pathfinder.automatic-pair.v1', validationMethod: 'automatic-owned-pair', barrierEvidence });
       const recordedBefore = automaticPairBaselineSnapshot(before, m.baselinePolicy), recordedAfter = automaticPairBaselineSnapshot(after, m.baselinePolicy);
-      if (Buffer.byteLength(canonicalPurposeJson({ before: recordedBefore, after: recordedAfter, provenance })) > AUTOMATIC_PAIR_LIMITS.receiptBytes) return fail('AUTOMATIC_PAIR_RECEIPT_LIMIT', 413);
+      if (Buffer.byteLength(canonicalPurposeJson({ before: recordedBefore, after: recordedAfter, provenance })) > RETAINED_WRITE_RECEIPT_BYTES) return fail('AUTOMATIC_PAIR_RECEIPT_LIMIT', 413);
       const receiptId = randomUUID(); await client.query(`INSERT INTO pf_apply_receipts(id,project_id,actor_id,idempotency_key,payload_hash,proposal_id,cable_id,before_snapshot,after_snapshot,provenance)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [receiptId, m.projectId, m.actorId, request.idempotencyKey, automaticPairHash(request), p.id, m.cableId, recordedBefore, recordedAfter, provenance]);
       await currentScope(); await fence(client, claim); await mandateFence(client, m); signal?.throwIfAborted();

@@ -14,11 +14,11 @@ import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.j
 import { createAutomaticPairReceiptProofReader } from './automaticPairReceiptProof.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
 import { exactObstacleRemarksTransition } from './obstacleRemarks.js';
+import { RETAINED_PROPOSAL_BYTES, RETAINED_WRITE_RECEIPT_BYTES } from './retainedProposalLimits.js';
 import { verifyBarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import { verifyMixedBarrierEngineIdentity, MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE,
   MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE, MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE } from '../../shared/pathfinderBarrierMixed.js';
 
-export const WORKFLOW_PROOF_BYTES = 256 * 1024;
 type Data = Record<string, any>;
 type Verified = { raw: Data; dependencies: DependencySnapshot; result: EngineResponse; seal: NonNullable<Awaited<ReturnType<typeof verifyRevisionResultForProposal>>> };
 const object = (value: unknown): Data | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Data : null;
@@ -92,7 +92,7 @@ export async function readWorkflowVerifiedProposal(client: PoolClient, projectId
     j.state AS job_state,j.cancel_requested,i.state AS item_state,i.status AS item_status
     FROM pf_proposals p JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id
     LEFT JOIN pf_job_items i ON i.project_id=p.project_id AND i.job_id=p.job_id AND i.cable_id=p.cable_id
-    WHERE p.project_id=$1 AND p.cable_id=$2 AND p.id=$3`, [projectId, cableId, proposalId, WORKFLOW_PROOF_BYTES])).rows[0];
+    WHERE p.project_id=$1 AND p.cable_id=$2 AND p.id=$3`, [projectId, cableId, proposalId, RETAINED_PROPOSAL_BYTES])).rows[0];
   try {
     if (!raw || raw.id !== proposalId || raw.project_id !== projectId || raw.cable_id !== cableId || raw.status !== 'calculated'
       || !policyHashSchema.safeParse(raw.proposal_hash).success || !policyHashSchema.safeParse(raw.dependency_hash).success) return null;
@@ -128,7 +128,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
       v.id AS review_id,v.actor_id AS review_actor,v.proposal_id AS review_proposal,v.proposal_hash AS review_proposal_hash,
       v.validation_method,v.revision_result_sha256,v.review_dependency_sha256,v.review_login_id
       FROM pf_apply_receipts r LEFT JOIN pf_reviews v ON v.project_id=r.project_id AND v.id::text=r.provenance->>'reviewId'
-      WHERE r.project_id=$1 AND r.cable_id=$2 ORDER BY r.applied_at DESC,r.id DESC LIMIT 1`, [projectId, cable.id, WORKFLOW_PROOF_BYTES])).rows[0]; check();
+      WHERE r.project_id=$1 AND r.cable_id=$2 ORDER BY r.applied_at DESC,r.id DESC LIMIT 1`, [projectId, cable.id, RETAINED_WRITE_RECEIPT_BYTES])).rows[0]; check();
     try {
       if (!receipt || receipt.project_id !== projectId || receipt.cable_id !== cable.id || !policyUuidSchema.safeParse(receipt.proposal_id).success) return null;
       // A valid older own-write receipt cannot certify a newer displayed

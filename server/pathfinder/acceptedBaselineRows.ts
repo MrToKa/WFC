@@ -3,6 +3,7 @@ import { REVISION_RESULTS_LIMITS } from '../../shared/pathfinderRevisionResults.
 import { principalTransaction } from './auth.js';
 import { PathFinderError } from './errors.js';
 import type { JobPrincipal } from './jobContracts.js';
+import { RETAINED_PROPOSAL_BYTES, RETAINED_WRITE_RECEIPT_BYTES } from './retainedProposalLimits.js';
 
 type Row = Record<string, unknown>;
 export type AcceptedRows = Map<string, Row | null>;
@@ -21,9 +22,11 @@ const joins = `FROM latest JOIN pf_apply_receipts r ON r.id=latest.id AND r.proj
       LEFT JOIN pf_revision_results s ON s.project_id=p.project_id AND s.proposal_id=p.id
       LEFT JOIN pf_reviews v ON v.project_id=r.project_id AND v.id::text=r.provenance->>'reviewId'`;
 const version = `jsonb_build_array(r.id,r.xmin::text,p.id,p.xmin::text,s.id,s.xmin::text,v.id,v.xmin::text)::text`;
+// Keep a full query batch within the previous 50 MiB combined proof budget.
+export const MAX_ACCEPTED_BASELINE_BATCH = Math.floor(50 * 1024 ** 2 / (RETAINED_PROPOSAL_BYTES + RETAINED_WRITE_RECEIPT_BYTES));
 const retainedWriteBody = `r.provenance->>'schemaVersion' IN('pathfinder.initial-fill.v1','pathfinder.initial-fill.v2','pathfinder.apply.v3','pathfinder.automatic-pair.v1','pathfinder.automatic-pair-capacity-clear.v1') AND
-    octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)
-      +octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144`;
+    octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=${RETAINED_WRITE_RECEIPT_BYTES} AND
+    octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES}`;
 // OFFSET 0 keeps PostgreSQL from repeating the size guard for every retained JSON column.
 export const acceptedRowsSql = `/* revision:latest-accepted */ ${latest}
       SELECT ${version} AS row_version,r.id AS receipt_id,r.cable_id,r.proposal_id,r.applied_at,
@@ -126,8 +129,9 @@ export async function prefetchAcceptedRows(
     // Each group releases its project and authority locks before the next.
     // Fall back to live reads when the worker's retained JSON budget is full.
     let bytes = 0;
-    for (let at = 0; at < ids.length; at += chunk) {
-      const group = ids.slice(at, at + chunk);
+    const batch = Math.min(chunk, MAX_ACCEPTED_BASELINE_BATCH);
+    for (let at = 0; at < ids.length; at += batch) {
+      const group = ids.slice(at, at + batch);
       const rows = await read((client) => readAcceptedRows(client, project, group));
       for (const id of group) cache.set(id, null);
       for (const row of rows) {

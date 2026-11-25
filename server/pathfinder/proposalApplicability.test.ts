@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { RETAINED_PROPOSAL_BYTES } from './retainedProposalLimits.js';
 import type { PoolClient } from 'pg';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability.js';
@@ -116,8 +117,8 @@ describe('version-specific sealed cable applicability with mocked SQL and scoped
     const f=barrierFixture(parent),value=await f.run();
     expect(value).toEqual({applicable:true,evidence:{schemaVersion:'wfc.pf.sealed-cable-applicability.v2',dependencyVersion:'pathfinder.dependencies.v8',
       projectId,jobId,cableId,proposalId,dependencyHash:f.input.dependencyHash,scope:'sealed-cable-item'}});
-    expect(f.query.mock.calls[0][0]).toContain('octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144');
-    expect(f.query.mock.calls[0][0]).toContain('CASE WHEN octet_length(i.dependencies::text)<=262144 THEN i.dependencies=p.dependencies ELSE false END AS item_dependencies_match');
+    expect(f.query.mock.calls[0][0]).toContain(`octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES}`);
+    expect(f.query.mock.calls[0][0]).toContain(`CASE WHEN octet_length(i.dependencies::text)<=${RETAINED_PROPOSAL_BYTES} THEN i.dependencies=p.dependencies ELSE false END AS item_dependencies_match`);
     expect(f.query.mock.calls[0][0]).not.toContain('AS proposal_dependencies');
     expect(f.query.mock.calls[0][1]).toEqual([projectId,jobId,cableId,proposalId]);
     expect(authority).toHaveBeenCalledExactlyOnceWith(f.client,{projectId,jobId,cableId,lock:true});expect(wholeAuthority).not.toHaveBeenCalled();

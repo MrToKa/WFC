@@ -5,7 +5,8 @@ import type { CableWorkflowRow } from '../../shared/pathfinderCableWorkflow.js';
 import type { BarrierDependencySnapshot, DependencySnapshot, EngineResponse } from './jobContracts.js';
 import { defaultOptions, optionsSchema, engineResponseSchema } from './jobContracts.js';
 import { hash } from './dependencies.js';
-import { createCableWorkflowProofReader, readWorkflowVerifiedProposal, WORKFLOW_PROOF_BYTES, normalizeSavedDisplayComparison } from './cableWorkflowProof.js';
+import { createCableWorkflowProofReader, readWorkflowVerifiedProposal, normalizeSavedDisplayComparison } from './cableWorkflowProof.js';
+import { RETAINED_PROPOSAL_BYTES } from './retainedProposalLimits.js';
 import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 import { syntheticBarrierEngineIdentity } from './calculationFixtures.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
@@ -395,7 +396,7 @@ describe('cable workflow positive result evidence (synthetic boundaries)', () =>
     expect(proof.scope).toHaveBeenCalledWith(f.dependencies);
     expect(proof.seal).toHaveBeenCalledWith(f.client, { projectId, proposalId, result: f.result, dependencies: f.dependencies, proposalHash: f.raw.proposal_hash });
     expect(f.query.mock.calls[0][0]).toContain('octet_length(p.dependencies::text)+octet_length(p.result::text)<=$4');
-    expect(WORKFLOW_PROOF_BYTES).toBe(256 * 1024);
+    expect(f.query.mock.calls[0]).toEqual([expect.any(String), [projectId, cableId, proposalId, RETAINED_PROPOSAL_BYTES]]);
   });
   it.each(['project_id', 'cable_id', 'id'])('rejects exchanged %s proof identity', async field => {
     const f = fixture(); f.raw[field] = id(99);

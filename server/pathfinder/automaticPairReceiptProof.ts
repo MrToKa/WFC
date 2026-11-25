@@ -14,6 +14,7 @@ import { requireBarrierWriteEvidence } from './barrierWrites.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { designLengthCompatibilityIssue, routeCompatibilityIssue, type DependencySnapshot, type EngineResponse } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
+import { RETAINED_PROPOSAL_BYTES, RETAINED_WRITE_RECEIPT_BYTES } from './retainedProposalLimits.js';
 import { automaticPairCapacityClearTransition, validCapacityClearEvidence } from './capacityClearWrite.js';
 import { continuesAutomaticSnapshot, automaticPairObservedSnapshot, validAutomaticPairMaterialObservation } from './automaticPairSnapshot.js';
 
@@ -64,10 +65,10 @@ export function createAutomaticPairReceiptProofReader(client: PoolClient, check:
       CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$4 THEN r.before_snapshot ELSE NULL END AS before_snapshot,
       CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$4 THEN r.after_snapshot ELSE NULL END AS after_snapshot,
       CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$4 THEN r.provenance ELSE NULL END AS provenance,
-      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=$4 THEN p.dependencies ELSE NULL END AS dependencies,
-      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=$4 THEN p.result ELSE NULL END AS result,p.proposal_hash,p.dependency_hash,p.job_id,p.status,
+      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES} THEN p.dependencies ELSE NULL END AS dependencies,
+      CASE WHEN octet_length(p.dependencies::text)+octet_length(p.result::text)<=${RETAINED_PROPOSAL_BYTES} THEN p.result ELSE NULL END AS result,p.proposal_hash,p.dependency_hash,p.job_id,p.status,
       r.applied_at::text AS applied_at_exact FROM pf_apply_receipts r JOIN pf_proposals p ON p.project_id=r.project_id AND p.id=r.proposal_id AND p.cable_id=r.cable_id
-      WHERE r.project_id=$1 AND r.cable_id=$2 AND r.id=$3`, [projectId, cableId, receiptId, AUTOMATIC_PAIR_LIMITS.receiptBytes]);
+      WHERE r.project_id=$1 AND r.cable_id=$2 AND r.id=$3`, [projectId, cableId, receiptId, RETAINED_WRITE_RECEIPT_BYTES]);
     if (rows.length !== 1) return null; const r = rows[0], before = r.before_snapshot, after = r.after_snapshot;
     const clear = automaticPairCapacityClearProvenanceSchema.safeParse(r.provenance);
     if (r.id !== receiptId || r.project_id !== projectId || r.cable_id !== cableId
