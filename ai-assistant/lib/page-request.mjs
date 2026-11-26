@@ -44,6 +44,7 @@ export async function answerPageRequest(adapter, { prompt, page, catalog }) {
         'Return materials only for an explicit instruction to add new items to the supplied catalog. ' +
         'Use type as the item name. Copy only supplied material facts, keep identifiers exact, ' +
         'Map orderMeasurement to pcs, pack or meters and packaging to m, Package, Box, Drum or pcs. ' +
+        'Set source only to an exact http:// or https:// link supplied in the user message. Use null for document names, vendor names, and missing links. ' +
         'Use null for unknown optional fields. Combine neither different items nor different part numbers. ' +
         'If any requested row is ambiguous, unnamed, destined for another catalog, or the batch exceeds 25 items, ' +
         'return an empty materials array and explain what is needed. ' +

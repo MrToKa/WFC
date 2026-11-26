@@ -10,9 +10,14 @@ import { pagePrompt, requestPageAssistant } from './pageRequest.js';
 
 type MaterialInput = z.infer<typeof createMaterialTrayInstallationMaterialSchema>;
 const requestSchema = z.object({ prompt: pagePrompt }).strict();
-const materialBatch = z.array(
+const sourceField = createMaterialTrayInstallationMaterialSchema.shape.source;
+const materialBatch = (prompt: string) => z.array(
   z.record(z.unknown()).transform((row) =>
-    Object.fromEntries(Object.entries(row).filter(([, value]) => value !== null)),
+    Object.fromEntries(Object.entries(row).filter(([field, value]) => {
+      if (value === null) return false;
+      if (field !== 'source') return true;
+      return typeof value === 'string' && sourceField.safeParse(value).success && prompt.includes(value.trim());
+    })),
   ).pipe(createMaterialTrayInstallationMaterialSchema),
 ).max(25);
 
@@ -30,7 +35,7 @@ export function registerMaterialAssistant(
 
     try {
       const output = await requestPageAssistant(parsed.data.prompt, '/materials', catalog);
-      const batch = materialBatch.safeParse(output.materials);
+      const batch = materialBatch(parsed.data.prompt).safeParse(output.materials);
       if (!batch.success) {
         const issue = batch.error.issues[0];
         res.status(422).json({ error: `Invalid material data at ${issue.path.join('.')}. ${issue.message}` });
