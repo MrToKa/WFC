@@ -17,6 +17,7 @@ import ExcelJS from 'exceljs';
 import { uploadExcelFile } from '../utils/excelUpload.js';
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
+import { registerMaterialAssistant } from '../assistant/materialRequest.js';
 import { materialAuditPool as pool } from '../services/materialAuditPool.js';
 import {
   mapMaterialTrayInstallationMaterialRow,
@@ -115,6 +116,37 @@ type InstallationMaterialCatalogConfig = {
   fileSlug: string;
 };
 
+export function insertInstallationMaterial(
+  db: Pick<typeof pool, 'query'>,
+  table: InstallationMaterialCatalogConfig['table'] | 'material_cable_installation_materials',
+  data: z.infer<typeof createMaterialTrayInstallationMaterialSchema>,
+) {
+  return db.query<MaterialTrayInstallationMaterialRow>(
+    `INSERT INTO ${table} (
+     id, type, purpose, material, description, manufacturer, part_no,
+     dimension_mm, weight_kg, unit_price, minimum_order_quantity, order_measurement,
+     packaging, source
+   ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+   RETURNING *`,
+    [
+      randomUUID(),
+      data.type.trim(),
+      normalizeOptionalString(data.purpose),
+      normalizeOptionalString(data.material),
+      normalizeOptionalString(data.description),
+      normalizeOptionalString(data.manufacturer),
+      normalizeOptionalString(data.partNo),
+      normalizeOptionalString(data.dimensionMm),
+      data.weightKg ?? null,
+      data.unitPrice ?? 0,
+      data.minimumOrderQuantity ?? 1,
+      data.orderMeasurement ?? 'pcs',
+      data.packaging ?? 'pcs',
+      normalizeOptionalString(data.source),
+    ],
+  );
+}
+
 // All catalogs use the same fields, import rules, permissions, and composition routes.
 export const createInstallationMaterialCatalogRouter = (
   config: InstallationMaterialCatalogConfig,
@@ -141,6 +173,9 @@ export const createInstallationMaterialCatalogRouter = (
 `;
 
   const router = Router();
+  registerMaterialAssistant(router, config.label, (client, data) =>
+    insertInstallationMaterial(client, config.table, data),
+  );
 
   const isPostgresError = (error: unknown, code: string): boolean =>
     typeof error === 'object' &&
@@ -223,30 +258,7 @@ export const createInstallationMaterialCatalogRouter = (
 
       const data = parsed.data;
       try {
-        const result = await pool.query<MaterialTrayInstallationMaterialRow>(
-          `INSERT INTO ${config.table} (
-           id, type, purpose, material, description, manufacturer, part_no,
-           dimension_mm, weight_kg, unit_price, minimum_order_quantity, order_measurement,
-           packaging, source
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-         RETURNING *`,
-          [
-            randomUUID(),
-            data.type.trim(),
-            normalizeOptionalString(data.purpose),
-            normalizeOptionalString(data.material),
-            normalizeOptionalString(data.description),
-            normalizeOptionalString(data.manufacturer),
-            normalizeOptionalString(data.partNo),
-            normalizeOptionalString(data.dimensionMm),
-            data.weightKg ?? null,
-            data.unitPrice ?? 0,
-            data.minimumOrderQuantity ?? 1,
-            data.orderMeasurement ?? 'pcs',
-            data.packaging ?? 'pcs',
-            normalizeOptionalString(data.source),
-          ],
-        );
+        const result = await insertInstallationMaterial(pool, config.table, data);
         res.status(201).json({
           [config.itemKey]: mapMaterialTrayInstallationMaterialRow(result.rows[0]),
         });

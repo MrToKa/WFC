@@ -1,3 +1,4 @@
+import { pageAssistantRouter } from './assistant/pageRoutes.js';
 import { materialChangeLogsRouter } from './routes/materialChangeLogsRoutes.js';
 import { withMaterialAuditActor } from './services/materialAuditContext.js';
 import cors from 'cors';
@@ -136,6 +137,7 @@ export const createApp = (): Express => {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/assistant', pageAssistantRouter);
   app.use('/api/preparer', createPreparerRouter());
   app.use('/api/users', userRouter);
   app.use('/api/admin', adminUsersRouter);

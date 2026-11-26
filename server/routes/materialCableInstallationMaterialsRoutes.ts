@@ -1,3 +1,5 @@
+import { insertInstallationMaterial } from './installationMaterialCatalogRoutes.js';
+import { registerMaterialAssistant } from '../assistant/materialRequest.js';
 import {
   materialIdentityPredicate,
   materialIdentityConflict,
@@ -119,6 +121,10 @@ materialCableInstallationMaterialsRouter.get(
   },
 );
 
+registerMaterialAssistant(materialCableInstallationMaterialsRouter, 'Cable installation materials', (client, data) =>
+  insertInstallationMaterial(client, 'material_cable_installation_materials', data),
+);
+
 materialCableInstallationMaterialsRouter.post(
   '/',
   authenticate,
@@ -131,78 +137,8 @@ materialCableInstallationMaterialsRouter.post(
       return;
     }
 
-    const {
-      type,
-      purpose,
-      material,
-      description,
-      manufacturer,
-      partNo,
-      dimensionMm,
-      weightKg,
-      unitPrice,
-      minimumOrderQuantity,
-      orderMeasurement,
-      packaging,
-      source,
-    } = parseResult.data;
-
     try {
-      const result = await pool.query<MaterialCableInstallationMaterialRow>(
-        `
-          INSERT INTO material_cable_installation_materials (
-            id,
-            type,
-            purpose,
-            material,
-            description,
-            manufacturer,
-            part_no
-            ,dimension_mm
-            ,weight_kg
-            ,unit_price
-            ,minimum_order_quantity
-            ,order_measurement
-            ,packaging
-            ,source
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-          RETURNING
-            id,
-            type,
-            purpose,
-            material,
-            description,
-            manufacturer,
-            part_no,
-            dimension_mm,
-            weight_kg,
-            unit_price,
-            minimum_order_quantity,
-            order_measurement,
-            packaging,
-            source,
-            created_at,
-            updated_at;
-        `,
-        [
-          randomUUID(),
-          type.trim(),
-          normalizeOptionalString(purpose ?? null),
-          normalizeOptionalString(material ?? null),
-          normalizeOptionalString(description ?? null),
-          normalizeOptionalString(manufacturer ?? null),
-          normalizeOptionalString(partNo ?? null),
-          normalizeOptionalString(dimensionMm ?? null),
-          weightKg ?? null,
-          unitPrice ?? 0,
-          minimumOrderQuantity ?? 1,
-          orderMeasurement ?? 'pcs',
-          packaging ?? 'pcs',
-          normalizeOptionalString(source ?? null),
-        ],
-      );
-
+      const result = await insertInstallationMaterial(pool, 'material_cable_installation_materials', parseResult.data);
       res.status(201).json({
         cableInstallationMaterial: mapMaterialCableInstallationMaterialRow(result.rows[0]),
       });

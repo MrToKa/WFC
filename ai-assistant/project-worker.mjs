@@ -1,3 +1,4 @@
+import { answerPageRequest } from './lib/page-request.mjs';
 import { createServer } from 'node:http';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
@@ -71,7 +72,7 @@ export function createProjectWorker({ secret, adapter, db, maxPages = 60, ceilin
       res.end(JSON.stringify(body));
     };
     if (req.url === '/health' && req.method === 'GET') return reply(200, { status: 'ok' });
-    if (!['/analyze', '/answer', '/model-decisions'].includes(req.url) || req.method !== 'POST')
+    if (!['/analyze', '/answer', '/model-decisions', '/page-request'].includes(req.url) || req.method !== 'POST')
       return reply(404, { error: 'Not found' });
     if (!timingSafeEqual(digest(req.headers.authorization || ''), digest('Bearer ' + secret)))
       return reply(403, { error: 'Forbidden' });
@@ -84,12 +85,15 @@ export function createProjectWorker({ secret, adapter, db, maxPages = 60, ceilin
       let bytes = 0;
       for await (const chunk of req) {
         bytes += chunk.length;
-        const limit = req.url === '/model-decisions' ? 48 * 1024 : req.url === '/answer' ? 128 * 1024 : maxRequestBytes;
+        const limit = req.url === '/page-request' ? 64 * 1024 : req.url === '/model-decisions' ? 48 * 1024 : req.url === '/answer' ? 128 * 1024 : maxRequestBytes;
         if (bytes > limit)
           throw Error('Assistant request exceeds the size limit.');
         chunks.push(chunk);
       }
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (req.url === '/page-request') {
+        return reply(200, await answerPageRequest(adapter, body));
+      }
       if (req.url === '/model-decisions') {
         const request = decisionsRequest(body);
         scopePrefix = request.project + '/' + request.job + '/';

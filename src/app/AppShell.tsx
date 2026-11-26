@@ -232,7 +232,9 @@ export const AppShell = () => {
       <main id="app-root" className={styles.main} role="main" tabIndex={-1}>
         <Suspense fallback={<Spinner label="Loading page..." />}>
           <Outlet />
-          {user && !/^\/(projects|materials)\/[^/]+/.test(pathname) && <AssistantPanel key={pathname} />}
+          {user && !/^\/(projects|materials)\/[^/]+/.test(pathname) &&
+            !/^\/materials\/?$/.test(pathname) &&
+            <AssistantPanel key={pathname} page={pathname} />}
         </Suspense>
       </main>
     </div>

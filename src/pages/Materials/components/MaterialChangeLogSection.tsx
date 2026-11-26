@@ -69,7 +69,7 @@ export const MaterialChangeLogSection = ({
 
   return (
     <>
-    <AssistantPanel key={materialId} />
+    <AssistantPanel key={materialId} page="/materials/details" />
     <Accordion collapsible defaultOpenItems={[]} key={`${category}:${materialId}`}>
       <AccordionItem value="change-log" className={styles.card}>
         <AccordionHeader>Change log</AccordionHeader>

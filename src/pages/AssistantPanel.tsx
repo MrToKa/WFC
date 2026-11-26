@@ -5,6 +5,7 @@ import {
   AccordionHeader,
   Spinner,
 } from '@fluentui/react-components';
+import { PageAssistant, type AssistantCatalog } from './PageAssistant';
 import { useAuth } from '@/context/AuthContext';
 import { canReadCatalogs } from '@/utils/permissions';
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
@@ -12,13 +13,17 @@ import { useProjectDetailsStyles } from './ProjectDetails.styles';
 const Workspace = lazy(() =>
   import('./Assistant').then((m) => ({ default: m.AssistantWorkspace })),
 );
-const ProjectPicker = lazy(() =>
-  import('./Assistant').then((m) => ({ default: m.AssistantProjects })),
-);
+type Props = {
+  projectId?: string;
+  writable?: boolean;
+  initiallyOpen?: boolean;
+  page?: string;
+  catalog?: AssistantCatalog;
+};
 
-type Props = { projectId?: string; writable?: boolean; initiallyOpen?: boolean };
-
-export function AssistantPanel({ projectId, writable = false, initiallyOpen = false }: Props) {
+export function AssistantPanel({
+  projectId, writable = false, initiallyOpen = false, page = '/', catalog,
+}: Props) {
   const { user, token } = useAuth();
   const styles = useProjectDetailsStyles();
   const [chat, setChat] = useState<'initial' | 'open' | 'closed'>(
@@ -55,7 +60,12 @@ export function AssistantPanel({ projectId, writable = false, initiallyOpen = fa
                   admin={Boolean(user.isAdmin)}
                 />
               ) : (
-                <ProjectPicker key={JSON.stringify([user.id, token])} />
+                <PageAssistant
+                  key={JSON.stringify([user.id, token, page, catalog?.endpoint])}
+                  token={token}
+                  page={page}
+                  catalog={user.isAdmin ? catalog : undefined}
+                />
               )}
             </Suspense>
           )}

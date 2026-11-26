@@ -18,3 +18,29 @@ it('loads on demand and preserves a draft when collapsed and reopened', async ()
   fireEvent.click(button);
   expect(screen.getByLabelText('draft')).toHaveValue('GVL244');
 });
+
+
+it('sends a page request without a project selector', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(JSON.stringify({ answer: 'Catalog information' }), {
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
+  try {
+    render(<AssistantPanel page="/materials" initiallyOpen />);
+    expect(screen.queryByText('Choose a project')).toBeNull();
+    const field = await screen.findByRole('textbox', { name: 'Message to AI Assistant' });
+    fireEvent.change(field, { target: { value: 'Explain ordering units' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Catalog information')).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/assistant/page'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ prompt: 'Explain ordering units', page: '/materials' }),
+      }),
+    );
+  } finally {
+    fetchMock.mockRestore();
+  }
+});

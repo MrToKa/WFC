@@ -1,3 +1,4 @@
+import { AssistantPanel } from './AssistantPanel';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Body1,
@@ -775,6 +776,18 @@ export const Materials = () => {
           />
         )}
       </div>
+
+      <AssistantPanel
+        page="/materials"
+        catalog={selectedCatalog && catalogHook && isAdmin ? {
+          endpoint: selectedCatalog.category + 's',
+          label: selectedCatalog.label,
+          onCreated: () => {
+            void catalogHook.reloadCableInstallationMaterials({ showSpinner: false });
+            void refreshStepStatus();
+          },
+        } : undefined}
+      />
 
       <TrayDialog
         open={traysHook.isTrayDialogOpen}
