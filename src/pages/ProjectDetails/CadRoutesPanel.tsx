@@ -12,6 +12,7 @@ import {
   Input,
   Spinner,
   Title3,
+  tokens,
 } from '@fluentui/react-components';
 import { Flowchart20Regular, TableSimple20Regular } from '@fluentui/react-icons';
 import { getApiBaseUrl } from '@/api/http';
@@ -853,7 +854,16 @@ export function CadRoutesPanel({
               <span
                 style={{ display: 'inline-flex', gap: 8, marginLeft: 8, verticalAlign: 'middle' }}
               >
-                {route.profileNeedsReview && <span>Review Trays profile</span>}
+                {route.profileNeedsReview ? <span>Review Trays profile</span> : route.substituteStep ? (
+                  <span
+                    role="img"
+                    aria-label="Trays profile assigned"
+                    title="Trays profile assigned for capacity calculations"
+                    style={{ color: tokens.colorPaletteGreenForeground1 }}
+                  >
+                    ✓
+                  </span>
+                ) : null}
                 {route.projectTrayId || route.exportedTrayId ? (
                   <span role="img" aria-label="In Trays list" title="In Trays list">
                     <TableSimple20Regular aria-hidden />

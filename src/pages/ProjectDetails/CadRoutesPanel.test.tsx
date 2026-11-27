@@ -356,11 +356,12 @@ describe('complete CAD routes', () => {
     catalogue([
       draft,
       { ...draft, id: id(11), name: 'Listed route', exportedTrayId: id(70) },
-      { ...draft, id: id(12), name: 'Published route', status: 'published', projectTrayId: id(71) },
+      { ...draft, id: id(12), name: 'Published route', status: 'published', projectTrayId: id(71), substituteStep: true },
+      { ...draft, id: id(13), name: 'Profile changed', exportedTrayId: id(72), substituteStep: true, profileNeedsReview: true },
     ]);
     show();
     await screen.findByRole('button', { name: /Main riser/ });
-    const [unlisted, listed, published] = screen.getAllByRole('listitem');
+    const [unlisted, listed, published, changed] = screen.getAllByRole('listitem');
     expect(within(unlisted).queryByRole('img')).not.toBeInTheDocument();
     expect(within(listed).getByRole('img', { name: 'In Trays list' })).toBeInTheDocument();
     expect(
@@ -368,6 +369,10 @@ describe('complete CAD routes', () => {
     ).not.toBeInTheDocument();
     expect(within(published).getByRole('img', { name: 'In Trays list' })).toBeInTheDocument();
     expect(within(published).getByRole('img', { name: 'In routing network' })).toBeInTheDocument();
+    expect(within(published).getByRole('img', { name: 'Trays profile assigned' })).toBeInTheDocument();
+    expect(within(listed).queryByRole('img', { name: 'Trays profile assigned' })).not.toBeInTheDocument();
+    expect(within(changed).getByText('Review Trays profile')).toBeInTheDocument();
+    expect(within(changed).queryByRole('img', { name: 'Trays profile assigned' })).not.toBeInTheDocument();
   });
 
   it('offers only purposes used by existing project trays, including custom names', async () => {

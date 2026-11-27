@@ -104,7 +104,26 @@ describe('substitute STEP geometry', () => {
     row!.width_mm = 500;
     expect(await (await reviewSubstitute(reviewToken)).json()).toMatchObject({ code: 'CAD_ROUTE_REVIEW_CHANGED' });
     row!.purpose = 'Changed';
-    expect(await (await reviewSubstitute()).json()).toMatchObject({ code: 'CAD_ROUTE_TRAY_EDITED' });
+    expect(await (await reviewSubstitute()).json()).toMatchObject({ code: 'CAD_ROUTE_TRAY_EDITED',
+      message: expect.stringContaining('Purpose (Control → Changed)') });
+  });
+
+  it('accepts recalculation metadata for the same length and identifies a real length change', async () => {
+    await save();
+    group.status = 'published';
+    group.project_tray_id = row!.id;
+    group.publication = { baseArtifactId: id(90), traySnapshot: {
+      id: row!.id, name: row!.name, purpose: row!.purpose, lengthMm: 1500,
+      trayType: row!.tray_type, widthMm: row!.width_mm, heightMm: row!.height_mm,
+    } };
+    row!.length_calculation = { ...(row!.length_calculation as object), calculatedAt: '2026-11-27T09:00:00Z' };
+    row!.width_mm = 450;
+    const { reviewToken } = await (await reviewSubstitute()).json();
+    expect(typeof reviewToken).toBe('string');
+    expect((await reviewSubstitute(reviewToken)).status).toBe(200);
+    row!.length_mm = 1600;
+    expect(await (await reviewSubstitute()).json()).toMatchObject({ code: 'CAD_ROUTE_TRAY_EDITED',
+      message: expect.stringContaining('Length (mm) (1500 → 1600)') });
   });
 });
 

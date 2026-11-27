@@ -164,18 +164,29 @@ cadRouteTrayExportsRouter.post('/designs/:designId/routes/:routeId/substitute-st
     const { trayType, widthMm, heightMm } = desired.fields;
     const step = { trayType, widthMm, heightMm };
     const projection = cadTrayProjection(row);
+    const publication = group.publication as { traySnapshot?: { id: string; name: string; purpose: string; lengthMm: number }; baseArtifactId: string } | null;
+    const snapshot = publication?.traySnapshot;
+    const compare = (saved: Pick<Projection, 'name' | 'purpose' | 'lengthMm'>, source: string) => {
+      const fields = [['Name', saved.name, projection.name], ['Purpose', saved.purpose, projection.purpose],
+        ['Length (mm)', saved.lengthMm, projection.lengthMm]] as const;
+      const differences = fields.filter(([, before, current]) => before !== current);
+      if (differences.length) {
+        const details = differences.map(([field, before, current]) => `${field} (${before ?? 'empty'} → ${current ?? 'empty'})`);
+        return fail('CAD_ROUTE_TRAY_EDITED', `${group.name} differs from ${source} in Trays. ${details.join('; ')}.`);
+      }
+    };
     if (link) {
       const proof = link.source_proof as { source?: unknown };
       if (!proof?.source || hash(proof.source) !== link.source_sha256)
         return fail('CAD_ROUTE_TRAY_EXPORT_INTEGRITY', 'The saved CAD source could not be verified.');
-      if (hash({ ...(link.projection as Projection), ...real }) !== hash(projection))
-        return fail('CAD_ROUTE_TRAY_EDITED', 'Resolve changes to the name, purpose or length before confirming the profile.');
+      // A recalculated timestamp or length source can differ without changing the length.
+      compare(link.projection as Projection, 'the saved CAD export');
     }
-    const publication = group.publication as { traySnapshot?: { id: string; name: string; purpose: string; lengthMm: number }; baseArtifactId: string } | null;
-    const snapshot = publication?.traySnapshot;
-    if (group.status === 'published' && (!snapshot || snapshot.id !== trayId || snapshot.name !== row.name ||
-        snapshot.purpose !== row.purpose || snapshot.lengthMm !== projection.lengthMm))
-      return fail('CAD_ROUTE_CATALOG_CHANGED', 'The published route also differs in identity, purpose or length.');
+    if (group.status === 'published') {
+      if (!snapshot || snapshot.id !== trayId)
+        return fail('CAD_ROUTE_CATALOG_CHANGED', `${group.name} does not match the Trays row recorded in its publication.`);
+      compare(snapshot, 'the published CAD route');
+    }
     const reviewToken = hash({ projectId, designId, routeId, revision: group.revision, trayId, projection, publication,
       geometry: desired.sourceSha256, exportSource: link?.source_sha256 ?? null });
     if (!parsed.data.reviewToken) return { step, real, reviewToken };
