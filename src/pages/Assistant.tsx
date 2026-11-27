@@ -234,8 +234,8 @@ export function AssistantWorkspace({ projectId, token, admin, writable }: Props)
     [preview, setPreview] = useState<{ model: string; p: AssistantProposal } | null>(null);
   const [progress, setProgress] = useState('');
   const [pollError, setPollError] = useState(false);
-  const [focusedJobId, setFocusedJobId] = useState<string | null>(null);
-  const [previousJobId, setPreviousJobId] = useState('');
+  // Before opening a new chat, show the latest job's status as a shortcut to history.
+  const [focusedJobId, setFocusedJobId] = useState<string | null>();
   const [recheckDocuments, setRecheckDocuments] = useState(false);
   const [autoAssign, setAutoAssign] = useState(false);
   const [replaceConflicting, setReplaceConflicting] = useState(false);
@@ -265,12 +265,9 @@ export function AssistantWorkspace({ projectId, token, admin, writable }: Props)
   const pickedCount = attachments.length;
   const completedJobs = state?.jobs.filter((job) => job.status === 'review' && !workflowActive(job)) ?? [];
   const conversationTip = state?.jobs.find((job) => job.id === conversationTipId);
-  const previousJob = pickedCount === 0 || Boolean(previousJobId || conversationTipId)
-    ? (conversationTip?.status === 'review' && !workflowActive(conversationTip) ? conversationTip : undefined)
-      ?? completedJobs.find((job) => job.id === previousJobId) ?? completedJobs[0]
-    : undefined;
+  const previousJob = completedJobs.find((job) => job.id === conversationTipId);
   const thread: AssistantJob[] = [];
-  let turn = conversationTip ?? previousJob;
+  let turn = conversationTip;
   while (turn && !thread.some((job) => job.id === turn?.id)) {
     thread.unshift(turn);
     turn = state?.jobs.find((job) => job.id === turn?.previous_job_id);
@@ -293,8 +290,8 @@ export function AssistantWorkspace({ projectId, token, admin, writable }: Props)
       : []),
   ];
   const active = activeJobs.length > 0;
-  const awaitingJob = focusedJobId !== null && !state?.jobs.some((job) => job.id === focusedJobId);
-  const focusedJob = state?.jobs.find((job) => job.id === focusedJobId) ?? state?.jobs[0];
+  const awaitingJob = typeof focusedJobId === 'string' && !state?.jobs.some((job) => job.id === focusedJobId);
+  const focusedJob = focusedJobId === undefined ? state?.jobs[0] : state?.jobs.find((job) => job.id === focusedJobId);
   const visibleJobs = focusedJob && !isActiveJob(focusedJob)
     ? [...activeJobs, focusedJob]
     : activeJobs;
@@ -371,8 +368,19 @@ export function AssistantWorkspace({ projectId, token, admin, writable }: Props)
     setAutoAssign(false);
     setReplaceConflicting(false);
     setRecheckDocuments(false);
-    setPreviousJobId(job.id);
+    setConversationTipId(job.id);
+    composerRef.current?.focus();
+  }
+  function startNewChat() {
     setConversationTipId(null);
+    setFocusedJobId(null);
+    setInstructions('');
+    setAttachments([]);
+    setRecheckDocuments(false);
+    setAutoAssign(false);
+    setReplaceConflicting(false);
+    setError('');
+    command.current = null;
     composerRef.current?.focus();
   }
   async function applyLocations(job: AssistantJob) {
@@ -449,14 +457,10 @@ export function AssistantWorkspace({ projectId, token, admin, writable }: Props)
       {writable && (
         <>
           <span>Активен 3D модел · {state?.modelVersionId ?? 'Няма избрана версия'}</span>
-          {thread.length > 0 && (previousJobId || conversationTipId) && (
+          <div><Button disabled={busy} onClick={startNewChat}>Нов чат</Button></div>
+          {thread.length > 0 && (
             <section aria-label="Разговор с AI Assistant" style={{ display: 'grid', gap: 12 }}>
               <Subtitle2>Разговор с AI Assistant</Subtitle2>
-              <div><Button disabled={busy} onClick={() => {
-                setPreviousJobId('');
-                setConversationTipId(null);
-                setRecheckDocuments(false);
-              }}>Излез от разговора</Button></div>
               {thread.map((job) => (
                 <article key={job.id} style={{ borderInlineStart: '2px solid GrayText', paddingInline: 12 }}>
                   <strong>Ти</strong>
@@ -473,7 +477,7 @@ export function AssistantWorkspace({ projectId, token, admin, writable }: Props)
             <Textarea
               disabled={busy}
               textarea={{ ref: composerRef }}
-              placeholder={previousJob ? 'Напиши следващата команда или въпрос…' : undefined}
+              placeholder={previousJob ? 'Напиши следващата команда или въпрос…' : 'Напиши указания за новата задача…'}
               rows={4}
               value={instructions}
               maxLength={12000}
@@ -498,13 +502,13 @@ export function AssistantWorkspace({ projectId, token, admin, writable }: Props)
             <Button size="small" disabled={busy} aria-label={`Премахни ${file.name}`}
               onClick={() => setAttachments(current => current.filter(item => item.id !== id))}>Премахни</Button>
           </div>)}
-          {previousJob && (
-            <Field label="Предишен анализ" hint="По подразбиране асистентът отговаря по запазените резултати.">
-              <Select value={previousJob.id} onChange={(e) => {
-                setPreviousJobId(e.target.value);
-                setConversationTipId(null);
-                setAutoAssign(false); setReplaceConflicting(false);
+          {completedJobs.length > 0 && (
+            <Field label="Предишен анализ" hint="Избери анализ, за да продължиш по запазените му резултати.">
+              <Select disabled={busy} value={previousJob?.id ?? ''} onChange={(e) => {
+                const job = completedJobs.find((item) => item.id === e.target.value);
+                if (job) followUp(job);
               }}>
+                <option value="" disabled>Избери анализ за продължение</option>
                 {completedJobs.map((job) => (
                   <option key={job.id} value={job.id}>
                     {new Date(job.created_at).toLocaleString('bg-BG')} · {job.follow_up_mode === 'results' ? 'Отговор по резултатите' : `${job.total} документа`}

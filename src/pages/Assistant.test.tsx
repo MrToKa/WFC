@@ -72,8 +72,9 @@ describe('assistant task form', () => {
     api.files.mockResolvedValue({ files: [drawing] });
     render(<AssistantWorkspace projectId="aalborg" token="session" admin={false} writable />);
     const previous = await screen.findByRole('combobox', { name: 'Предишен анализ' });
-    const start = screen.getByRole('button', { name: 'Изпрати съобщение' });
+    expect(previous).toHaveValue('');
     fireEvent.click(screen.getAllByRole('button', { name: 'Продължи разговора' })[0]);
+    const start = screen.getByRole('button', { name: 'Изпрати съобщение' });
     expect(screen.getByRole('region', { name: 'Разговор с AI Assistant' })).toHaveTextContent('Check the pump');
     expect(screen.getByLabelText('Допълнителни указания за тази задача')).toHaveFocus();
     expect(previous).toHaveValue(latest.id);
@@ -101,6 +102,47 @@ describe('assistant task form', () => {
         followUpMode: attach ? 'documents' : 'results', files: attach ? [{id:expect.any(String), versionId:null}] : []},
       names: attach ? ['new.pdf'] : [],
     }));
+  });
+  it('starts a fresh chat without inheriting the previous analysis or its draft', async () => {
+    const oldJob = {
+      id: 'old-job', status: 'review', model_id: 'old-model', created_at: '2026-11-20T00:00:00.000Z',
+      progress: 1, total: 1, tokens: 100, estimated_usd: 0.018,
+      proposals: [], applied: {}, instructions: 'Old analysis',
+    };
+    const workspace = { rules: '', revision: 2, modelVersionId: 'active-model', jobs: [oldJob] };
+    api.request.mockImplementation(async (_path, opts) => opts.method === 'POST' ? {} : workspace);
+    render(<AssistantWorkspace projectId="aalborg" token="session" admin={false} writable />);
+
+    const previous = await screen.findByRole('combobox', { name: 'Предишен анализ' });
+    const newChat = screen.getByRole('button', { name: 'Нов чат' });
+    const composer = screen.getByLabelText('Допълнителни указания за тази задача');
+    expect(previous).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Стартирай задача' })).toBeDisabled();
+    fireEvent.change(previous, { target: { value: oldJob.id } });
+    expect(screen.getByRole('region', { name: 'Разговор с AI Assistant' })).toHaveTextContent('Old analysis');
+    fireEvent.change(composer, { target: { value: 'Unsent follow-up' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Провери документите отново' }));
+    attachFiles('old-draft.pdf');
+
+    fireEvent.click(newChat);
+    expect(composer).toHaveValue('');
+    expect(composer).toHaveFocus();
+    expect(previous).toHaveValue('');
+    expect(within(previous).getByRole('option', { name: /Old analysis/ })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Разговор с AI Assistant' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Премахни old-draft.pdf' })).toBeNull();
+
+    fireEvent.change(composer, { target: { value: 'New analysis' } });
+    attachFiles('new.pdf');
+    fireEvent.click(screen.getByRole('button', { name: 'Стартирай задача' }));
+    await waitFor(() => {
+      const { job, names } = submitted();
+      expect(job).toMatchObject({ instructions: 'New analysis', modelVersionId: 'active-model' });
+      expect(job).not.toHaveProperty('previousJobId');
+      expect(job).not.toHaveProperty('followUpMode');
+      expect(names).toEqual(['new.pdf']);
+    });
+    await waitFor(() => expect(composer).toHaveValue(''));
   });
   it('shows document analysis, 3D matching and the completion report as polling progresses', async () => {
     const job = {
