@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import { canonicalPurposeJson, normalizeCatalogKey, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { DEFAULT_DRAWING_MODES } from '../../shared/pathfinderDrawingPolicy.js';
 import { drawingSettingsWriteSchema, drawingProjectSchema, trayDrawingDataSchema, trayDrawingOverrideSchema, trayDrawingResponseSchema, trayDrawingSnapshotSchema, drawingInputHashInput, drawingSettingsHashInput, drawingContentHashInput, type DrawingSettingsWrite, type TrayDrawingResponse, type TrayDrawingSnapshot } from '../../shared/trayDrawingSnapshot.js';
-import { drawingRoutingContainsTray, makeTrayDrawingInput, trayDrawingDiagnostics as drawingDiagnostics } from '../../shared/trayDrawingInputs.js';
+import { drawingRoutingContainsTray, makeTrayDrawingInput, measureTrayDrawingFreeSpace, trayDrawingDiagnostics as drawingDiagnostics } from '../../shared/trayDrawingInputs.js';
 import { computeTrayDrawing } from '../../shared/trayDrawing/index.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { mapProjectRow } from '../models/project.js';
@@ -193,24 +193,9 @@ export async function readProjectDrawingFreeSpace(c: PoolClient, projectId: stri
     const layout = computeTrayDrawing(makeTrayDrawingInput(data, value, modes, rule?.purposeModes)), { blocked } = drawingDiagnostics(data, layout);
     commands += layout.commands.length; memberships += data.trayCables.length;
     if (commands > 2_000_000 || memberships > 500_000) return fail('DRAWING_EXPORT_CAPACITY_LIMIT', 413);
-    // Retain the existing Type A/MV free-space exclusion in both UI and XLSX.
+    // Retain the existing Type A/MV free-space exclusion from the XLSX summary.
     const excluded = data.tray.purpose?.trim().toLowerCase() === 'type a (pink color) for mv cables';
-    const summary = layout.summary, width = data.tray.widthMm;
-    const occupied = summary ? data.project.cableLayout.considerBundleSpacingAsFree ? summary.occupiedWidthWithoutBundleSpacingMm : summary.occupiedWidthWithBundleSpacingMm : null;
-    // Bottom-row occupancy can fit even when cable or clamp envelopes collide.
-    const overflowMm = summary?.overflowMm ?? 0;
-    const freeWidthMm = !width || occupied == null ? null : width - occupied;
-    const displayedFreeWidthMm = freeWidthMm !== null && freeWidthMm >= 0 && overflowMm > 0
-      ? -overflowMm
-      : freeWidthMm;
-    const freeSpace = width && displayedFreeWidthMm !== null ? displayedFreeWidthMm / width * 100 : null;
-    // A drawing can be blocked by overflow while still measuring a width deficit.
-    const metricsBlocked = blocked && !(freeSpace !== null && freeSpace < 0 && !drawingDiagnostics(data, {
-      ...layout,
-      diagnostics: layout.diagnostics.filter(({ code }) =>
-        code !== 'DRAWING_OVERFLOW' && code !== 'DRAWING_HEIGHT_OVERFLOW' && code !== 'CLAMP_HEIGHT_OVERFLOW')
-    }).blocked);
-    freeSpaceByTrayId[row.id] = excluded || metricsBlocked ? null : freeSpace;
+    freeSpaceByTrayId[row.id] = excluded ? null : measureTrayDrawingFreeSpace(data, layout, blocked)?.freeWidthPercent ?? null;
     provenance.push({ trayId: row.id, layoutSha256: drawingDigest(layout), inputSha256: drawingDigest(drawingInputHashInput(data, drawingDigest(captured.sources))), state: blocked ? 'blocked' : 'ready' });
   }
   if (!project) { const p = await ensureProjectExists(projectId, c); if (!p) return fail('PROJECT_NOT_FOUND', 404); project = drawingProjectSchema.parse(mapProjectRow(p)); }

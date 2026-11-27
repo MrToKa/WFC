@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRAWING_DEFAULTS, drawingCategory, drawingRoutingContainsTray, makeTrayDrawingInput, trayDrawingDiagnostics } from './trayDrawingInputs.js';
+import { DRAWING_DEFAULTS, drawingCategory, drawingRoutingContainsTray, makeTrayDrawingInput, measureTrayDrawingFreeSpace, trayDrawingDiagnostics } from './trayDrawingInputs.js';
 import { DEFAULT_DRAWING_MODES } from './pathfinderDrawingPolicy.js';
 import { computeTrayDrawing, classifyDrawingCategory } from './trayDrawing/index.js';
 import type { TrayDrawingResponse, TrayBundleOverride } from './trayDrawingSnapshot.js';
@@ -22,6 +22,22 @@ function data(): Data {
 const override = (value: Partial<TrayBundleOverride> = {}): TrayBundleOverride => ({ useCustom: true, categories: {}, ...value });
 
 describe('authoritative drawing input interpretation', () => {
+  it('measures occupied width and a signed deficit when the cables overlap and the divider cannot fit', () => {
+    const source = data();
+    source.tray.widthMm = 32;
+    const layout = computeTrayDrawing(makeTrayDrawingInput(source, null, {
+      ...DEFAULT_DRAWING_MODES, power: 'left', control: 'right',
+    }));
+    const { blocked, diagnostics } = trayDrawingDiagnostics(source, layout);
+    expect(blocked).toBe(true);
+    expect(diagnostics.map(({ code }) => code)).toContain('DIVIDER_GAP_UNAVAILABLE');
+    expect(measureTrayDrawingFreeSpace(source, layout, blocked)).toEqual({
+      occupiedWidthMm: 40,
+      freeWidthMm: -8,
+      freeWidthPercent: -25,
+    });
+  });
+
   it('blocks missing purpose, invalid diameter, overflow and incomplete placement after supporting named purposes', () => {
     const source = data(); source.trayCables[0].purpose = 'Plastic tubing';
     const layout = computeTrayDrawing(makeTrayDrawingInput(source, null, DEFAULT_DRAWING_MODES));

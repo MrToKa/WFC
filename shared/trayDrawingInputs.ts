@@ -29,6 +29,41 @@ export function trayDrawingDiagnostics(data: Pick<TrayDrawingPlacementData, 'tra
   return { diagnostics, blocked };
 }
 
+const widthDeficitDiagnostics = new Set([
+  'DRAWING_OVERFLOW',
+  'DRAWING_HEIGHT_OVERFLOW',
+  'CLAMP_HEIGHT_OVERFLOW',
+  'DIVIDER_GAP_UNAVAILABLE',
+]);
+
+/** Measures occupied width even when a verified layout cannot fit in the tray. */
+export function measureTrayDrawingFreeSpace(
+  data: TrayDrawingPlacementData,
+  layout: TrayDrawingLayout,
+  blocked: boolean,
+) {
+  const { summary } = layout;
+  const widthMm = data.tray.widthMm;
+  if (!summary || widthMm === null || !Number.isFinite(widthMm) || widthMm <= 0) return null;
+
+  const occupiedWidthMm = data.project.cableLayout.considerBundleSpacingAsFree
+    ? summary.occupiedWidthWithoutBundleSpacingMm
+    : summary.occupiedWidthWithBundleSpacingMm;
+  const remainingWidthMm = widthMm - occupiedWidthMm;
+  const horizontalOverflowMm = summary.overflowMm ?? 0;
+  // Cable and clamp envelopes can overlap even when the bottom row alone fits.
+  const freeWidthMm = remainingWidthMm >= 0 && horizontalOverflowMm > 0
+    ? -horizontalOverflowMm
+    : remainingWidthMm;
+
+  if (blocked && (freeWidthMm >= 0 || trayDrawingDiagnostics(data, {
+    ...layout,
+    diagnostics: layout.diagnostics.filter(({ code }) => !widthDeficitDiagnostics.has(code)),
+  }).blocked)) return null;
+
+  return { occupiedWidthMm, freeWidthMm, freeWidthPercent: freeWidthMm / widthMm * 100 };
+}
+
 /** Same full-input category/range/settings interpretation for server snapshots and local drafts. */
 export function makeTrayDrawingInput(data: TrayDrawingPlacementData, override: TrayBundleOverride | null, modes: DrawingCategoryModes, purposeModes: PurposeModes = {}) {
   const base = data.project.cableLayout;

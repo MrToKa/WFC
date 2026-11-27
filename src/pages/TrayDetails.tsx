@@ -33,7 +33,7 @@ import {
 import { fetchTrayDrawingSnapshot, saveTrayDrawingSettings, exportTrayDrawing, drawingBlobBase64, TrayDrawingApiError, type DrawingSettingsWrite } from '@/api/trayDrawing';
 import { resolveTrayAutoLength } from '@/viewer/trayAutoLength';
 import { computeTrayDrawing, replayTrayDrawing, type DrawingCanvas } from '../../shared/trayDrawing/index';
-import { makeTrayDrawingInput } from '../../shared/trayDrawingInputs';
+import { makeTrayDrawingInput, measureTrayDrawingFreeSpace, trayDrawingDiagnostics } from '../../shared/trayDrawingInputs';
 import { trayBundleOverrideSchema } from '../../shared/trayDrawingSnapshot';
 import type { TrayAutoLengthMeasurement } from '../../shared/trayAutoLength';
 import type {
@@ -85,8 +85,7 @@ import {
   TrayAutoLengthRequest,
   formatDimensionValue,
   formatWeightValue,
-  matchCableCategory,
-  calculateTrayFreeSpaceMetrics
+  matchCableCategory
 } from './TrayDetails/TrayDetails.utils';
 import { TrayFormState, TrayFormErrors } from './TrayDetails/TrayDetails.types';
 import { TrayChangeTracker } from './TrayDetails/components/TrayChangeTracker';
@@ -853,13 +852,14 @@ export const TrayDetails = () => {
   const drawingContext = JSON.stringify([projectId, trayId, token]);
   const latestDrawingContext = useRef(drawingContext); latestDrawingContext.current = drawingContext;
 
-  const verifiedDrawingLayout = useMemo(() => {
-    if (!drawingResponse || drawingResponse.snapshot.state === 'blocked') return null;
+  const drawingLayout = useMemo(() => {
+    if (!drawingResponse) return null;
     try { return localDrawingDraft
       ? computeTrayDrawing(makeTrayDrawingInput(drawingResponse.data, trayBundleOverrideSchema.parse(bundleOverrides), drawingResponse.snapshot.categoryModes, drawingResponse.snapshot.purposeModes))
       : drawingResponse.layout;
     } catch { return null; }
   }, [drawingResponse, localDrawingDraft, bundleOverrides]);
+  const verifiedDrawingLayout = drawingResponse?.snapshot.state === 'blocked' ? null : drawingLayout;
   const layoutSummary = verifiedDrawingLayout?.summary as unknown as TrayLayoutSummary | null;
 
   // Custom bundle ranges form state for tray-level configuration
@@ -1288,36 +1288,27 @@ export const TrayDetails = () => {
     trayPurposeNormalized === 'mv cable trays' ||
     trayPurposeNormalized === 'type a (pink color) for mv cables';
 
-  const freeSpaceMetrics = useMemo(
-    () =>
-      !layoutSummary ? { occupiedWidthMm: null, freeWidthPercent: null, calculationAvailable: false } : calculateTrayFreeSpaceMetrics({
-        tray,
-        cables: sortedTrayCables,
-        layout: activeProjectCableLayout ?? null,
-        spacingBetweenCablesMm: projectCableSpacingMm,
-        considerBundleSpacingAsFree,
-        layoutSummary
-      }),
-    [
-      considerBundleSpacingAsFree,
-      activeProjectCableLayout,
-      layoutSummary,
-      sortedTrayCables,
-      projectCableSpacingMm,
-      tray
-    ]
-  );
+  const freeSpaceMetrics = useMemo(() => {
+    if (!drawingResponse || !drawingLayout) return null;
+    const blocked = localDrawingDraft
+      ? trayDrawingDiagnostics(drawingResponse.data, drawingLayout).blocked
+      : drawingResponse.snapshot.state === 'blocked';
+    return measureTrayDrawingFreeSpace(drawingResponse.data, drawingLayout, blocked);
+  }, [drawingResponse, drawingLayout, localDrawingDraft]);
+  const occupiedWidthMm = freeSpaceMetrics?.occupiedWidthMm ?? null;
+  const freeWidthPercent = freeSpaceMetrics?.freeWidthPercent ?? null;
+  const freeWidthMm = freeSpaceMetrics?.freeWidthMm ?? null;
+  const hasWidthDeficit = freeWidthMm !== null && freeWidthMm < 0;
 
   const freeSpaceAlert = useMemo(() => {
     if (
-      !freeSpaceMetrics.calculationAvailable ||
-      freeSpaceMetrics.freeWidthPercent === null ||
+      freeWidthPercent === null ||
       isMvTrayPurpose
     ) {
       return null;
     }
 
-    const percent = freeSpaceMetrics.freeWidthPercent;
+    const percent = freeWidthPercent;
     const percentDisplay = `${percentageFormatter.format(percent)} %`;
 
     if (minFreeSpacePercent !== null && percent < minFreeSpacePercent) {
@@ -1342,9 +1333,7 @@ export const TrayDetails = () => {
 
     return null;
   }, [
-    freeSpaceMetrics.calculationAvailable,
-    freeSpaceMetrics.freeWidthPercent,
-    freeSpaceMetrics.occupiedWidthMm,
+    freeWidthPercent,
     isMvTrayPurpose,
     maxFreeSpacePercent,
     minFreeSpacePercent,
@@ -1642,73 +1631,30 @@ export const TrayDetails = () => {
     )} = ${numberFormatter.format(totalWeightKg)} kg`;
   }, [trayTotalOwnWeightKg, cablesTotalWeightKg, totalWeightKg, numberFormatter]);
 
-  const occupiedWidthDisplay = freeSpaceMetrics.occupiedWidthMm === null
+  const occupiedWidthDisplay = occupiedWidthMm === null
     ? 'N/A'
-    : `${numberFormatter.format(freeSpaceMetrics.occupiedWidthMm)} mm`;
+    : `${numberFormatter.format(occupiedWidthMm)} mm`;
 
-  const trayFreeSpaceDisplay = freeSpaceMetrics.freeWidthPercent === null
+  const trayFreeSpaceDisplay = freeWidthPercent === null
     ? 'N/A'
-    : `${percentageFormatter.format(freeSpaceMetrics.freeWidthPercent)} %`;
+    : `${percentageFormatter.format(freeWidthPercent)} %`;
 
-  const rawTrayWidthMm = tray?.widthMm ?? null;
-  const trayWidthMm =
-    typeof rawTrayWidthMm === 'number' && Number.isFinite(rawTrayWidthMm) && rawTrayWidthMm > 0
-      ? rawTrayWidthMm
+  const trayWidthMm = drawingResponse?.data.tray.widthMm ?? null;
+
+  const totalCableWidthMm = drawingLayout?.summary?.totalCableWidthMm;
+  const occupiedWidthFormula =
+    occupiedWidthMm !== null && totalCableWidthMm !== undefined && totalCableWidthMm <= occupiedWidthMm
+      ? `${numberFormatter.format(totalCableWidthMm)} + ${numberFormatter.format(
+        occupiedWidthMm - totalCableWidthMm
+      )} = ${occupiedWidthDisplay}`
       : null;
 
-  const occupiedWidthFormula = useMemo(() => {
-    const occupiedWidth = freeSpaceMetrics.occupiedWidthMm;
-    if (occupiedWidth === null || Number.isNaN(occupiedWidth)) {
-      return null;
-    }
-
-    if (
-      layoutSummary &&
-      typeof layoutSummary.totalCableWidthMm === 'number' &&
-      Number.isFinite(layoutSummary.totalCableWidthMm)
-    ) {
-      const spacingContribution = Math.max(0, occupiedWidth - layoutSummary.totalCableWidthMm);
-      return `${numberFormatter.format(layoutSummary.totalCableWidthMm)} + ${numberFormatter.format(
-        spacingContribution
-      )} = ${numberFormatter.format(occupiedWidth)} mm`;
-    }
-
-    if (trayWidthMm !== null) {
-      const freeWidthMm = Math.max(0, trayWidthMm - occupiedWidth);
-      return `${numberFormatter.format(trayWidthMm)} - ${numberFormatter.format(
-        freeWidthMm
-      )} = ${numberFormatter.format(occupiedWidth)} mm`;
-    }
-
-    return null;
-  }, [freeSpaceMetrics.occupiedWidthMm, layoutSummary, numberFormatter, trayWidthMm]);
-
-  const trayFreeSpaceFormula = useMemo(() => {
-    const occupiedWidth = freeSpaceMetrics.occupiedWidthMm;
-    const freePercent = freeSpaceMetrics.freeWidthPercent;
-
-    if (
-      trayWidthMm === null ||
-      occupiedWidth === null ||
-      freePercent === null ||
-      Number.isNaN(occupiedWidth) ||
-      Number.isNaN(freePercent)
-    ) {
-      return null;
-    }
-
-    return `((${numberFormatter.format(trayWidthMm)} - ${numberFormatter.format(
-      occupiedWidth
-    )}) / ${numberFormatter.format(trayWidthMm)}) * 100 = ${percentageFormatter.format(
-      freePercent
-    )} %`;
-  }, [
-    freeSpaceMetrics.freeWidthPercent,
-    freeSpaceMetrics.occupiedWidthMm,
-    numberFormatter,
-    percentageFormatter,
-    trayWidthMm
-  ]);
+  const trayFreeSpaceFormula =
+    trayWidthMm !== null && occupiedWidthMm !== null && freeWidthPercent !== null && !hasWidthDeficit
+      ? `((${numberFormatter.format(trayWidthMm)} - ${numberFormatter.format(
+        occupiedWidthMm
+      )}) / ${numberFormatter.format(trayWidthMm)}) * 100 = ${trayFreeSpaceDisplay}`
+      : null;
 
   // Calculate useful tray height (tray height - rung height)
   const usefulTrayHeightMm = useMemo(() => {
@@ -2485,8 +2431,8 @@ export const TrayDetails = () => {
       projectCableTypes,
       projectCables,
       trayTemplatePurposeCount,
-      trayFreeSpacePercent: freeSpaceMetrics.freeWidthPercent,
-      trayOccupiedWidthMm: freeSpaceMetrics.occupiedWidthMm,
+      trayFreeSpacePercent: freeWidthPercent,
+      trayOccupiedWidthMm: occupiedWidthMm,
       occupiedWidthFormula,
       includeGroundingCable,
       groundingCableTypeName: groundingCableDisplay ?? null,
@@ -2526,8 +2472,8 @@ export const TrayDetails = () => {
     projectCableTypes,
     projectCables,
     trayTemplatePurposeCount,
-    freeSpaceMetrics.freeWidthPercent,
-    freeSpaceMetrics.occupiedWidthMm,
+    freeWidthPercent,
+    occupiedWidthMm,
     occupiedWidthFormula,
     includeGroundingCable,
     groundingCableDisplay,
@@ -3472,7 +3418,13 @@ export const TrayDetails = () => {
           </div>
           <div className={styles.field}>
             <Caption1>Cable tray free space</Caption1>
-            <Body1>{trayFreeSpaceFormula ?? trayFreeSpaceDisplay}</Body1>
+            {hasWidthDeficit ? (
+              <Body1 className={styles.freeSpaceDanger}>
+                Width deficit {numberFormatter.format(-freeWidthMm)} mm ({trayFreeSpaceDisplay})
+              </Body1>
+            ) : (
+              <Body1>{trayFreeSpaceFormula ?? trayFreeSpaceDisplay}</Body1>
+            )}
           </div>
         </div>
         {freeSpaceAlert ? (
