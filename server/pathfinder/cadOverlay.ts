@@ -3,7 +3,7 @@ import type { PoolClient } from 'pg';
 import { cadOverlayEnvelopeSchema, cadOverlayPayloadSchema, type CadOverlayEnvelope } from '../../shared/pathfinderCadOverlay.js';
 import { canonicalPurposeJson, catalogRoutingHashInput } from '../../shared/pathfinderPurposePolicy.js';
 import { projectRoutingCatalogRows } from './catalog.js';
-import { PathFinderError } from './errors.js';
+import { CadTrayCatalogConflict, PathFinderError } from './errors.js';
 import type { RoutingScope } from './routingScope.js';
 import { cadDesignEnabled } from '../cadDesign/configuration.js';
 
@@ -79,9 +79,18 @@ export async function readCadOverlay(client: PoolClient, projectId: string, arti
   for (const group of active) {
     const saved=(group.publication as {traySnapshot?:{id:string;name:string;purpose:string;trayType:string;widthMm:number;heightMm:number;lengthMm:number}})?.traySnapshot;
     const actual=actualTrays.find(row=>row.id===group.project_tray_id);
-    if (!saved || !actual || saved.id!==actual.id || saved.name!==actual.name || saved.purpose!==actual.purpose || saved.trayType!==actual.tray_type ||
-      saved.widthMm!==Number(actual.width_mm) || saved.heightMm!==Number(actual.height_mm) || saved.lengthMm!==Number(actual.length_mm))
-      throw new PathFinderError('CAD_ROUTE_CATALOG_CHANGED',409,'A published CAD route catalog row changed. Withdraw and republish it before calculating.');
+    const fields: string[] = [];
+    if (!saved || !actual) fields.push(saved ? 'missing Trays row' : 'missing publication snapshot');
+    else {
+      if (saved.id !== actual.id) fields.push('ID');
+      if (saved.name !== actual.name) fields.push('Name');
+      if (saved.purpose !== actual.purpose) fields.push('Purpose');
+      if (saved.trayType !== actual.tray_type) fields.push('Type');
+      if (saved.widthMm !== Number(actual.width_mm)) fields.push('Width');
+      if (saved.heightMm !== Number(actual.height_mm)) fields.push('Height');
+      if (saved.lengthMm !== Number(actual.length_mm)) fields.push('Length');
+    }
+    if (fields.length) throw new CadTrayCatalogConflict(saved?.name || actual?.name || group.project_tray_id || 'unknown', fields);
   }
   const source = await client.query<{id:string;name:string;purpose:string|null}>(
     'SELECT id::text,name,purpose FROM trays WHERE project_id=$1 AND NOT(id=ANY($2::uuid[])) ORDER BY id',[projectId,additions]);

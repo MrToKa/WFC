@@ -121,6 +121,15 @@ beforeEach(() => {
 });
 
 describe('saved CAD network preparation with verified composite and CAS publication', () => {
+  it('rebuilds substitute geometry using Trays dimensions in the catalog snapshot', async () => {
+    const linked = links.get(groups[1].id)!;
+    Object.assign(linked.row, { tray_type: 'PROJECT', width_mm: 450, height_mm: 85 });
+    Object.assign(linked, { link: { substitute_step: true }, projection: cadTrayProjection(linked.row) });
+    await prepare();
+    const published = JSON.parse(String(history[1][7]));
+    expect(published.traySnapshot).toMatchObject({ trayType: 'PROJECT', widthMm: 450, heightMm: 85 });
+    expect(published.overlay.segments[0].ports[0].widthMetres).toBeCloseTo(0.3);
+  });
   it('regenerates two separately assigned routes sharing a physical mate without duplicating either section', async () => {
     const actual=await vi.importActual<typeof import('./routePublication.js')>('./routePublication.js');
     const first=instances.get(groups[0].id)![0],second=instances.get(groups[1].id)![0];

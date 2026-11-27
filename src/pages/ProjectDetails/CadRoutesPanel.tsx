@@ -19,6 +19,13 @@ import { useToast } from '@/context/ToastContext';
 import { useProjectTrayPurposes } from '@/hooks/useProjectTrayPurposes';
 import { cadRouteGroupInputSchema, type CadRouteGroup } from '../../../shared/cadRouteGroups';
 
+type TrayProfileReview = {
+  scope: string;
+  reviewToken: string;
+  real: { trayType: string; widthMm: number; heightMm: number };
+  step: { trayType: string; widthMm: number; heightMm: number };
+};
+
 type Instance = {
   id: string;
   partNumber: string;
@@ -148,6 +155,7 @@ export function CadRoutesPanel({
   const [members, setMembers] = useState<string[]>([]);
   const memberSelectionEpoch = useRef(0);
   const selectedMembershipRoute = useRef('');
+  const [profileReview, setProfileReview] = useState<TrayProfileReview | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -692,6 +700,28 @@ export function CadRoutesPanel({
       setBusy(false);
     }
   };
+  const profileScope = JSON.stringify([projectId, designId, selected?.id, selected?.revision]);
+  const reviewProfile = async (confirm: boolean) => {
+    if (!selected || busy || externalBusy || unsavedChanges || (confirm && profileReview?.scope !== profileScope)) return;
+    setBusy(true);
+    try {
+      const response = await request(`/${selected.id}/substitute-step`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: selected.revision,
+          ...(confirm ? { reviewToken: profileReview!.reviewToken } : {}) }),
+      });
+      const data = await response.json();
+      if (confirm) {
+        setProfileReview(null);
+        await reload();
+        await onTraysChanged?.();
+        reportCommand('Substitute STEP geometry saved', `Routing uses the STEP geometry. Capacity uses the Trays profile for ${selected.name}.`);
+      } else setProfileReview({ ...data, scope: profileScope });
+    } catch (error) {
+      setProfileReview(null);
+      reportCommand('Cannot use substitute STEP geometry', error instanceof Error ? error.message : 'Refresh the route and try again.', 'error');
+    } finally { setBusy(false); }
+  };
   const addToTraysList = async () => {
     if (!selected || busy || externalBusy || unsavedChanges) return;
     setBusy(true);
@@ -823,6 +853,7 @@ export function CadRoutesPanel({
               <span
                 style={{ display: 'inline-flex', gap: 8, marginLeft: 8, verticalAlign: 'middle' }}
               >
+                {route.profileNeedsReview && <span>Review Trays profile</span>}
                 {route.projectTrayId || route.exportedTrayId ? (
                   <span role="img" aria-label="In Trays list" title="In Trays list">
                     <TableSimple20Regular aria-hidden />
@@ -1177,6 +1208,18 @@ export function CadRoutesPanel({
           </fieldset>
         ) : null}
         {unsavedChanges ? <Caption1>Save route changes before continuing.</Caption1> : null}
+        {selected && !isRevision && !openRevision && (selected.exportedTrayId || selected.projectTrayId) ? (
+          <fieldset>
+            <legend>Substitute STEP geometry</legend>
+            {selected.substituteStep && <Caption1 block>Using the real profile from Trays.</Caption1>}
+            {profileReview?.scope === profileScope ? <>
+              <p>Trays: {profileReview.real.trayType} &middot; {profileReview.real.widthMm} &times; {profileReview.real.heightMm} mm</p>
+              <p>STEP: {profileReview.step.trayType} &middot; {profileReview.step.widthMm} &times; {profileReview.step.heightMm} mm</p>
+              <Button disabled={busy || externalBusy || unsavedChanges} onClick={() => void reviewProfile(true)}>Use Trays profile for capacity</Button>
+              <Button disabled={busy} onClick={() => setProfileReview(null)}>Cancel</Button>
+            </> : <Button disabled={busy || externalBusy || unsavedChanges} onClick={() => void reviewProfile(false)}>Review Trays and STEP profiles</Button>}
+          </fieldset>
+        ) : null}
         {selected?.status === 'published' ? (
           <Button
             disabled={busy || externalBusy || unsavedChanges}

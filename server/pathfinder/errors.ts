@@ -3,3 +3,8 @@ export class PathFinderError extends Error {
     super(message); this.name = 'PathFinderError';
   }
 }
+export class CadTrayCatalogConflict extends PathFinderError {
+  constructor(readonly tray: string, readonly fields: string[]) {
+    super('CAD_ROUTE_CATALOG_CHANGED', 409, `Published CAD route ${tray} differs from Trays (${fields.join(', ')}).`);
+  }
+}

@@ -53,6 +53,8 @@ beforeEach(()=>{
   });
   mocks.query.mockImplementation(async(sql:string,values:unknown[]=[])=>{
     if(sql.startsWith('SELECT * FROM cad_route_tray_exports'))return {rows:link?[link]:[]};
+    if(sql.startsWith('UPDATE cad_route_tray_exports SET substitute_step') && link)
+      Object.assign(link, { substitute_step: true, projection: values[3] });
     if(sql.startsWith('SELECT * FROM trays'))return {rows:row&&values[0]===projectId&&values[1]===row.id?[row]:[]};
     if(sql.startsWith('SELECT id FROM trays'))return {rows:duplicate?[{id:id(999)}]:[]};
     if(sql.startsWith('INSERT INTO trays')){row=tray(String(values[1]),values);return {rows:[row]};}
@@ -66,6 +68,45 @@ beforeEach(()=>{
 });
 const save=(body:unknown={expectedRevision:group.revision},admin=true)=>fetch(base,{method:'POST',headers:{'Content-Type':'application/json','x-test-admin':admin?'yes':'no'},body:JSON.stringify(body)});
 const writes=()=>mocks.query.mock.calls.filter(([sql])=>/^INSERT INTO trays|^UPDATE trays|^INSERT INTO cad_route_tray_exports/.test(String(sql)));
+
+const reviewSubstitute = (reviewToken?: string) => fetch(base.replace('/trays-list', '/substitute-step'), {
+  method: 'POST', headers: { 'Content-Type': 'application/json', 'x-test-admin': 'yes' },
+  body: JSON.stringify({ expectedRevision: group.revision, reviewToken }),
+});
+
+describe('substitute STEP geometry', () => {
+  it('repairs a published profile in place and uses the real profile for subsequent length updates', async () => {
+    await save();
+    const original = { ...row! };
+    group.status = 'published';
+    group.project_tray_id = original.id;
+    group.publication = { baseArtifactId: id(90), overlay: { segments: ['existing'] },
+      traySnapshot: { id: original.id, name: original.name, purpose: original.purpose, lengthMm: original.length_mm,
+        trayType: original.tray_type, widthMm: original.width_mm, heightMm: original.height_mm } };
+    Object.assign(row!, { tray_type: 'REAL', width_mm: 450, height_mm: 85 });
+    const { step, real, reviewToken } = await (await reviewSubstitute()).json();
+    expect(step).toMatchObject({ trayType: 'KL-FIRST', widthMm: 300, heightMm: 60 });
+    expect(real).toEqual({ trayType: 'REAL', widthMm: 450, heightMm: 85 });
+    mocks.query.mockClear();
+    expect((await reviewSubstitute(reviewToken)).status).toBe(200);
+    expect(mocks.query.mock.calls.some(([sql]) => /^(UPDATE trays|DELETE|INSERT INTO trays)/.test(sql))).toBe(false);
+    const published = mocks.query.mock.calls.find(([sql]) => sql.startsWith('UPDATE cad_route_groups SET publication'))!;
+    expect(published[1][3]).toMatchObject({ overlay: { segments: ['existing'] }, traySnapshot: { ...real, id: original.id } });
+    group.status = 'draft';
+    instances[0].cut_length_mm = 990;
+    expect((await save()).status).toBe(200);
+    expect(row).toMatchObject({ id: original.id, tray_type: 'REAL', width_mm: 450, height_mm: 85, length_mm: 990 });
+  });
+
+  it('requires a new review after a profile edit and refuses unrelated edits', async () => {
+    await save();
+    const { reviewToken } = await (await reviewSubstitute()).json();
+    row!.width_mm = 500;
+    expect(await (await reviewSubstitute(reviewToken)).json()).toMatchObject({ code: 'CAD_ROUTE_REVIEW_CHANGED' });
+    row!.purpose = 'Changed';
+    expect(await (await reviewSubstitute()).json()).toMatchObject({ code: 'CAD_ROUTE_TRAY_EDITED' });
+  });
+});
 
 describe('server-derived route-list source and projection',()=>{
   it('selects the first placed straight SKU, preserving source order instead of sorting UUIDs',()=>{

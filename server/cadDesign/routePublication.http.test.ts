@@ -330,6 +330,17 @@ describe('CAD publication HTTP authorization and refusal', () => {
     expect(proof).toEqual(publication.overlay);expect(publication.overlay.segments[0]).not.toHaveProperty('independent');
     expect(sql('SELECT pf_recalculation_dirty')?.[1]).toEqual([projectId,'geometry','CAD_ROUTE_PUBLISHED',`${routeId}:8`]);
   });
+  it('publishes substitute geometry on the real Trays profile', async () => {
+    seedListExport();
+    Object.assign(exportedTray!, { tray_type: 'PROJECT-450', width_mm: 450, height_mm: 85 });
+    Object.assign(exportLink!, { substitute_step: true, projection: cadTrayProjection(exportedTray!) });
+    const response = await post(await start(), 'publish', publishBody);
+    expect(response.status).toBe(200);
+    const published = JSON.parse(String(sql('UPDATE cad_route_groups')?.[1][4]));
+    expect(published.traySnapshot).toMatchObject({ id: trayId, trayType: 'PROJECT-450', widthMm: 450, heightMm: 85, lengthMm: 1500 });
+    expect(published.overlay.segments[0].ports[0].widthMetres).toBeCloseTo(0.3);
+    expect(sql('INSERT INTO trays')).toBeUndefined();
+  });
   it('reuses its compatible list-first row rather than creating a duplicate and pins its projection in publication',async()=>{
     seedListExport();const response=await post(await start(),'publish',publishBody);
     expect(response.status).toBe(200);expect(await response.json()).toMatchObject({projectTrayId:trayId,status:'published'});

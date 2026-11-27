@@ -31,6 +31,8 @@ export type CadRouteGroupInput = z.output<typeof cadRouteGroupInputSchema>;
 export type CadRouteGroup = {
   id: string; name: string; tag: string; color: string; purpose: string; revision: number;
   status: 'draft' | 'published'; instanceIds: string[]; projectTrayId: string | null;
+  substituteStep?: boolean;
+  profileNeedsReview?: boolean;
   exportedTrayId?: string | null;
   revisionOfRouteId?: string | null;
   revisionOfRouteName?: string | null;

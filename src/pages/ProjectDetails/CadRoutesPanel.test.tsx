@@ -102,6 +102,28 @@ describe('published route revisions', { timeout: 20000 }, () => {
     revisionOfRouteName: published.name,
   };
 
+  it('reviews both profiles before confirming the saved route and revision', async () => {
+    const selected = { ...draft, exportedTrayId: id(70) };
+    const profile = { step: { trayType: 'STEP-SKU', widthMm: 400, heightMm: 80 },
+      real: { trayType: 'REAL-SKU', widthMm: 300, heightMm: 60 }, reviewToken: 'a'.repeat(64) };
+    const requests: Record<string, unknown>[] = [];
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (url.endsWith('/substitute-step')) {
+        requests.push(JSON.parse(String(options.body)));
+        return { ok: true, json: async () => requests.length === 1 ? profile : { confirmed: true } };
+      }
+      return { ok: true, json: async () => ({ routes: [selected] }) };
+    });
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review Trays and STEP profiles' }));
+    expect(await screen.findByText(/REAL-SKU/)).toBeVisible();
+    expect(screen.getByText(/STEP-SKU/)).toBeVisible();
+    expect(requests).toEqual([{ expectedRevision: selected.revision }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Use Trays profile for capacity' }));
+    await waitFor(() => expect(requests[1]).toEqual({ expectedRevision: selected.revision, reviewToken: profile.reviewToken }));
+  });
+
   it('opens the draft, reviews cable impact and publishes only after confirmation', async () => {
     let routes = [published];
     const refreshGeometry = vi.fn(async () => {});

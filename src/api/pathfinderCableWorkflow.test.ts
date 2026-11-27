@@ -141,6 +141,10 @@ describe('bounded read-only cable workflow transport', () => {
     vi.mocked(fetch).mockResolvedValueOnce(response({ code: 'CONTEXT_CHANGED', error: '<private business values>' }, 409));
     await expect(fetchPathFinderCableWorkflowPage(project, 'token')).rejects.toMatchObject({ status: 409, code: 'CONTEXT_CHANGED', message: 'The project changed. Refresh the cable list before continuing.' });
   });
+  it('identifies the CAD route and the catalog fields requiring review', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(response({ code: 'CAD_ROUTE_CATALOG_CHANGED', tray: 'BC901', fields: ['Type', 'Width'] }, 409));
+    await expect(fetchPathFinderCableWorkflowPage(project, 'token')).rejects.toThrow('BC901 differs from Trays (Type, Width)');
+  });
   it.each([
     ['WORKFLOW_DATABASE_BUSY', 'The database was busy while loading cable diagnostics. Try refreshing the list.'],
     ['WORKFLOW_DEADLINE_EXCEEDED', 'Loading cable diagnostics took too long. Try refreshing the list.'],

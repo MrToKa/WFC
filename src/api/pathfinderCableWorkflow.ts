@@ -23,6 +23,12 @@ const invalidRequest = (): never => { throw new PathFinderCableWorkflowApiError(
 function refusal(status: number, value: unknown): never {
   const candidate = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>).code : null;
   const code = typeof candidate === 'string' && /^[A-Z][A-Z0-9_]{0,95}$/.exec(candidate)?.[0] === candidate ? candidate : 'CABLE_WORKFLOW_UNAVAILABLE';
+  if (status === 409 && code === 'CAD_ROUTE_CATALOG_CHANGED') {
+    const details = value as { tray?: unknown; fields?: unknown };
+    const fields = Array.isArray(details.fields) ? details.fields.filter(field => typeof field === 'string').join(', ') : '';
+    const subject = typeof details.tray === 'string' ? details.tray : 'A published CAD route';
+    throw new PathFinderCableWorkflowApiError(code, status, `${subject} differs from Trays${fields ? ' (' + fields + ')' : ''}. Review the linked row in CAD Routes.`);
+  }
   if (status === 503 && code === 'WORKFLOW_DATABASE_BUSY') {
     throw new PathFinderCableWorkflowApiError(code, status, 'The database was busy while loading cable diagnostics. Try refreshing the list.');
   }

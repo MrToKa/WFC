@@ -1,3 +1,4 @@
+import { routingTrayProfile } from './trayProfile.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import type { PoolClient } from 'pg';
@@ -293,9 +294,10 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     if(group.revision!==parsed.data.expectedRevision)return refuse('STALE_CAD_ROUTE','The route changed. Refresh and retry.');
     if(group.status!=='draft')return refuse('CAD_ROUTE_PUBLISHED','Withdraw the route before publishing another revision.');
     if(group.revision_of_route_id)return refuse('CAD_ROUTE_REVISION_REVIEW_REQUIRED','Review this revision and publish it through the route revision workflow.');
-    const material=resolveCadRouteMaterial(instances);
+    const stepProfile=resolveCadRouteMaterial(instances);
     const {compatibleCadTrayExport}=await import('./routeTrayExports.js');
     const trayExport=await compatibleCadTrayExport(client,projectId,designId,group,instances,chain,transitions);
+    const material=routingTrayProfile(stepProfile,trayExport);
     if(trayExport&&normalizeCatalogKey(group.name).replace(/^\/+|\/+$/g,'').trim().toUpperCase()!==group.tag)
       return refuse('CAD_ROUTE_TRAY_NAME_TAG_MISMATCH','This legacy route name differs from its routing identifier. Rename the route to one identifier and refresh its Trays row before publishing.');
     const model=(await client.query<{model_version_id:string}>('SELECT model_version_id FROM cad_designs WHERE project_id=$1 AND id=$2',[projectId,designId])).rows[0];

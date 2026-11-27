@@ -1,3 +1,4 @@
+import { projectTrayProfile, routingTrayProfile } from './trayProfile.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { PoolClient } from 'pg';
@@ -17,7 +18,7 @@ const hash=(value:unknown)=>createHash('sha256').update(canonicalPurposeJson(val
 const fail=(code:string,message:string):never=>{throw new PublicationError(code,message);};
 type Group={id:string;name:string;purpose:string;revision:number;status?:string;project_tray_id?:string|null;publication?:unknown};
 type Chain={points:[number,number,number][];lengthMetres:number;paths?:CadRoutePath[]};
-type ExportLink={project_id:string;design_id:string;route_group_id:string;tray_id:string;source_sha256:string;source_proof:unknown;projection:unknown};
+type ExportLink={substitute_step?:boolean;project_id:string;design_id:string;route_group_id:string;tray_id:string;source_sha256:string;source_proof:unknown;projection:unknown};
 type Projection={name:string;purpose:string|null;trayType:string|null;widthMm:number|null;heightMm:number|null;lengthMm:number|null;lengthSource:string;lengthCalculation:unknown};
 const numeric=(value:unknown):number|null=>value==null||!Number.isFinite(Number(value))?null:Number(value);
 export function cadTrayProjection(row:TrayRow):Projection {
@@ -77,7 +78,7 @@ export async function writeCadTrayExport(client:PoolClient,projectId:string,desi
     const desired=deriveCadTrayExport(projectId,designId,group,instances,chain,transitions);
     let saved=await readCadTrayExport(client,projectId,designId,routeId);
     let adoptedPublishedRow=false;
-    const response=(trayId:string,created:boolean,reused:boolean)=>({routeId,trayId,name:desired.fields.name,purpose:desired.fields.purpose,type:desired.fields.trayType,
+    const response=(trayId:string,created:boolean,reused:boolean)=>({routeId,trayId,name:desired.fields.name,purpose:desired.fields.purpose,type:saved?.link.substitute_step ? saved.row.tray_type : desired.fields.trayType,
       lengthMm:desired.fields.lengthMm,elementCount:desired.elementCount,created,reused,source:'cad-route'});
     if(saved&&saved.link.source_sha256===desired.sourceSha256)return response(saved.row.id,false,true);
     // An existing network publication may already own the exact ordinary row.
@@ -97,7 +98,8 @@ export async function writeCadTrayExport(client:PoolClient,projectId:string,desi
     if(duplicate.rows.length)return fail('CAD_ROUTE_TRAY_NAME_CONFLICT','Another Trays row already has this route name. Its row was preserved; choose a unique route name.');
     const calculation=trayLengthCalculationSchema.parse({source:'cad-route',designId,routeId,routeRevision:group.revision,centerlineSha256:desired.centerlineSha256,
       lengthMm:desired.fields.lengthMm,elementCount:desired.elementCount,calculatedAt:new Date().toISOString()});
-    const values=[projectId,trayId,desired.fields.name,desired.fields.purpose,desired.fields.trayType,desired.fields.widthMm,desired.fields.heightMm,desired.fields.lengthMm,JSON.stringify(calculation)];
+    const profile = routingTrayProfile(desired.fields, saved);
+    const values=[projectId,trayId,desired.fields.name,desired.fields.purpose,profile.trayType,profile.widthMm,profile.heightMm,desired.fields.lengthMm,JSON.stringify(calculation)];
     const written=saved?await client.query<TrayRow>(`UPDATE trays SET name=$3,purpose=$4,tray_type=$5,width_mm=$6,height_mm=$7,length_mm=$8,
       length_source='auto',length_calculation=$9::jsonb,updated_at=now() WHERE project_id=$1 AND id=$2 RETURNING *`,values):
       await client.query<TrayRow>(`INSERT INTO trays(project_id,id,name,purpose,tray_type,width_mm,height_mm,length_mm,length_source,length_calculation)
@@ -127,6 +129,7 @@ export async function synchronizeCadTrayExportsAfterTransfer(client:PoolClient,p
     if(membership.member_count===0){
       if(!saved)return;
       await client.query(`DELETE FROM cad_route_tray_exports WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 AND tray_id=$4`,[projectId,designId,routeId,saved.row.id]);
+      if (saved.link.substitute_step) return;
       const removed=await client.query('DELETE FROM trays WHERE project_id=$1 AND id=$2 RETURNING id',[projectId,saved.row.id]);
       if(!removed.rows[0])return fail('CAD_ROUTE_TRAY_CONFLICT','The Trays row changed. Retry the transfer.');
     }else await writeCadTrayExport(client,projectId,designId,routeId,userId);
@@ -134,6 +137,78 @@ export async function synchronizeCadTrayExportsAfterTransfer(client:PoolClient,p
   if(source&&sourceRouteId)await refresh(sourceRouteId,source);
   await refresh(targetRouteId,target);
 }
+
+const substituteInput = z.object({
+  expectedRevision: z.number().int().positive(),
+  reviewToken: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+}).strict();
+
+cadRouteTrayExportsRouter.post('/designs/:designId/routes/:routeId/substitute-step', requireAdmin, safe(async (req, res) => {
+  const parsed = substituteInput.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ code: 'INVALID_CAD_PROFILE_REVIEW' }); return; }
+  const { projectId, designId, routeId } = req.params;
+  const result = await publicationTransaction(req, async client => {
+    const { group, instances, chain, transitions } = await groupInputs(client, projectId, designId, routeId);
+    if (group.revision !== parsed.data.expectedRevision || group.revision_of_route_id)
+      return fail('STALE_CAD_ROUTE', 'Select the current saved route to review its profile.');
+    const link = (await client.query<ExportLink>(
+      'SELECT * FROM cad_route_tray_exports WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 FOR UPDATE',
+      [projectId, designId, routeId])).rows[0];
+    const trayId = link?.tray_id ?? group.project_tray_id;
+    if (!trayId || (group.status === 'published' && group.project_tray_id !== trayId))
+      return fail('CAD_ROUTE_TRAY_EXPORT_INTEGRITY', 'Add the route to the Trays list before selecting its real profile.');
+    const row = (await client.query<TrayRow>('SELECT * FROM trays WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, trayId])).rows[0];
+    if (!row) return fail('CAD_ROUTE_TRAY_EXPORT_INTEGRITY', 'The linked Trays row is missing.');
+    const real = projectTrayProfile(row);
+    const desired = deriveCadTrayExport(projectId, designId, group, instances, chain, transitions);
+    const { trayType, widthMm, heightMm } = desired.fields;
+    const step = { trayType, widthMm, heightMm };
+    const projection = cadTrayProjection(row);
+    if (link) {
+      const proof = link.source_proof as { source?: unknown };
+      if (!proof?.source || hash(proof.source) !== link.source_sha256)
+        return fail('CAD_ROUTE_TRAY_EXPORT_INTEGRITY', 'The saved CAD source could not be verified.');
+      if (hash({ ...(link.projection as Projection), ...real }) !== hash(projection))
+        return fail('CAD_ROUTE_TRAY_EDITED', 'Resolve changes to the name, purpose or length before confirming the profile.');
+    }
+    const publication = group.publication as { traySnapshot?: { id: string; name: string; purpose: string; lengthMm: number }; baseArtifactId: string } | null;
+    const snapshot = publication?.traySnapshot;
+    if (group.status === 'published' && (!snapshot || snapshot.id !== trayId || snapshot.name !== row.name ||
+        snapshot.purpose !== row.purpose || snapshot.lengthMm !== projection.lengthMm))
+      return fail('CAD_ROUTE_CATALOG_CHANGED', 'The published route also differs in identity, purpose or length.');
+    const reviewToken = hash({ projectId, designId, routeId, revision: group.revision, trayId, projection, publication,
+      geometry: desired.sourceSha256, exportSource: link?.source_sha256 ?? null });
+    if (!parsed.data.reviewToken) return { step, real, reviewToken };
+    if (parsed.data.reviewToken !== reviewToken) return fail('CAD_ROUTE_REVIEW_CHANGED', 'The route or Trays row changed. Review the profiles again.');
+    if (link?.substitute_step && hash(link.projection) === hash(projection) &&
+        (group.status !== 'published' || hash(snapshot) === hash({ ...snapshot, ...real })))
+      return { step, real, confirmed: true };
+    if ((await client.query('SELECT id FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND revision_of_route_id=$3 LIMIT 1',
+      [projectId, designId, routeId])).rows.length)
+      return fail('CAD_ROUTE_REVISION_IN_PROGRESS', 'Finish the open revision before changing the profile mapping.');
+    const keys = [projectId, designId, routeId];
+    if (link) {
+      await client.query(`UPDATE cad_route_tray_exports SET substitute_step=true,projection=$4,updated_at=now()
+        WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3`, [...keys, projection]);
+    } else {
+      await client.query(`INSERT INTO cad_route_tray_exports(project_id,design_id,route_group_id,tray_id,source_sha256,source_proof,projection,created_by,substitute_step)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true)`, [...keys, trayId, desired.sourceSha256,
+        { source: desired.source, capturedRouteRevision: group.revision }, projection, req.userId]);
+    }
+    if (publication && group.status === 'published') {
+      const updated = { ...publication, traySnapshot: { ...snapshot, ...real }, trayExportSourceSha256: link?.source_sha256 ?? desired.sourceSha256 };
+      await client.query(`INSERT INTO cad_route_network_publication_history(id,project_id,design_id,route_group_id,previous_revision,
+        base_artifact_id,previous_publication,publication,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [randomUUID(), ...keys, group.revision, publication.baseArtifactId, publication, updated, req.userId]);
+      await client.query('UPDATE cad_route_groups SET publication=$4,revision=revision+1,updated_at=now() WHERE project_id=$1 AND design_id=$2 AND id=$3', [...keys, updated]);
+    } else {
+      await client.query('UPDATE cad_route_groups SET revision=revision+1,updated_at=now() WHERE project_id=$1 AND design_id=$2 AND id=$3', keys);
+    }
+    return { step, real, confirmed: true };
+  });
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.json(result);
+}));
 
 cadRouteTrayExportsRouter.post('/designs/:designId/routes/:routeId/trays-list',requireAdmin,safe(async(req,res)=>{
   const parsed=input.safeParse(req.body);if(!parsed.success){res.status(400).json({code:'INVALID_CAD_ROUTE_TRAY_EXPORT',message:'A current saved route revision is required.'});return;}

@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { requestPrincipal } from './auth.js';
-import { PathFinderError } from './errors.js';
+import { CadTrayCatalogConflict, PathFinderError } from './errors.js';
 import type { CableWorkflowRepository } from './cableWorkflowRepository.js';
 
 /** Mounted behind requireAdmin; the repository rechecks the existing current login without DML. */
@@ -28,7 +28,8 @@ export function createCableWorkflowReadHandlers(repository: CableWorkflowReposit
             : safe.status === 400 ? 'Use the supported cable filters, search, preferences and cursor.'
               : safe.code === 'WORKFLOW_ADMISSION_LIMIT' ? 'The retained calculation history exceeds this diagnostic read limit.'
                 : safe.status === 404 ? 'This project cable is unavailable.' : 'Cable diagnostics are unavailable. Refresh the current project.';
-        res.status(safe.status).json({ code: safe.code, error: message });
+        res.status(safe.status).json({ code: safe.code, error: message,
+          ...(safe instanceof CadTrayCatalogConflict ? { tray: safe.tray, fields: safe.fields } : {}) });
       }
     } finally { req.removeListener('aborted', disconnected); res.removeListener('close', closed); }
   };

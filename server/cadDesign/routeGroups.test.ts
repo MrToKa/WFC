@@ -315,7 +315,9 @@ describe('CAD route authoring contract', () => {
     expect(lock[0]).toContain("v.health='healthy'");
     expect(lock[1]).toEqual([projectId,designId]);
     const listQuery = mocks.query.mock.calls[2];
-    expect(listQuery[0]).toContain('e.project_id=g.project_id AND e.design_id=g.design_id AND e.route_group_id=g.id) AS "exportedTrayId"');
+    expect(listQuery[0]).toContain('e.project_id=g.project_id AND e.design_id=g.design_id AND e.route_group_id=g.id');
+    expect(listQuery[0]).toContain('e.tray_id AS "exportedTrayId"');
+    expect(listQuery[0]).toContain('t.project_id=g.project_id AND t.id=coalesce(g.project_tray_id,e.tray_id)');
     expect(listQuery[1]).toEqual([projectId,designId]);
     expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
   });

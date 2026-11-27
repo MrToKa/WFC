@@ -20,5 +20,6 @@ export async function initializeCadRouteTrayExportsSchema(pool: Pool): Promise<v
         REFERENCES cad_route_groups(project_id,design_id,id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
       FOREIGN KEY(project_id,tray_id) REFERENCES trays(project_id,id) ON DELETE CASCADE
     );
+    ALTER TABLE cad_route_tray_exports ADD COLUMN IF NOT EXISTS substitute_step boolean NOT NULL DEFAULT false;
   `);
 }

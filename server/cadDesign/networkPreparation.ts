@@ -1,3 +1,4 @@
+import { routingTrayProfile } from './trayProfile.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import type { PoolClient } from 'pg';
@@ -110,7 +111,7 @@ async function freeze(client: PoolClient, projectId: string, designId: string, i
       return refuse('CAD_ROUTE_TRAY_EXPORT_INTEGRITY', 'The saved CAD route needs its exact Trays list link before network generation.');
     if (exported && normalizeCatalogKey(group.name).replace(/^\/+|\/+$/g, '').trim().toUpperCase() !== group.tag)
       return refuse('CAD_ROUTE_TRAY_NAME_TAG_MISMATCH', 'Use one route identifier and refresh its Trays list row before network generation.');
-    const material = resolveCadRouteMaterial(instances);
+    const material = routingTrayProfile(resolveCadRouteMaterial(instances), exported);
     const trayId = exported?.row.id ?? group.project_tray_id;
     if (!trayId) return refuse('CAD_ROUTE_TRAY_EXPORT_INTEGRITY', 'A saved CAD route has no verified Trays list row.');
     if (group.status === 'published' && group.project_tray_id !== trayId)

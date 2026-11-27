@@ -139,6 +139,13 @@ describe('published CAD route revisions', () => {
     expect(mocks.promote).not.toHaveBeenCalled();
   });
 
+  it('publishes revised STEP geometry with the confirmed Trays profile', async () => {
+    mocks.readExport.mockResolvedValue({ link: { substitute_step: true },
+      row: { ...tray, tray_type: 'REAL', width_mm: 450, height_mm: 85 } });
+    const { reviewToken } = await preview();
+    expect((await post('publish', { expectedRevision: 2, reviewToken })).status).toBe(200);
+    expect(mocks.promote).toHaveBeenCalled();
+  });
   it('verifies the replacement overlay and keeps the route and tray IDs', async () => {
     const { reviewToken } = await preview();
     const response = await post('publish', { expectedRevision: 2, reviewToken });

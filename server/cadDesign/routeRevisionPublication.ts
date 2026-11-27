@@ -1,3 +1,4 @@
+import { routingTrayProfile } from './trayProfile.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import type { PoolClient } from 'pg';
@@ -135,7 +136,8 @@ async function readReview(client: PoolClient, req: Request, expectedRevision: nu
     throw new PublicationError('CAD_ROUTE_TRAY_EXPORT_INTEGRITY', 'The published route is missing its Trays record.');
   }
   const desired = deriveCadTrayExport(projectId, designId, parent, instances, chain, transitions);
-  const { trayType, widthMm, heightMm, lengthMm } = desired.fields;
+  const { lengthMm } = desired.fields;
+  const { trayType, widthMm, heightMm } = routingTrayProfile(desired.fields, exported);
   if (trayType !== tray.tray_type || widthMm !== Number(tray.width_mm) || heightMm !== Number(tray.height_mm)) {
     throw new PublicationError('CAD_ROUTE_REVISION_PROFILE_CHANGED', 'Keep the published tray profile when revising this route.');
   }

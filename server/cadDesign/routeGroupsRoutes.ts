@@ -43,9 +43,12 @@ const safe = (handler: (req: Request, res: Response) => Promise<void>) =>
     });
   };
 const routeSelect = `SELECT g.id,g.name,g.tag,g.color,g.purpose,g.revision,g.status,
-  g.project_tray_id AS "projectTrayId",
-  (SELECT e.tray_id FROM cad_route_tray_exports e
-    WHERE e.project_id=g.project_id AND e.design_id=g.design_id AND e.route_group_id=g.id) AS "exportedTrayId",
+  coalesce(e.substitute_step,false) AS "substituteStep", g.project_tray_id AS "projectTrayId", e.tray_id AS "exportedTrayId",
+  (t.id IS NOT NULL AND (
+    t.tray_type IS DISTINCT FROM (profile.saved->>'trayType') OR
+    to_jsonb(t.width_mm) IS DISTINCT FROM nullif(profile.saved->'widthMm','null'::jsonb) OR
+    to_jsonb(t.height_mm) IS DISTINCT FROM nullif(profile.saved->'heightMm','null'::jsonb)
+  )) AS "profileNeedsReview",
   g.revision_of_route_id AS "revisionOfRouteId",
   (SELECT parent.name FROM cad_route_groups parent WHERE parent.project_id=g.project_id AND parent.design_id=g.design_id
     AND parent.id=g.revision_of_route_id) AS "revisionOfRouteName",
@@ -54,7 +57,10 @@ const routeSelect = `SELECT g.id,g.name,g.tag,g.color,g.purpose,g.revision,g.sta
   CASE WHEN g.status='published' THEN 'automatic' ELSE NULL END AS "networkMode",
   COALESCE((SELECT jsonb_agg(m.instance_id::text ORDER BY m.instance_id) FROM cad_route_group_members m
     WHERE m.project_id=g.project_id AND m.design_id=g.design_id AND m.route_group_id=g.id),'[]'::jsonb) AS "instanceIds"
-  FROM cad_route_groups g`;
+  FROM cad_route_groups g
+  LEFT JOIN cad_route_tray_exports e ON e.project_id=g.project_id AND e.design_id=g.design_id AND e.route_group_id=g.id
+  LEFT JOIN trays t ON t.project_id=g.project_id AND t.id=coalesce(g.project_tray_id,e.tray_id)
+  CROSS JOIN LATERAL (SELECT CASE WHEN g.status='published' THEN g.publication->'traySnapshot' ELSE e.projection END AS saved) profile`;
 const validateParams = (req: Request): void => {
   if (![req.params.projectId,req.params.designId,...(req.params.routeId ? [req.params.routeId] : [])].every(value => uuid.safeParse(value).success))
     throw new RouteGroupError('INVALID_CAD_ROUTE_ID',400);
