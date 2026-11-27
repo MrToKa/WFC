@@ -1,4 +1,7 @@
 import { projectTrayProfile, routingTrayProfile } from './trayProfile.js';
+import { cadTrayProjection, numeric, saveProfilePublication, substitutePurpose, synchronizeSubstituteTrayProfile, withExportPurpose,
+  type ExportLink, type Projection } from './substituteTrayProfile.js';
+export { cadTrayProjection } from './substituteTrayProfile.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { PoolClient } from 'pg';
@@ -18,13 +21,6 @@ const hash=(value:unknown)=>createHash('sha256').update(canonicalPurposeJson(val
 const fail=(code:string,message:string):never=>{throw new PublicationError(code,message);};
 type Group={id:string;name:string;purpose:string;revision:number;status?:string;project_tray_id?:string|null;publication?:unknown};
 type Chain={points:[number,number,number][];lengthMetres:number;paths?:CadRoutePath[]};
-type ExportLink={substitute_step?:boolean;project_id:string;design_id:string;route_group_id:string;tray_id:string;source_sha256:string;source_proof:unknown;projection:unknown};
-type Projection={name:string;purpose:string|null;trayType:string|null;widthMm:number|null;heightMm:number|null;lengthMm:number|null;lengthSource:string;lengthCalculation:unknown};
-const numeric=(value:unknown):number|null=>value==null||!Number.isFinite(Number(value))?null:Number(value);
-export function cadTrayProjection(row:TrayRow):Projection {
-  return {name:row.name,purpose:row.purpose,trayType:row.tray_type,widthMm:numeric(row.width_mm),heightMm:numeric(row.height_mm),lengthMm:numeric(row.length_mm),
-    lengthSource:row.length_source??'manual',lengthCalculation:row.length_calculation??null};
-}
 export function deriveCadTrayExport(projectId:string,designId:string,group:Group,instances:PublicationInstance[],chain:Chain,transitions:PublicationTransition[]=[]) {
   const first=instances.find(row=>row.component_kind==='straight')??instances[0];
   if(!first)return fail('CAD_ROUTE_PART_LIMIT','Connect at least one component before adding the route to the Trays list.');
@@ -141,7 +137,10 @@ export async function synchronizeCadTrayExportsAfterTransfer(client:PoolClient,p
 const substituteInput = z.object({
   expectedRevision: z.number().int().positive(),
   reviewToken: z.string().regex(/^[a-f0-9]{64}$/).optional(),
-}).strict();
+  profile: z.object({ trayType: z.string().trim().min(1).max(500),
+    widthMm: z.number().positive().finite(), heightMm: z.number().positive().finite(),
+    purpose: z.string().trim().min(1).max(500) }).strict().optional(),
+}).strict().refine(input => !input.profile || input.reviewToken);
 
 cadRouteTrayExportsRouter.post('/designs/:designId/routes/:routeId/substitute-step', requireAdmin, safe(async (req, res) => {
   const parsed = substituteInput.safeParse(req.body);
@@ -160,14 +159,15 @@ cadRouteTrayExportsRouter.post('/designs/:designId/routes/:routeId/substitute-st
     const row = (await client.query<TrayRow>('SELECT * FROM trays WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, trayId])).rows[0];
     if (!row) return fail('CAD_ROUTE_TRAY_EXPORT_INTEGRITY', 'The linked Trays row is missing.');
     const real = projectTrayProfile(row);
-    const desired = deriveCadTrayExport(projectId, designId, group, instances, chain, transitions);
+    const purpose = substitutePurpose(row);
+    const desired = deriveCadTrayExport(projectId, designId, { ...group, purpose }, instances, chain, transitions);
     const { trayType, widthMm, heightMm } = desired.fields;
     const step = { trayType, widthMm, heightMm };
     const projection = cadTrayProjection(row);
     const publication = group.publication as { traySnapshot?: { id: string; name: string; purpose: string; lengthMm: number }; baseArtifactId: string } | null;
     const snapshot = publication?.traySnapshot;
     const compare = (saved: Pick<Projection, 'name' | 'purpose' | 'lengthMm'>, source: string) => {
-      const fields = [['Name', saved.name, projection.name], ['Purpose', saved.purpose, projection.purpose],
+      const fields = [['Name', saved.name, projection.name],
         ['Length (mm)', saved.lengthMm, projection.lengthMm]] as const;
       const differences = fields.filter(([, before, current]) => before !== current);
       if (differences.length) {
@@ -189,31 +189,39 @@ cadRouteTrayExportsRouter.post('/designs/:designId/routes/:routeId/substitute-st
     }
     const reviewToken = hash({ projectId, designId, routeId, revision: group.revision, trayId, projection, publication,
       geometry: desired.sourceSha256, exportSource: link?.source_sha256 ?? null });
-    if (!parsed.data.reviewToken) return { step, real, reviewToken };
+    if (!parsed.data.reviewToken) return { step, real, reviewToken, purpose, previousPurpose: group.purpose };
     if (parsed.data.reviewToken !== reviewToken) return fail('CAD_ROUTE_REVIEW_CHANGED', 'The route or Trays row changed. Review the profiles again.');
-    if (link?.substitute_step && hash(link.projection) === hash(projection) &&
-        (group.status !== 'published' || hash(snapshot) === hash({ ...snapshot, ...real })))
+    if (parsed.data.profile && hash(parsed.data.profile) !== hash({ ...real, purpose })) {
+      if (!link?.substitute_step) return fail('CAD_ROUTE_PROFILE_REQUIRED', 'Confirm the existing Trays profile before editing it here.');
+      const profile = parsed.data.profile;
+      const updated = (await client.query<TrayRow>(`UPDATE trays SET tray_type=$3,width_mm=$4,height_mm=$5,purpose=$6,updated_at=now()
+        WHERE project_id=$1 AND id=$2 RETURNING *`, [projectId, trayId, profile.trayType, profile.widthMm, profile.heightMm, profile.purpose])).rows[0];
+      if (!updated) return fail('CAD_ROUTE_TRAY_CONFLICT', 'The linked Trays row changed. Review the profiles again.');
+      await synchronizeSubstituteTrayProfile(client, row, updated, req.userId!);
+      await recordTrayChanges(client, req.userId!, row, updated);
+      return { step, real: projectTrayProfile(updated), confirmed: true };
+    }
+    if (link?.substitute_step && group.purpose === purpose && hash(link.projection) === hash(projection) &&
+        (group.status !== 'published' || hash(snapshot) === hash({ ...snapshot, ...real, purpose })))
       return { step, real, confirmed: true };
     if ((await client.query('SELECT id FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND revision_of_route_id=$3 LIMIT 1',
       [projectId, designId, routeId])).rows.length)
       return fail('CAD_ROUTE_REVISION_IN_PROGRESS', 'Finish the open revision before changing the profile mapping.');
     const keys = [projectId, designId, routeId];
+    const source = link ? withExportPurpose(link, purpose) : null;
     if (link) {
-      await client.query(`UPDATE cad_route_tray_exports SET substitute_step=true,projection=$4,updated_at=now()
-        WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3`, [...keys, projection]);
+      await client.query(`UPDATE cad_route_tray_exports SET substitute_step=true,projection=$4,source_proof=$5,source_sha256=$6,updated_at=now()
+        WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3`, [...keys, projection, source!.proof, source!.sha]);
     } else {
       await client.query(`INSERT INTO cad_route_tray_exports(project_id,design_id,route_group_id,tray_id,source_sha256,source_proof,projection,created_by,substitute_step)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true)`, [...keys, trayId, desired.sourceSha256,
         { source: desired.source, capturedRouteRevision: group.revision }, projection, req.userId]);
     }
     if (publication && group.status === 'published') {
-      const updated = { ...publication, traySnapshot: { ...snapshot, ...real }, trayExportSourceSha256: link?.source_sha256 ?? desired.sourceSha256 };
-      await client.query(`INSERT INTO cad_route_network_publication_history(id,project_id,design_id,route_group_id,previous_revision,
-        base_artifact_id,previous_publication,publication,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [randomUUID(), ...keys, group.revision, publication.baseArtifactId, publication, updated, req.userId]);
-      await client.query('UPDATE cad_route_groups SET publication=$4,revision=revision+1,updated_at=now() WHERE project_id=$1 AND design_id=$2 AND id=$3', [...keys, updated]);
+      const updated = { ...publication, traySnapshot: { ...snapshot, ...real, purpose }, trayExportSourceSha256: source?.sha ?? desired.sourceSha256 };
+      await saveProfilePublication(client, keys, group.revision, publication, updated, purpose, req.userId!);
     } else {
-      await client.query('UPDATE cad_route_groups SET revision=revision+1,updated_at=now() WHERE project_id=$1 AND design_id=$2 AND id=$3', keys);
+      await client.query('UPDATE cad_route_groups SET purpose=$4,revision=revision+1,updated_at=now() WHERE project_id=$1 AND design_id=$2 AND id=$3', [...keys, purpose]);
     }
     return { step, real, confirmed: true };
   });

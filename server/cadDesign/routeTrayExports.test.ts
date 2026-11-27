@@ -54,7 +54,13 @@ beforeEach(()=>{
   mocks.query.mockImplementation(async(sql:string,values:unknown[]=[])=>{
     if(sql.startsWith('SELECT * FROM cad_route_tray_exports'))return {rows:link?[link]:[]};
     if(sql.startsWith('UPDATE cad_route_tray_exports SET substitute_step') && link)
-      Object.assign(link, { substitute_step: true, projection: values[3] });
+      Object.assign(link, { substitute_step: true, projection: values[3], source_proof: values[4], source_sha256: values[5] });
+    if(sql.startsWith('SELECT e.*,g.revision'))
+      return { rows: link && (link as Link & { substitute_step?: boolean }).substitute_step ? [{ ...link, revision: group.revision, status: group.status, publication: group.publication }] : [] };
+    if(sql.startsWith('UPDATE trays SET tray_type=') && row) {
+      row = { ...row, tray_type: String(values[2]), width_mm: Number(values[3]), height_mm: Number(values[4]), purpose: String(values[5]) };
+      return { rows: [row] };
+    }
     if(sql.startsWith('SELECT * FROM trays'))return {rows:row&&values[0]===projectId&&values[1]===row.id?[row]:[]};
     if(sql.startsWith('SELECT id FROM trays'))return {rows:duplicate?[{id:id(999)}]:[]};
     if(sql.startsWith('INSERT INTO trays')){row=tray(String(values[1]),values);return {rows:[row]};}
@@ -69,12 +75,34 @@ beforeEach(()=>{
 const save=(body:unknown={expectedRevision:group.revision},admin=true)=>fetch(base,{method:'POST',headers:{'Content-Type':'application/json','x-test-admin':admin?'yes':'no'},body:JSON.stringify(body)});
 const writes=()=>mocks.query.mock.calls.filter(([sql])=>/^INSERT INTO trays|^UPDATE trays|^INSERT INTO cad_route_tray_exports/.test(String(sql)));
 
-const reviewSubstitute = (reviewToken?: string) => fetch(base.replace('/trays-list', '/substitute-step'), {
+const reviewSubstitute = (reviewToken?: string, profile?: { trayType: string; widthMm: number; heightMm: number; purpose: string }) => fetch(base.replace('/trays-list', '/substitute-step'), {
   method: 'POST', headers: { 'Content-Type': 'application/json', 'x-test-admin': 'yes' },
-  body: JSON.stringify({ expectedRevision: group.revision, reviewToken }),
+  body: JSON.stringify({ expectedRevision: group.revision, reviewToken, profile }),
 });
 
 describe('substitute STEP geometry', () => {
+  it('adopts the changed Trays purpose and then saves CAD profile edits back to the same Trays row', async () => {
+    await save();
+    const trayId = row!.id;
+    group.status = 'published';
+    group.project_tray_id = trayId;
+    group.publication = { baseArtifactId: id(90), overlay: { segments: ['existing'] },
+      traySnapshot: { id: trayId, name: row!.name, purpose: row!.purpose, lengthMm: row!.length_mm,
+        trayType: row!.tray_type, widthMm: row!.width_mm, heightMm: row!.height_mm } };
+    row!.purpose = 'LV and I and C cable tray';
+    const review = await (await reviewSubstitute()).json();
+    expect(review).toMatchObject({ purpose: row!.purpose, previousPurpose: 'Control' });
+    expect((await reviewSubstitute(review.reviewToken)).status).toBe(200);
+    const write = () => mocks.query.mock.calls.filter(([sql]) => sql.startsWith('UPDATE cad_route_groups SET publication')).at(-1)![1];
+    expect(write()[3]).toMatchObject({ overlay: { segments: ['existing'] }, traySnapshot: { purpose: row!.purpose } });
+    group.publication = write()[3];
+    group.purpose = String(write()[4]);
+    group.revision++;
+    const { reviewToken } = await (await reviewSubstitute()).json();
+    expect((await reviewSubstitute(reviewToken, { trayType: 'REAL', widthMm: 400, heightMm: 77, purpose: 'LV' })).status).toBe(200);
+    expect(row).toMatchObject({ id: trayId, tray_type: 'REAL', width_mm: 400, height_mm: 77, purpose: 'LV', length_mm: 1500 });
+    expect(write()[3]).toMatchObject({ overlay: { segments: ['existing'] }, traySnapshot: { purpose: 'LV', trayType: 'REAL' } });
+  });
   it('repairs a published profile in place and uses the real profile for subsequent length updates', async () => {
     await save();
     const original = { ...row! };
@@ -103,9 +131,9 @@ describe('substitute STEP geometry', () => {
     const { reviewToken } = await (await reviewSubstitute()).json();
     row!.width_mm = 500;
     expect(await (await reviewSubstitute(reviewToken)).json()).toMatchObject({ code: 'CAD_ROUTE_REVIEW_CHANGED' });
-    row!.purpose = 'Changed';
+    row!.name = 'Changed';
     expect(await (await reviewSubstitute()).json()).toMatchObject({ code: 'CAD_ROUTE_TRAY_EDITED',
-      message: expect.stringContaining('Purpose (Control → Changed)') });
+      message: expect.stringContaining('Name (BC182 → Changed)') });
   });
 
   it('accepts recalculation metadata for the same length and identifies a real length change', async () => {

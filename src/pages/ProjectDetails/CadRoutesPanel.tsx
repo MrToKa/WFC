@@ -23,6 +23,8 @@ import { cadRouteGroupInputSchema, type CadRouteGroup } from '../../../shared/ca
 type TrayProfileReview = {
   scope: string;
   reviewToken: string;
+  purpose: string;
+  previousPurpose: string;
   real: { trayType: string; widthMm: number; heightMm: number };
   step: { trayType: string; widthMm: number; heightMm: number };
 };
@@ -157,6 +159,7 @@ export function CadRoutesPanel({
   const memberSelectionEpoch = useRef(0);
   const selectedMembershipRoute = useRef('');
   const [profileReview, setProfileReview] = useState<TrayProfileReview | null>(null);
+  const [profileEdit, setProfileEdit] = useState({ trayType: '', widthMm: '', heightMm: '', purpose: '' });
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -709,15 +712,21 @@ export function CadRoutesPanel({
       const response = await request(`/${selected.id}/substitute-step`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ expectedRevision: selected.revision,
-          ...(confirm ? { reviewToken: profileReview!.reviewToken } : {}) }),
+          ...(confirm ? { reviewToken: profileReview!.reviewToken,
+            ...(selected.substituteStep ? { profile: { ...profileEdit, widthMm: Number(profileEdit.widthMm), heightMm: Number(profileEdit.heightMm) } } : {}) } : {}) }),
       });
       const data = await response.json();
       if (confirm) {
         setProfileReview(null);
-        await reload();
-        await onTraysChanged?.();
+        const saved = (await reload()).find(route => route.id === selected.id);
+        if (saved && selectedMembershipRoute.current === selected.id) edit(saved);
+        await Promise.all([onTraysChanged?.(), projectPurposes.refresh()]);
         reportCommand('Substitute STEP geometry saved', `Routing uses the STEP geometry. Capacity uses the Trays profile for ${selected.name}.`);
-      } else setProfileReview({ ...data, scope: profileScope });
+      } else {
+        setProfileReview({ ...data, scope: profileScope });
+        setProfileEdit({ trayType: data.real.trayType, widthMm: String(data.real.widthMm),
+          heightMm: String(data.real.heightMm), purpose: data.purpose ?? '' });
+      }
     } catch (error) {
       setProfileReview(null);
       reportCommand('Cannot use substitute STEP geometry', error instanceof Error ? error.message : 'Refresh the route and try again.', 'error');
@@ -1221,11 +1230,28 @@ export function CadRoutesPanel({
         {selected && !isRevision && !openRevision && (selected.exportedTrayId || selected.projectTrayId) ? (
           <fieldset>
             <legend>Substitute STEP geometry</legend>
-            {selected.substituteStep && <Caption1 block>Using the real profile from Trays.</Caption1>}
+            {selected.substituteStep && <Caption1 block>{selected.realTrayType
+              ? `Trays type: ${selected.realTrayType}` : 'Using the real profile from Trays.'}</Caption1>}
             {profileReview?.scope === profileScope ? <>
               <p>Trays: {profileReview.real.trayType} &middot; {profileReview.real.widthMm} &times; {profileReview.real.heightMm} mm</p>
               <p>STEP: {profileReview.step.trayType} &middot; {profileReview.step.widthMm} &times; {profileReview.step.heightMm} mm</p>
-              <Button disabled={busy || externalBusy || unsavedChanges} onClick={() => void reviewProfile(true)}>Use Trays profile for capacity</Button>
+              {profileReview.previousPurpose && profileReview.purpose !== profileReview.previousPurpose &&
+                <p>Route purpose: {profileReview.previousPurpose} &rarr; {profileReview.purpose}</p>}
+              {selected.substituteStep && <>
+                <Field label="Trays type"><Input value={profileEdit.trayType} maxLength={500}
+                  onChange={(_, data) => setProfileEdit(old => ({ ...old, trayType: data.value }))} /></Field>
+                <Field label="Trays width (mm)"><Input type="number" value={profileEdit.widthMm}
+                  onChange={(_, data) => setProfileEdit(old => ({ ...old, widthMm: data.value }))} /></Field>
+                <Field label="Trays height (mm)"><Input type="number" value={profileEdit.heightMm}
+                  onChange={(_, data) => setProfileEdit(old => ({ ...old, heightMm: data.value }))} /></Field>
+                <Field label="Trays purpose"><select value={profileEdit.purpose}
+                  onChange={event => setProfileEdit(old => ({ ...old, purpose: event.target.value }))}>
+                  {[...new Set([profileReview.purpose, ...purposeOptions])].map(purpose => <option key={purpose}>{purpose}</option>)}
+                </select></Field>
+              </>}
+              <Button disabled={busy || externalBusy || unsavedChanges || (selected.substituteStep &&
+                (!profileEdit.trayType.trim() || !profileEdit.purpose || !(Number(profileEdit.widthMm) > 0) || !(Number(profileEdit.heightMm) > 0)))}
+                onClick={() => void reviewProfile(true)}>{selected.substituteStep ? 'Save Trays profile' : 'Use Trays profile for capacity'}</Button>
               <Button disabled={busy} onClick={() => setProfileReview(null)}>Cancel</Button>
             </> : <Button disabled={busy || externalBusy || unsavedChanges} onClick={() => void reviewProfile(false)}>Review Trays and STEP profiles</Button>}
           </fieldset>

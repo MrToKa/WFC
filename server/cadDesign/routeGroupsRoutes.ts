@@ -44,8 +44,10 @@ const safe = (handler: (req: Request, res: Response) => Promise<void>) =>
   };
 const routeSelect = `SELECT g.id,g.name,g.tag,g.color,g.purpose,g.revision,g.status,
   coalesce(e.substitute_step,false) AS "substituteStep", g.project_tray_id AS "projectTrayId", e.tray_id AS "exportedTrayId",
+  CASE WHEN e.substitute_step THEN t.tray_type END AS "realTrayType",
   (t.id IS NOT NULL AND (
     t.tray_type IS DISTINCT FROM (profile.saved->>'trayType') OR
+    t.purpose IS DISTINCT FROM (profile.saved->>'purpose') OR
     to_jsonb(t.width_mm) IS DISTINCT FROM nullif(profile.saved->'widthMm','null'::jsonb) OR
     to_jsonb(t.height_mm) IS DISTINCT FROM nullif(profile.saved->'heightMm','null'::jsonb)
   )) AS "profileNeedsReview",

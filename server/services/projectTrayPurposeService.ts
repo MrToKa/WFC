@@ -3,6 +3,8 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { readPurposePolicyState } from '../pathfinder/policySchema.js';
 import { resolveUserRole } from '../models/user.js';
+import type { TrayRow } from '../models/tray.js';
+import { synchronizeSubstituteTrayProfile } from '../cadDesign/substituteTrayProfile.js';
 
 export class TrayPurposeError extends Error {
   constructor(public code: string, public status: number, message: string) { super(message); }
@@ -94,7 +96,8 @@ export async function changeProjectTrayPurpose(c: PoolClient, projectId: string,
       const drawing = (await c.query<{ category_modes: unknown }>(`SELECT r.category_modes FROM pf_drawing_purpose_rules r
         JOIN pf_catalog_purpose_incarnations i ON i.project_id=r.project_id AND i.purpose_key=r.purpose_key AND i.incarnation_id=r.purpose_incarnation_id
         WHERE r.project_id=$1 AND r.purpose_key=$2 AND i.active`, [projectId, name])).rows[0];
-      await c.query('UPDATE trays SET purpose=$3,updated_at=now() WHERE project_id=$1 AND pf_catalog_key(purpose)=$2', [projectId, name, nextName]);
+      const changed = await c.query<TrayRow>('UPDATE trays SET purpose=$3,updated_at=now() WHERE project_id=$1 AND pf_catalog_key(purpose)=$2 RETURNING *', [projectId, name, nextName]);
+      for (const tray of changed.rows) await synchronizeSubstituteTrayProfile(c, { ...tray, purpose: name }, tray, actorId);
       await c.query('UPDATE project_tray_purpose_templates SET tray_purpose=$3,updated_at=now() WHERE project_id=$1 AND pf_catalog_key(tray_purpose)=$2', [projectId, name, nextName]);
       await c.query('DELETE FROM project_tray_purposes WHERE project_id=$1 AND name=$2', [projectId, name]);
       await c.query('INSERT INTO project_tray_purposes(project_id,name) VALUES($1,$2) ON CONFLICT DO NOTHING', [projectId, nextName]);

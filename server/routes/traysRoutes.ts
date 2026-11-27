@@ -18,6 +18,8 @@ import { projectDrawingMetricsSchema } from '../../shared/trayDrawingSnapshot.js
 import { authenticate, requireProjectEdit, requireProjectExport } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
+import { synchronizeSubstituteTrayProfile } from '../cadDesign/substituteTrayProfile.js';
+import { PublicationError } from '../cadDesign/routePublication.js';
 import { readCurrentTrayAutoLength, TrayAutoLengthError } from '../services/trayAutoLengthService.js';
 import { readTrayAutoLengthCaptureContext } from '../services/trayAutoLengthCaptureService.js';
 import { getPathFinderRuntime } from '../pathfinder/runtime.js';
@@ -778,13 +780,18 @@ traysRouter.patch(
         return;
       }
 
+      await synchronizeSubstituteTrayProfile(client, previous.rows[0], tray, req.userId!);
       await recordTrayChanges(client, req.userId!, previous.rows[0], tray);
       await client.query('COMMIT');
       res.json({ tray: mapTrayRow(tray) });
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => undefined);
-      if (error instanceof TrayAutoLengthError) {
+      if (error instanceof TrayAutoLengthError || error instanceof PathFinderError) {
         res.status(error.status).json({ error: error.message, code: error.code });
+        return;
+      }
+      if (['40P01', '40001'].includes((error as { code?: string }).code ?? '')) {
+        res.status(409).json({ error: 'The linked CAD route changed during the edit. Refresh and save again.' });
         return;
       }
       console.error('Update tray error', error);
@@ -1089,6 +1096,7 @@ traysRouter.post(
             `,
             [row.type, row.purpose, widthMm, heightMm, row.length, existing.id],
           );
+          await synchronizeSubstituteTrayProfile(client, existing, updated.rows[0], req.userId!);
           await recordTrayChanges(client, req.userId!, existing, updated.rows[0]);
           summary.updated += 1;
         } else {
@@ -1127,6 +1135,10 @@ traysRouter.post(
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Import trays error', error);
+      if (error instanceof PathFinderError) {
+        res.status(error.status).json({ error: error.message, code: error.code });
+        return;
+      }
       res.status(500).json({ error: 'Failed to import trays' });
       return;
     } finally {
