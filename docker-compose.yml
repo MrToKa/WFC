@@ -7,6 +7,9 @@ services:
       context: .
       dockerfile: Dockerfile.cad-converter
     restart: unless-stopped
+    init: true
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
     read_only: true
     user: "10001:10001"
     cap_drop: [ALL]
@@ -29,6 +32,8 @@ services:
     image: ${POSTGRES_IMAGE:-postgres:18}
     container_name: wfc-postgres
     restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 120s
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -49,6 +54,7 @@ services:
     image: ${MINIO_IMAGE:-minio/minio:latest}
     container_name: wfc-minio
     restart: unless-stopped
+    stop_grace_period: 120s
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
