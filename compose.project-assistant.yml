@@ -13,6 +13,9 @@ services:
       WFC_AI_MAX_PAGES: ${WFC_AI_MAX_PAGES:-60}
       WFC_AI_JOB_USD: ${WFC_AI_JOB_USD:-10}
     command: ["node","project-worker.mjs"]
+    init: true
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
