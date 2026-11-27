@@ -23,6 +23,7 @@ internal static class Program
         if (args is ["--benchmark"]) return Benchmark();
         if (args.Length != 0) return 2;
         PlainParity(); SelectionInputs(); LimitsAndCancellation(); ScopeAndBounds(); Persistence(); ConstrainedParity(); CadSideConnections();
+        SameRouteBendContacts();
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             schemaVersion = "wfc.pf.graph-reuse-checks.v1", status = failures == 0 ? "PASS" : "FAIL",
@@ -78,6 +79,52 @@ internal static class Program
     private sealed record Timing(double WholeMilliseconds, long AllocatedBytes, long BasisBuilds, long MemoryHits, long SurfaceQueries,
         long SurfaceHits, long CandidatePairs, double FingerprintMilliseconds, double TreeMilliseconds, double SurfaceMilliseconds,
         double GraphMilliseconds, long RetainedBytes);
+
+    private static void SameRouteBendContacts()
+    {
+        Test("same-route bend contact admits up to 50 mm in fresh and reused graphs", () =>
+        {
+            var from = P(-2); var options = Options(.01); var cache = new GraphPreparationCache();
+            foreach (var (distance, expected) in new[] { (.05, true), (.051, false) })
+            {
+                var to = P(distance + 1, 2);
+                var trays = BendNetwork(distance, "/B006", P(-1), .06);
+                var route = Without(() => Route(trays, from, to, options));
+                Equal(expected, route.Success);
+                if (expected)
+                {
+                    Equal("/B006", route.RouteText);
+                    Equal(0, route.ConnectionGapCount);
+                    Need(Math.Abs(route.LengthMeters - (3 + Math.Sqrt(2) + distance)) < 1e-9);
+                }
+                ExactAt(cache, trays, from, to, options);
+                ExactAt(cache, trays, from, to, options);
+            }
+        });
+
+        Test("50 mm bend tolerance requires matching routes, opposing ports and compatible sections", () =>
+        {
+            const double distance = .04;
+            var from = P(-2); var to = P(distance + 1, 2); var options = Options(.01);
+            Need(!Route(BendNetwork(distance, "/B004", P(-1), .06), from, to, options).Success);
+            Need(!Route(BendNetwork(distance, "/B006", P(0, -1), .06), from, to, options).Success);
+            Need(!Route(BendNetwork(distance, "/B006", P(-1), .08), from, to, options).Success);
+        });
+    }
+
+    private static TraySegment[] BendNetwork(double distance, string bendRoute, RoutePoint bendOutward, double bendHeight)
+    {
+        var straightEnd = P(0); var bendStart = P(distance);
+        var u = P(0, 1); var v = P(0, 0, 1);
+        var secondSectionAxis = bendOutward.X == 0 ? P(1) : u;
+        return [
+            new("straight", "/B006", CableCategory.Control, [P(-2), straightEnd], false,
+                [new RouteConnectionPort(straightEnd, P(1), u, v, .3, .06)]),
+            new("bend", bendRoute, CableCategory.Control, [bendStart, P(distance + 1, 1), P(distance + 1, 2)], true,
+                [new RouteConnectionPort(bendStart, bendOutward, secondSectionAxis, v, .3, bendHeight)])
+        ];
+    }
+
     private static void CadSideConnections()
     {
         Test("current CAD side-entry policy partitions cold warm and persisted graph recipes", () =>

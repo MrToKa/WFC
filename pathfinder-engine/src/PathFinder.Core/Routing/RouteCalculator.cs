@@ -21,6 +21,7 @@ namespace AddinRibbon.Routing
         public const double ConnectionGapEpsilonMeters = 0.000001;
         /// <summary>Native mesh precision accepted only at two verified opposing physical ports.</summary>
         public const double VerifiedPortContactPrecisionMeters = 0.0005;
+        private const double SameRouteBendPortToleranceMeters = 0.05;
         /// <summary>Additive integer units keep gap preference transitive while ignoring sub-micrometre mesh noise.</summary>
         public const double GapRankingResolutionMeters = 0.000001;
 
@@ -339,7 +340,7 @@ namespace AddinRibbon.Routing
         {
             if ((++treeVisits & 255) == 0) token.ThrowIfCancellationRequested();
             var first = pieces[firstIndex];
-            if (!Bounds.WithinTolerance(first.Bounds, node.Bounds, Math.Max(tolerance, VerifiedPortContactPrecisionMeters))) return true;
+            if (!Bounds.WithinTolerance(first.Bounds, node.Bounds, Math.Max(tolerance, SameRouteBendPortToleranceMeters))) return true;
             if (node.Left != null)
                 return VisitCandidates(node.Left, indices, pieces, firstIndex, tolerance,
                     graph, token, ref candidates, maxCandidates, ref treeVisits, preparation) &&
@@ -375,6 +376,8 @@ namespace AddinRibbon.Routing
 
         private static bool AddPortContacts(Piece first, Piece last, ContactGraph graph, double tolerance)
         {
+            if (UsesSameRouteBendPortTolerance(first, last) &&
+                !graph.AddSameRouteBendPortContacts(first, last, tolerance)) return false;
             if (first.EndsOnly)
             {
                 if (first.HasStartPort && !AddPortContact(first, last, 0, graph, tolerance)) return false;
@@ -425,6 +428,12 @@ namespace AddinRibbon.Routing
         private static bool DifferentRoutes(Piece first, Piece last) =>
             first.RouteCode != null && last.RouteCode != null && first.RouteCode != last.RouteCode;
 
+        private static bool UsesSameRouteBendPortTolerance(Piece first, Piece last) =>
+            SameRoute(first, last) && first.EndsOnly != last.EndsOnly &&
+            first.CadSection == null && last.CadSection == null && !first.Independent && !last.Independent &&
+            first.VerifiedPorts.Count != 0 && last.VerifiedPorts.Count != 0 &&
+            (first.HasStartPort || first.HasEndPort) && (last.HasStartPort || last.HasEndPort);
+
         private static bool SearchesContacts(Piece piece) =>
             !piece.EndsOnly || piece.HasStartPort || piece.HasEndPort ||
             (piece.AllowsInterRouteInteriorConnections && piece.RouteCode != null && !piece.Independent);
@@ -450,7 +459,8 @@ namespace AddinRibbon.Routing
         {
             if (!SameRoute(first, last)) return Bounds.WithinTolerance(first.Bounds, last.Bounds, tolerance);
             double cutoff = CanJoinCadEnds(first, last)
-                ? Math.Max(tolerance, VerifiedPortContactPrecisionMeters) : VerifiedPortContactPrecisionMeters;
+                ? Math.Max(tolerance, VerifiedPortContactPrecisionMeters)
+                : UsesSameRouteBendPortTolerance(first, last) ? SameRouteBendPortToleranceMeters : VerifiedPortContactPrecisionMeters;
             return Bounds.WithinTolerance(first.Bounds, last.Bounds, cutoff);
         }
 
@@ -530,16 +540,17 @@ namespace AddinRibbon.Routing
                 : new BigInteger(distance) * 1000000;
         }
 
-        private static bool ProvenPortContact(Piece first, Piece last, RoutePoint firstPoint, RoutePoint lastPoint)
+        private static bool ProvenPortContact(Piece first, Piece last, RoutePoint firstPoint, RoutePoint lastPoint,
+            double portDistanceTolerance = VerifiedPortContactPrecisionMeters)
         {
-            if (firstPoint.DistanceTo(lastPoint) > VerifiedPortContactPrecisionMeters) return false;
+            if (firstPoint.DistanceTo(lastPoint) > portDistanceTolerance) return false;
             foreach (var a in first.VerifiedPorts)
             {
                 if (!IsPhysicalPort(first, a, firstPoint)) continue;
                 foreach (var b in last.VerifiedPorts)
                 {
                     if (!IsPhysicalPort(last, b, lastPoint)
-                        || a.Point.DistanceTo(b.Point) > VerifiedPortContactPrecisionMeters
+                        || a.Point.DistanceTo(b.Point) > portDistanceTolerance
                         || RouteConnectionPort.Dot(a.Outward, b.Outward) > -1 + 0.00002) continue;
                     // Compare measured sections in both frames, including swapped U/V axes.
                     if (CompatibleSection(a, b) && CompatibleSection(b, a)) return true;
@@ -711,6 +722,26 @@ namespace AddinRibbon.Routing
                 this.preparation = preparation;
                 foreach (var ordered in segmentNodes) connections += ordered.Count - 1;
                 if (connections > maxConnections) Limit = GraphLimit.Connections;
+            }
+
+            internal bool AddSameRouteBendPortContacts(Piece first, Piece last, double tolerance)
+            {
+                return (!first.HasStartPort || AddBendPortContactsAt(first, last, 0, tolerance))
+                    && (!first.HasEndPort || AddBendPortContactsAt(first, last, 1, tolerance));
+            }
+
+            private bool AddBendPortContactsAt(Piece first, Piece last, double firstFraction, double tolerance)
+            {
+                return (!last.HasStartPort || AddBendPortContact(first, last, firstFraction, 0, tolerance))
+                    && (!last.HasEndPort || AddBendPortContact(first, last, firstFraction, 1, tolerance));
+            }
+
+            private bool AddBendPortContact(Piece first, Piece last, double firstFraction, double lastFraction, double tolerance)
+            {
+                var firstPoint = firstFraction == 0 ? first.Start : first.End;
+                var lastPoint = lastFraction == 0 ? last.Start : last.End;
+                return !ProvenPortContact(first, last, firstPoint, lastPoint, SameRouteBendPortToleranceMeters)
+                    || Link(first, last, firstFraction, lastFraction, 0, tolerance);
             }
 
             internal bool AddContact(Piece first, Piece last, double firstFraction, double lastFraction, double tolerance)

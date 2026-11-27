@@ -12,7 +12,7 @@ namespace AddinRibbon.Routing
     /// Supplied identities partition storage; exact current geometry selects every hit.</summary>
     public sealed partial class GraphPreparationCache
     {
-        public const string Version = "wfc.pf.graph-contact-preparation.v1";
+        public const string Version = "wfc.pf.graph-contact-preparation.v2";
         public const string OriginalRouteCalculatorSha256 = "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8";
         public const string OriginalTrayMeshClearanceSha256 = "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8";
         private readonly object gate = new object();

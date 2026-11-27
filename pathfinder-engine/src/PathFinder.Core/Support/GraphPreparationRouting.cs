@@ -230,7 +230,7 @@ namespace AddinRibbon.Routing
             GraphContactPair[] pairs, ref int position, ref int visits, CancellationToken token)
         {
             if ((++visits & 127) == 0) token.ThrowIfCancellationRequested(); var first = pieces[firstIndex];
-            if (!Bounds.WithinTolerance(first.Bounds, node.Bounds, Math.Max(tolerance, VerifiedPortContactPrecisionMeters))) return true;
+            if (!Bounds.WithinTolerance(first.Bounds, node.Bounds, Math.Max(tolerance, SameRouteBendPortToleranceMeters))) return true;
             if (node.Left != null) return ValidateCandidates(node.Left, indices, pieces, firstIndex, tolerance, pairs, ref position, ref visits, token)
                 && ValidateCandidates(node.Right, indices, pieces, firstIndex, tolerance, pairs, ref position, ref visits, token);
             for (int offset = 0; offset < node.Count; offset++)
