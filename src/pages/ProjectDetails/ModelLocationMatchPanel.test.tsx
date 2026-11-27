@@ -84,4 +84,29 @@ describe('independent From/To control', () => {
     fireEvent.click(screen.getByRole('button', { name: 'PUMP-A' }));
     expect(onOpen).toHaveBeenCalledWith('PUMP-A', expect.any(HTMLButtonElement));
   });
+  it('searches the full assigned report and prefers an exact tag over partial matches', () => {
+    const onShow = vi.fn();
+    const result = (name: string, status: 'assigned' | 'preserved' | 'missing') => ({
+      name, status, candidateObjectIds: [], locationId: null, bindingId: null, reasonCode: null,
+    });
+    const exact = result('15-PT-4005', 'preserved');
+    const other = result('15-PT-4005A', 'assigned');
+    setup({ complete: true, results: [
+      ...Array.from({ length: 130 }, (_, index) => result(`PUMP-${index}`, 'assigned')),
+      exact, other, result('15-PT-4005B', 'missing'),
+    ] }, { locationReport: { editing: false, canOpen: () => false, onOpen: vi.fn(), onShow } });
+    const input = screen.getByRole('searchbox', { name: 'Search assigned locations by tag' });
+    fireEvent.change(input, { target: { value: ' 15-pt-4005 ' } });
+    expect(screen.getByText('Assigned locations (2 of 132)')).toBeVisible();
+    fireEvent.submit(screen.getByRole('form', { name: 'Search assigned locations' }));
+    expect(onShow).toHaveBeenCalledExactlyOnceWith(exact);
+    fireEvent.change(input, { target: { value: '15-PT' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(onShow).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Show 15-PT-4005A in 3D' }));
+    expect(onShow).toHaveBeenLastCalledWith(other);
+    fireEvent.change(input, { target: { value: '15-PT-4005B' } });
+    expect(screen.getByText('No assigned location matches this tag.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled();
+  });
 });

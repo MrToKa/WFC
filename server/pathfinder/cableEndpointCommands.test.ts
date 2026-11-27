@@ -172,6 +172,17 @@ describe('cable endpoint commands with synthetic SQL; selection reader independe
     const f = fixture(); f.settings.mto = mto; const c = await f.read(); expect(c.canBind).toBe(false); expect(c.reasonCodes).toContain(reason);
     await expect(f.save(f.command(c))).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_UNAVAILABLE' }); expect(f.state.bindings.size).toBe(0);
   });
+  it('reads the saved model object on an MV endpoint while refusing a new assignment', async () => {
+    const f = fixture(), command = f.command(await f.read());
+    command.selection = { mode: 'object-derived', sdkObjectId: f.object.identity.dbId!, object: f.ref };
+    const saved = await f.save(command);
+    f.settings.mto = 'MV';
+    const current = await f.read();
+    expect(current).toMatchObject({ canBind: false, head: { id: saved.binding.binding.id },
+      confirmedSelection: { sdkObjectId: f.object.identity.dbId }, reasonCodes: ['CABLE_ENDPOINT_MV_EXCLUDED'] });
+    expect(current.automaticSelection).toBeNull();
+    await expect(f.save(f.command(current))).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_UNAVAILABLE' });
+  });
   it('shows an empty logical name as blocked and asks for a cable-list name instead of inventing one', async () => {
     const f = fixture(); f.state.cables[0].from_location = '  '; const c = await f.read(); expect(c.logicalName).toBe(null); expect(c.logicalKey).toBe(null);
     expect(c.canBind).toBe(false); expect(c.reasonCodes).toContain('CABLE_ENDPOINT_NAME_REQUIRED'); expect(f.state.locations.size).toBe(0);

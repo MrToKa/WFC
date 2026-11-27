@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { getBarrierRegistry } from '@/api/pathfinderBarriers';
-import type { CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
+import { fetchCableEndpointContext, type CableEndpointContext, type CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
 import { fetchPathFinderCableWorkflowDetail } from '@/api/pathfinderCableWorkflow';
 import type { PathFinderCableRoutingPanelProps } from '@/components/pathfinder/PathFinderCableRoutingPanel';
 import { usePathfinderLocationImpactProgress } from '@/hooks/usePathfinderLocationImpactProgress';
@@ -16,6 +16,7 @@ const { closeWindow, requestWindow, waitForSave, pointPickAbort } = vi.hoisted((
 }));
 
 vi.mock('@/api/pathfinderBarriers', () => ({ getBarrierRegistry: vi.fn() }));
+vi.mock('@/api/pathfinderCableEndpoints', () => ({ fetchCableEndpointContext: vi.fn() }));
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/hooks/usePathfinderLocationImpactProgress', () => ({ usePathfinderLocationImpactProgress: vi.fn() }));
 vi.mock('@/hooks/useFloatingCablePanel', () => ({
@@ -100,4 +101,40 @@ it('updates the same editor before and after saving, without waiting for recalcu
   expect(screen.getByRole('dialog', { name: '+NSHV' })).toBeVisible();
   expect(requestWindow).toHaveBeenCalledOnce();
   expect(closeWindow).not.toHaveBeenCalled();
+});
+
+it('focuses the saved object group for the tag without opening the editor', async () => {
+  requestWindow.mockClear();
+  const { scope } = barrierCalculationFixture(n => `c5000000-0000-4000-8000-${String(n).padStart(12, '0')}`).preferences.barrierRouting;
+  const locationId = 'saved-location', bindingId = 'saved-binding';
+  vi.mocked(useModelLocationMatch).mockReturnValue({
+    allowed: true, canStart: true, complete: true, totalNames: 1, owner: 'scope',
+    storageReady: true, busy: false, phase: 'idle', summaryLoading: false, progress: null, error: null, notice: null, pending: null,
+    start: vi.fn(), retry: vi.fn(), beforeCalculation: vi.fn(), cancel: vi.fn(),
+    results: [{ name: '15-PT-4005', status: 'preserved', candidateObjectIds: [99], locationId, bindingId, reasonCode: null }],
+  });
+  vi.mocked(usePathfinderLocationImpactProgress).mockReturnValue({ impact: null } as ReturnType<typeof usePathfinderLocationImpactProgress>);
+  const context = {
+    logicalKey: '15-PT-4005', current: scope, location: { id: locationId }, head: { id: bindingId },
+    reopenedObject: { sdkObjectId: 42, sdkObjectIds: [42, 43] },
+  } as unknown as CableEndpointContext;
+  vi.mocked(fetchCableEndpointContext).mockResolvedValueOnce(context)
+    .mockResolvedValueOnce({ ...context, current: { ...context.current!, selectionRevision: '999' } });
+  const showLocation = vi.fn().mockResolvedValue(true);
+  const pf = {
+    viewerPhase: 'ready', preparationViewerGeneration: 1, showLocation,
+    preparationAccess: { projectId: scope.projectId, loadedProjectId: scope.projectId, token: 'token', isAdmin: true },
+    data: { activeModel: scope, cables: [{ id: 'cable', fromLocation: ' 15-pt-4005 ', toLocation: null, mto: 'MV' }] },
+  } as unknown as ReturnType<typeof usePathFinder>;
+  render(<LocatorLocationAssignments pf={pf} accountId="account" active writable secondaryDistanceMeters={2} onRoutesChanged={vi.fn()} />);
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: '15-PT-4005' } });
+  const search = screen.getByRole('button', { name: 'Search' });
+  fireEvent.click(search);
+  await screen.findByText('Showing 15-PT-4005 in 3D.');
+  expect(fetchCableEndpointContext).toHaveBeenCalledWith(scope.projectId, 'token', 'cable', 'from', expect.any(AbortSignal));
+  expect(showLocation).toHaveBeenCalledExactlyOnceWith(42, [42, 43], undefined);
+  expect(requestWindow).not.toHaveBeenCalled();
+  fireEvent.click(search);
+  await screen.findByText('Could not show 15-PT-4005 in the current 3D model.');
+  expect(showLocation).toHaveBeenCalledTimes(1);
 });

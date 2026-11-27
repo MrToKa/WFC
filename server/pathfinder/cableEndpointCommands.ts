@@ -5,7 +5,7 @@ import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderP
 import { CABLE_ENDPOINT_LIMITS, cableEndpointCommandSchema, cableEndpointContextHashInput, cableEndpointContextSchema,
   cableEndpointEndSchema, cableEndpointImpactSchema, cableEndpointReceiptSchema, cableEndpointRecoverySchema,
   cableEndpointClosedSchema, cableEndpointSdkObjectIdSchema, cableEndpointSelectionResponseSchema,
-  cableEndpointConfirmedDisplaySelectionSchema, cableEndpointDisplayObjectNameSchema,
+  cableEndpointConfirmedDisplaySelectionSchema, cableEndpointDisplayObjectNameSchema, canReadSavedCableEndpointDisplay,
   type CableEndpointCommand, type CableEndpointContext } from '../../shared/pathfinderCableEndpoints.js';
 import { ENDPOINT_ANCHOR_RULE, endpointBindingSchema, endpointLocationNameSchema, endpointLocationSchema, type EndpointObjectRef } from '../../shared/pathfinderEndpointBindings.js';
 import { assertLoginNotExpired } from './auth.js';
@@ -114,8 +114,10 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
   else if (!endpointLocationNameSchema.safeParse(logicalName).success) reasons.push('CABLE_ENDPOINT_NAME_INVALID');
   if (cable.mto === 'MV') reasons.push('CABLE_ENDPOINT_MV_EXCLUDED');
   if (!current) reasons.push('ENDPOINT_PREPARATION_REQUIRED');
+  const canBind = reasons.length === 0;
+  const canReadSavedDisplay = canReadSavedCableEndpointDisplay({ canBind, mto: cable.mto, reasonCodes: reasons });
   let automaticSelection: CableEndpointContext['automaticSelection'] = null, confirmedSelection: CableEndpointContext['confirmedSelection'] = null;
-  if (!head && reasons.length === 0 && current && logicalName) {
+  if (!head && canBind && current && logicalName) {
     const candidate = await readAutomaticNamedEndpointCandidate(client, { projectId, current, name: logicalName }); check();
     if (candidate.status === 'automatic-ready' && candidate.objectId && candidate.point) {
       const sdkObjectId = Number(candidate.objectId.slice(5));
@@ -131,7 +133,7 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
       }
     }
   }
-  if (head?.status === 'confirmed' && head.mode === 'object-derived' && head.sourceObject && reasons.length === 0 && current
+  if (head?.status === 'confirmed' && head.mode === 'object-derived' && head.sourceObject && canReadSavedDisplay && current
     && head.modelVersionId === current.modelVersionId && head.aggregateId === current.aggregateId && head.artifactId === current.artifactId
     && head.projectionSha256 === current.projectionSha256 && head.captureFrameId === current.captureFrameId) {
     const display = await objectDisplay(client, projectId, head.sourceObject, check);
@@ -142,10 +144,10 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
         confirmedSelection = { source: 'confirmed', ...display, object: selected.object, pointProjectMetres: head.pointProjectMetres, approximate: true, confirmed: true };
     }
   }
-  let confirmedDisplaySelection = head && location && current && reasons.length === 0
+  let confirmedDisplaySelection = head && location && current && canReadSavedDisplay
     ? await readCableEndpointDisplay(client, { projectId, head, location, current }, check) : null;
   let reopenedObject: CableEndpointContext['reopenedObject'];
-  if (!confirmedSelection && !confirmedDisplaySelection && !reasons.length && current && location && head?.status === 'confirmed'
+  if (!confirmedSelection && !confirmedDisplaySelection && canReadSavedDisplay && current && location && head?.status === 'confirmed'
     && head.locationRevision === location.revision && head.modelVersionId === current.modelVersionId
     && (head.mode === 'fixed-world' || head.aggregateId !== current.aggregateId || head.artifactId !== current.artifactId || head.captureFrameId !== current.captureFrameId
       || head.projectionSha256 !== current.projectionSha256 || (head.sourceObject && head.sourceObject.traceId !== current.traceId))) {
@@ -165,7 +167,7 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
   // saved point or turning the match into an unsaved automatic assignment.
   if (!reopenedObject && !confirmedDisplaySelection && head?.status === 'confirmed' && head.mode === 'fixed-world'
     && head.sourceObject === null && head.attachment === null && !head.autoMatchEvidence?.objectGroup
-    && location && head.locationRevision === location.revision && current && reasons.length === 0
+    && location && head.locationRevision === location.revision && current && canReadSavedDisplay
     && head.modelVersionId === current.modelVersionId && head.aggregateId === current.aggregateId
     && head.artifactId === current.artifactId && head.projectionSha256 === current.projectionSha256
     && head.captureFrameId === current.captureFrameId) {
@@ -189,7 +191,7 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
   }
   const draft = cableEndpointContextSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-context.v1', projectId, cableId, end,
     ...(reopenedObject && { reopenedObject }),
-    cableWriteRevision: cable.cable_write_revision, logicalName, logicalKey, mto: cable.mto, canBind: reasons.length === 0,
+    cableWriteRevision: cable.cable_write_revision, logicalName, logicalKey, mto: cable.mto, canBind,
     reasonCodes: reasons, registryRevision: registry.revision, location, head, current, automaticSelection, confirmedSelection,
     confirmedDisplaySelection, contextSha256: '0'.repeat(64) });
   return budget(cableEndpointContextSchema.parse({ ...draft, contextSha256: endpointBindingHash(cableEndpointContextHashInput(draft)) }));

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getBarrierRegistry } from '@/api/pathfinderBarriers';
-import type { CableEndpointEnd, CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
+import { fetchCableEndpointContext, type CableEndpointEnd, type CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
 import { fetchPathFinderCableWorkflowDetail, type CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 import { PathFinderCableRoutingPanel } from '@/components/pathfinder/PathFinderCableRoutingPanel';
+import { locationObjects, locationPoint } from '@/components/pathfinder/cableEndpointLocationDisplay';
 import { requestFloatingCableWindow, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
 import { usePathfinderLocationImpactProgress } from '@/hooks/usePathfinderLocationImpactProgress';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
@@ -10,6 +11,7 @@ import { createSupportedBarrierAdmissionIntent } from '../../../shared/pathfinde
 import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
 import { normalizeEndpointLocation, type EndpointCurrentScope } from '../../../shared/pathfinderEndpointBindings';
 import type { LocationImpactCalculation } from '../../../shared/pathfinderLocationImpacts';
+import type { ModelLocationMatchResult } from '../../../shared/pathfinderModelLocationMatch';
 import { ModelLocationMatchPanel } from './ModelLocationMatchPanel';
 import type { usePathFinder } from './hooks/usePathFinder';
 
@@ -34,22 +36,34 @@ export function LocatorLocationAssignments({ pf, accountId, active, writable, se
   const [lastSavedName, setLastSavedName] = useState<string | null>(null);
   const [refreshRevision, setRefreshRevision] = useState(0);
   const [impact, setImpact] = useState<Impact | null>(null);
+  const showRequest = useRef<AbortController | null>(null);
+  const [showing, setShowing] = useState<string>();
+  const [showMessage, setShowMessage] = useState<{ text: string; error: boolean }>();
   const references = useMemo(() => {
     const names = new Map<string, Reference>();
+    const excluded = new Map<string, Reference>();
     for (const cable of pf.data?.cables ?? []) {
-      if (!isPathFinderCableEligible(cable.mto)) continue;
+      const map = isPathFinderCableEligible(cable.mto) ? names : excluded;
       for (const end of ['from', 'to'] as const) {
         const name = end === 'from' ? cable.fromLocation : cable.toLocation;
         if (!name?.trim()) continue;
         const key = normalizeEndpointLocation(name);
-        if (!names.has(key)) names.set(key, { cableId: cable.id, end });
+        if (!map.has(key)) map.set(key, { cableId: cable.id, end });
       }
     }
-    return names;
+    return { names, excluded };
   }, [pf.data?.cables]);
 
   const ready = active && writable && pf.viewerPhase === 'ready';
   useEffect(() => { if (!ready) { setTarget(null); setSavingTarget(null); } }, [ready]);
+  const { projectId, loadedProjectId, token } = access;
+  const model = pf.data?.activeModel;
+  const { modelVersionId, selectionRevision, contentFingerprint } = model ?? {};
+  useEffect(() => {
+    setShowing(undefined);
+    setShowMessage(undefined);
+    return () => { showRequest.current?.abort(); showRequest.current = null; };
+  }, [ready, accountId, projectId, loadedProjectId, token, modelVersionId, selectionRevision, contentFingerprint, pf.preparationViewerGeneration]);
   const progress = usePathfinderLocationImpactProgress({ ...access, active: active && Boolean(impact),
     current: impact?.current ?? null, calculation: impact?.calculation ?? null, impactId: impact?.id ?? null,
     foregroundWindow: impact?.reportWindow });
@@ -57,6 +71,58 @@ export function LocatorLocationAssignments({ pf, accountId, active, writable, se
   useEffect(() => {
     if (receipt?.status === 'complete') onRoutesChanged();
   }, [receipt?.id, receipt?.status, onRoutesChanged]);
+
+  async function showAssignedLocation(item: ModelLocationMatchResult) {
+    if (!ready || saving || showRequest.current) return;
+    const unavailable = () => setShowMessage({ text: `Could not show ${item.name} in the current 3D model.`, error: true });
+    const key = normalizeEndpointLocation(item.name);
+    const reference = references.names.get(key) ?? references.excluded.get(key);
+    if (!reference || !projectId || projectId !== loadedProjectId || !token || !modelVersionId || !selectionRevision || !contentFingerprint) {
+      unavailable();
+      return;
+    }
+    const scope = { modelVersionId, selectionRevision, contentFingerprint };
+    const request = new AbortController();
+    showRequest.current = request;
+    setShowing(item.name);
+    setShowMessage(undefined);
+    try {
+      const context = await fetchCableEndpointContext(projectId, token, reference.cableId, reference.end, request.signal);
+      if (request.signal.aborted) return;
+      const current = context.current;
+      if (context.logicalKey !== key || !item.locationId || context.location?.id !== item.locationId
+        || (context.head?.id ?? null) !== item.bindingId || current?.modelVersionId !== modelVersionId
+        || current.selectionRevision !== selectionRevision || current.contentFingerprint !== contentFingerprint) {
+        unavailable();
+        return;
+      }
+      const saved = { context: { ...context, automaticSelection: null }, draft: null, enabled: true, error: null };
+      const object = locationObjects(saved, scope);
+      const point = object ? null : locationPoint(saved, scope);
+      // Legacy assignments expose their model-local identity through PathFinder state.
+      // Use it only after the live read confirms the same location and registry revision.
+      const legacy = !context.head && pf.data?.registryRevision === context.registryRevision
+        ? pf.data.locations.find(location => location.id === item.locationId)?.binding : null;
+      let shown = false;
+      if (object) {
+        const surfacePoint = context.head?.derivation === 'picked-surface-point' ? context.head.pointProjectMetres : undefined;
+        shown = await pf.showLocation(object.sdkObjectId, object.sdkObjectIds, surfacePoint);
+      } else if (point) {
+        shown = await pf.showLocationPoint(point.pointProjectMetres, point.current);
+      } else if (legacy?.modelVersionId === modelVersionId) {
+        const legacyId = legacy.objectId && /^dbid:[1-9][0-9]*$/.test(legacy.objectId) ? Number(legacy.objectId.slice(5)) : 0;
+        if (legacyId > 0 && legacyId <= 2147483647) shown = await pf.showLocation(legacyId);
+        else if (legacy.coordinateFrame === 'canonical-world-metres') shown = await pf.showLocationPoint(legacy.point, scope);
+      }
+      if (request.signal.aborted) return;
+      if (shown) setShowMessage({ text: `Showing ${item.name} in 3D.`, error: false });
+      else unavailable();
+    } catch {
+      if (!request.signal.aborted) unavailable();
+    } finally {
+      if (showRequest.current === request) { showRequest.current = null; setShowing(undefined); }
+    }
+  }
 
   if (!writable) return null;
   return <>
@@ -66,10 +132,13 @@ export function LocatorLocationAssignments({ pf, accountId, active, writable, se
         switchingDisabled: saving,
         selectedName: target?.name,
         lastSavedName,
-        canOpen: name => references.has(normalizeEndpointLocation(name)),
+        showing,
+        showMessage,
+        onShow: item => void showAssignedLocation(item),
+        canOpen: name => references.names.has(normalizeEndpointLocation(name)),
         onOpen: (name, anchor) => {
           if (!ready || saving || target?.name === name) return;
-          const reference = references.get(normalizeEndpointLocation(name));
+          const reference = references.names.get(normalizeEndpointLocation(name));
           if (reference) setTarget({ ...reference, name, anchor, popup: target?.popup ?? requestFloatingCableWindow({ title: name }) });
         },
       }} />

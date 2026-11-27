@@ -49,6 +49,12 @@ export function cableEndpointDisplayMatchesSourceGroup(display: z.infer<typeof c
     && canonicalPurposeJson(display.sdkObjectIds ?? null) === canonicalPurposeJson(display.preservedMatchObjectGroup.objectIds));
   return canonicalPurposeJson(display.sdkObjectIds ?? null) === canonicalPurposeJson(head?.autoMatchEvidence?.objectGroup?.objectIds ?? null);
 }
+export function canReadSavedCableEndpointDisplay(value: {
+  canBind: boolean; mto: string | null; reasonCodes: readonly string[];
+}) {
+  return value.canBind || (value.mto === 'MV' && value.reasonCodes.length === 1 && value.reasonCodes[0] === 'CABLE_ENDPOINT_MV_EXCLUDED');
+}
+
 export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-context.v1'),
   projectId: policyUuidSchema, cableId: policyUuidSchema, end: cableEndpointEndSchema, cableWriteRevision: policyRevisionSchema,
   logicalName, logicalKey: logicalName, mto: z.string().max(96).nullable(), canBind: z.boolean(), reasonCodes,
@@ -71,7 +77,8 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     context.addIssue({ code: 'custom', message: 'Bindable display context requires a named eligible cable and current preparation.' });
   if (value.automaticSelection && (!value.canBind || value.head !== null || !value.current?.traceId || value.automaticSelection.object.traceId !== value.current.traceId))
     context.addIssue({ code: 'custom', message: 'An unconfirmed automatic candidate never replaces a saved head or a different model scope.' });
-  if (value.confirmedSelection && (!value.canBind || !value.head || value.head.status !== 'confirmed' || value.head.mode !== 'object-derived'
+  const canReadSavedDisplay = canReadSavedCableEndpointDisplay(value) && endpointLocationNameSchema.safeParse(value.logicalName).success;
+  if (value.confirmedSelection && (!canReadSavedDisplay || !value.head || value.head.status !== 'confirmed' || value.head.mode !== 'object-derived'
     || value.head.modelVersionId !== value.current?.modelVersionId || value.head.aggregateId !== value.current?.aggregateId
     || value.head.artifactId !== value.current?.artifactId || value.head.projectionSha256 !== value.current?.projectionSha256
     || value.head.captureFrameId !== value.current?.captureFrameId || value.confirmedSelection.object.traceId !== value.current?.traceId
@@ -79,7 +86,7 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     || canonicalPurposeJson(value.confirmedSelection.pointProjectMetres) !== canonicalPurposeJson(value.head.pointProjectMetres)))
     context.addIssue({ code: 'custom', message: 'Confirmed model display belongs to the exact current object-derived head.' });
   const reopened = value.reopenedObject;
-  if (reopened && (!value.canBind || !value.head || !value.location || !value.current || value.head.status !== 'confirmed'
+  if (reopened && (!canReadSavedDisplay || !value.head || !value.location || !value.current || value.head.status !== 'confirmed'
     || (value.head.mode !== 'fixed-world' && value.head.mode !== 'object-derived')
     || value.head.modelVersionId !== value.current.modelVersionId || value.head.locationRevision !== value.location.revision
     || value.head.id !== reopened.bindingId || value.head.contentSha256 !== reopened.bindingContentSha256
@@ -94,7 +101,7 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     context.addIssue({ code: 'custom', message: 'A reconnected object matches a name of this shared location.' });
   if (display && !cableEndpointDisplayMatchesSourceGroup(display, value.head))
     context.addIssue({ code: 'custom', message: 'Grouped display IDs retain the exact confirmed source-item members.' });
-  if (display && (!value.canBind || !value.current || !value.head || !value.location || value.head.status !== 'confirmed'
+  if (display && (!canReadSavedDisplay || !value.current || !value.head || !value.location || value.head.status !== 'confirmed'
     || value.head.mode !== 'fixed-world' || value.head.sourceObject !== null || value.head.attachment !== null
     || value.head.locationRevision !== value.location.revision || display.bindingId !== value.head.id || display.bindingContentSha256 !== value.head.contentSha256
     || canonicalPurposeJson(display.current) !== canonicalPurposeJson(value.current)
