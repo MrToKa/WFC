@@ -7,6 +7,7 @@ import { hash } from './dependencies.js';
 import { PathFinderError } from './errors.js';
 import { createJobSchema, type JobPrincipal } from './jobContracts.js';
 import type { BulkPreparation } from './jobs.js';
+import { MAX_ACCEPTED_BASELINE_BATCH } from './acceptedBaselineRows.js';
 
 export const bulkPreparationSql = `
   CREATE TABLE IF NOT EXISTS pf_bulk_preparations (
@@ -188,7 +189,22 @@ export function createBulkPreparationQueue(
     ).rows[0];
     if (!row) return;
     const fenced = () => new PathFinderError('BULK_PREPARATION_SUPERSEDED', 409);
+    const controller = new AbortController();
+    controllers.add(controller);
+    // Renew independently of expensive proof validation. Stop/reclaim is
+    // observed even while a bounded SQL statement is still in flight.
+    let heartbeatActive: Promise<void> | undefined;
+    const heartbeat = setInterval(() => {
+      if (!heartbeatActive) heartbeatActive = control().query(
+        `UPDATE pf_bulk_preparations SET available_at=now()+interval '3 minutes'
+         WHERE id=$1 AND claim=$2 AND state='preparing'`, [row.id, claim],
+      ).then(result => { if (!result.rowCount) controller.abort(fenced()); })
+        .catch(() => controller.abort(new PathFinderError('BULK_PREPARATION_LEASE_LOST', 503)))
+        .finally(() => { heartbeatActive = undefined; });
+    }, 1000);
+    heartbeat.unref();
     try {
+      if (row.attempt > 3) throw new PathFinderError('BULK_PREPARATION_ATTEMPTS_EXHAUSTED', 503);
       const input = createJobSchema.parse(row.request);
       if (input.submissionId !== row.id || hash(input) !== row.request_sha256)
         throw new PathFinderError('BULK_SUBMISSION_CONFLICT', 409);
@@ -197,11 +213,13 @@ export function createBulkPreparationQueue(
         { userId: row.actor_id, loginId: row.login_id, loginExpiresAt: row.expires_at.getTime() },
         input,
         {
+          signal: controller.signal,
           chunk: Math.max(
             1,
-            Math.floor(REVISION_RESULTS_LIMITS.chunk / 2 ** Math.min(2, row.attempt - 1)),
+            Math.floor(Math.min(REVISION_RESULTS_LIMITS.chunk, MAX_ACCEPTED_BASELINE_BATCH) / 2 ** Math.min(2, row.attempt - 1)),
           ),
           async report(done, total, stage = 'validating') {
+            controller.signal.throwIfAborted();
             const result = await control().query(
               `UPDATE pf_bulk_preparations SET prepared=$3,total=$4,stage=$5,updated_at=now(),
             available_at=now()+interval '3 minutes' WHERE id=$1 AND claim=$2 AND state='preparing'`,
@@ -210,6 +228,7 @@ export function createBulkPreparationQueue(
             if (!result.rowCount) throw fenced();
           },
           async finish(client) {
+            controller.signal.throwIfAborted();
             const result = await client.query(
               `UPDATE pf_bulk_preparations SET state='submitted',request=NULL,claim=NULL,updated_at=now()
             WHERE id=$1 AND claim=$2 AND state='preparing'`,
@@ -224,6 +243,8 @@ export function createBulkPreparationQueue(
       const retryable =
         code === 'ACCEPTED_BASELINES_TIMEOUT' ||
         code === 'PATHFINDER_COMMIT_OUTCOME_UNKNOWN' ||
+        code === 'BULK_PREPARATION_LEASE_LOST' ||
+        code === 'BULK_PREPARATION_SHUTDOWN' ||
         (error instanceof Error &&
           'code' in error &&
           ['40001', '40P01', '55P03'].includes(String(error.code)));
@@ -242,8 +263,13 @@ export function createBulkPreparationQueue(
         claim=NULL,available_at=now()+interval '2 seconds',updated_at=now() WHERE id=$1 AND claim=$2 AND state='preparing'`,
         [row.id, claim, retry, code],
       );
+    } finally {
+      clearInterval(heartbeat);
+      await heartbeatActive;
+      controllers.delete(controller);
     }
   }
+  const controllers = new Set<AbortController>();
   let timer: ReturnType<typeof setInterval> | undefined, active: Promise<void> | undefined;
   function tick() {
     if (!active)
@@ -267,6 +293,7 @@ export function createBulkPreparationQueue(
     async stop() {
       clearInterval(timer);
       timer = undefined;
+      for (const controller of controllers) controller.abort(new PathFinderError('BULK_PREPARATION_SHUTDOWN', 503));
       await active;
       await dedicated?.end();
       dedicated = undefined;

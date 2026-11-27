@@ -12,7 +12,7 @@ import { PathFinderError } from './errors.js';
 import { AUTOMATIC_PAIR_LIMITS, AUTOMATIC_PAIR_POLICY, automaticPairMandateHashInput, type AutomaticPairMandate,
   type AutomaticPairOwnership } from '../../shared/pathfinderAutomaticPair.js';
 import type { collectDependencyBatchInTransaction } from './dependencyBatch.js';
-import { persistRevisionAdmission, readRevisionBaseline, revisionResultHash, sealRevisionResult, verifyRevisionResultForProposal, createRevisionResults,
+import { persistRevisionAdmission, prefetchAcceptedBaselines, readRevisionBaseline, revisionResultHash, sealRevisionResult, verifyRevisionResultForProposal, createRevisionResults,
   type RevisionAdmissionInput } from './revisionResultRepository.js';
 
 const applicabilitySeams = vi.hoisted(() => ({ authority:vi.fn(),applicable:vi.fn() }));
@@ -98,6 +98,8 @@ function fixture() {
     if (sql.startsWith('SELECT is_admin FROM users')) return { rows: [{ is_admin: admin }] };
     if (sql.startsWith('SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings')) return { rows: [{ user_id: who.userId, expires_at: new Date(who.loginExpiresAt), revoked_at: null }] };
     if (sql.includes('revision:latest-accepted')) return { rows: accepted.filter(r => (values[1] as string[]).includes(String(r.cable_id))) };
+    if (sql.startsWith('WITH latest AS MATERIALIZED')) return { rows: accepted.filter(r => (values[1] as string[]).includes(String(r.cable_id))).map(row=>({cable_id:row.cable_id,row_version:row.row_version})) };
+    if (sql.startsWith('SELECT id FROM cables WHERE project_id')) return {rows:accepted.map(row=>({id:row.cable_id}))};
     if (sql.startsWith('SELECT generation::text,domain,reason,source_revision')) return { rows: events };
     if (sql.startsWith('INSERT INTO pf_revision_admissions')) {
       admissions.push({ id: values[0], project_id: values[1], job_id: values[2], generation: values[3], kind: values[4], input_sha256: values[5], options: values[6], model_ref: values[7], total: values[8], observed_events: JSON.parse(String(values[9])), created_at: '2026-10-19T12:00:00.123Z', cursor_created_at: '2026-10-19T12:00:00.123456Z' }); return { rows: [] };
@@ -288,6 +290,33 @@ async function savedDisplayFixture(realProof = false) {
 }
 
 describe('immutable admission snapshots and revision envelopes', () => {
+  it('prechecks protected history in snapshot batches and admits the unchanged compact baseline without rereading the proof', async () => {
+    const value = await protectedAcceptedBaselineFixture();
+    value.row.row_version = 'receipt/proposal/seal/review-v1';
+    const report = vi.fn().mockResolvedValue(undefined);
+    const cache = await prefetchAcceptedBaselines(value.f.pool, pid, who, undefined, 20, Date.now()+1800000, report);
+    expect(report).toHaveBeenLastCalledWith(1, 1);
+    expect(JSON.stringify(cache.get(id(10)))).not.toContain('accepted_dependencies');
+    const proofReads = value.f.calls.filter(call=>call.sql==='SELECT * FROM pf_revision_results WHERE project_id=$1 AND proposal_id=$2').length;
+    const input = value.f.input(); input.jobId = id(123); input.options = value.deps.options; input.items[0].cable = value.after;
+    input.items[0].dependencies = {...value.deps,cableWriteRevision:value.after.cable_write_revision};
+    await persistRevisionAdmission(value.f.client, input, {cache, chunk:20, report});
+    const baseline = (await readRevisionBaseline(value.f.client,{projectId:pid,jobId:input.jobId,cableId:id(10)})).baseline;
+    expect(baseline.acceptedMatchesCurrent).toBe(true);
+    expect(baseline.lastAcceptedApply?.receiptId).toBe(value.row.receipt_id);
+    expect(value.f.calls.filter(call=>call.sql==='SELECT * FROM pf_revision_results WHERE project_id=$1 AND proposal_id=$2')).toHaveLength(proofReads);
+    expect(value.f.calls.some(call=>call.sql.includes('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ'))).toBe(true);
+  });
+  it('discards a prefetched proof when the live joined versions change and rejects a now-invalid manual receipt', async () => {
+    const value = await protectedAcceptedBaselineFixture(); value.row.row_version = 'v1';
+    const report = vi.fn().mockResolvedValue(undefined);
+    const cache = await prefetchAcceptedBaselines(value.f.pool,pid,who,undefined,20,Date.now()+1800000,report);
+    value.row.row_version = 'v2'; value.row.accepted_review_dependency_sha256 = '0'.repeat(64);
+    const input = value.f.input(); input.jobId=id(123); input.options=value.deps.options; input.items[0].cable=value.after;
+    input.items[0].dependencies={...value.deps,cableWriteRevision:value.after.cable_write_revision};
+    await persistRevisionAdmission(value.f.client,input,{cache,chunk:20,report});
+    expect((await readRevisionBaseline(value.f.client,{projectId:pid,jobId:input.jobId,cableId:id(10)})).baseline.lastAcceptedApply).toBeNull();
+  });
   it('acknowledges the exact automatic own write without changing the admission or granting item applicability', async () => {
     const value = await savedDisplayFixture(), beforeRead = structuredClone({ baseline: value.f.baselines, seal: value.f.seals });
     const callsAt = value.f.calls.length, page = await value.run();

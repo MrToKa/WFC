@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { PathFinderError } from './errors.js';
-import { prefetchAcceptedRows, type AcceptedRows } from './acceptedBaselineRows.js';
+import type { AcceptedRows } from './acceptedBaselineRows.js';
 import { readPendingPreparation } from './bulkPreparation.js';
 import { canonicalJson, collectDependenciesForVersion, createTransactionDependencyReadCollector, hash, hasSyntheticProof,
   type TransactionDependencyReadCollector } from './dependencies.js';
@@ -18,7 +18,7 @@ import { collectDependencyBatchInTransaction, type DependencyBatch } from './dep
 import { RECALCULATION_LIMITS, recalculationReasonSchema } from '../../shared/pathfinderRecalculation.js';
 import { pauseRecalculationForJob, readRecalculationJobAuthority, requireEnrollmentAuthority, type RecalculationJobAdapter } from './recalculationRepository.js';
 import { BARRIER_WRITE_UNVERIFIED_MESSAGE, readBarrierWriteEvidence, requireBarrierWriteEvidence, requireCurrentBarrierWriteScope } from './barrierWrites.js';
-import { persistRevisionAdmission, verifyRevisionResultForProposal } from './revisionResultRepository.js';
+import { persistRevisionAdmission, prefetchAcceptedBaselines, verifyRevisionResultForProposal } from './revisionResultRepository.js';
 import { isAutomaticEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 import { readProposalApplicability } from './proposalApplicability.js';
 import { cancelLocationImpactForJob } from './locationImpactRepository.js';
@@ -120,7 +120,7 @@ async function admissionModelRef(client:PoolClient,projectId:string){
 type BulkSubmission = {id:string;sha256:string};
 
 export type BulkPreparation = {
-  chunk: number; cache?: AcceptedRows; report(done: number, total: number, stage?: 'reading'|'validating'): Promise<void>;
+  chunk: number; cache?: AcceptedRows; signal?: AbortSignal; report(done: number, total: number, stage?: 'reading'|'validating'): Promise<void>;
   finish(client: PoolClient): Promise<void>;
 };
 export async function insertCalculationBatch(client:PoolClient,projectId:string,who:OperationPrincipal,batch:DependencyBatch,timeout:number,requestHash:string,bounds:{signal?:AbortSignal;deadline:number},admission:{kind:'manual'|'automatic'|'location-impact';generation:string|null;bulkSubmission?:BulkSubmission;preparation?:BulkPreparation}={kind:'manual',generation:null}):Promise<string>{
@@ -217,10 +217,10 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         throw error;
       };
       const legacyMatch = bulkSubmission ? null : await registry.match(projectId,who,input.expectedRegistryRevision,input.cableIds);
-      const workerDeadline=preparation ? Date.now()+BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds : undefined;
-      if (preparation && workerDeadline) {
-        preparation.cache=await prefetchAcceptedRows(pool,projectId,who,input.cableIds,preparation.chunk,workerDeadline,
-          (done,total)=>preparation.report(done,total,'reading'));
+      if (preparation) {
+        preparation.cache=await prefetchAcceptedBaselines(pool,projectId,who,input.cableIds,preparation.chunk,
+          Date.now()+BULK_CALCULATION_SUBMISSION_LIMITS.preparationMilliseconds,
+          (done,total)=>preparation.report(done,total,'reading'),preparation.signal);
         await preparation.report(0,0,'validating');
       }
       return principalTransaction(pool,projectId,who,async client => {
@@ -229,8 +229,8 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
           if(existing){await preparation?.finish(client);return existing;}
         }
         await client.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
-        const bulkDeadline=workerDeadline ?? (bulkSubmission ? Date.now()+BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds : undefined);
-        const checkBulkDeadline=()=>{if(bulkDeadline!==undefined&&Date.now()>bulkDeadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);};
+        const bulkDeadline=bulkSubmission ? Date.now()+BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds : undefined;
+        const checkBulkDeadline=()=>{preparation?.signal?.throwIfAborted();if(bulkDeadline!==undefined&&Date.now()>bulkDeadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);};
         // A keyed submission owns the project mutex from the receipt lookup
         // through matching and admission. A retry cannot observe a committed
         // registry change from its original invocation without its job receipt.
@@ -243,19 +243,22 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
           // submission only checks the shared locations used by its cables.
           checkBulkDeadline();
           const recovery = new AbortController();
+          const recoverySignal = preparation?.signal ? AbortSignal.any([recovery.signal,preparation.signal]) : recovery.signal;
           const timer = setTimeout(() => recovery.abort(new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503)),
             Math.max(0,deadline-Date.now()));
           try {
             if (input.cableIds) {
-              await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,recovery.signal,{cableIds:input.cableIds});
+              await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,recoverySignal,{cableIds:input.cableIds});
             } else {
-              await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,recovery.signal);
-              await recoverCrossModelEndpointsInTransaction(client,projectId,who,recovery.signal);
+              await requalifyAutomaticEndpointBindingsInTransaction(client,projectId,who,recoverySignal);
+              await recoverCrossModelEndpointsInTransaction(client,projectId,who,recoverySignal);
             }
           } finally { clearTimeout(timer); }
         }
-        const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline,
-          dependencyVersion:'pathfinder.dependencies.v8',bulkSubmission:bulkSubmission!==undefined}).catch(rethrowScopeError);
+        const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline,signal:preparation?.signal,
+          // Explicit Recalculate rechecks saved routes as well as empty ones.
+          // Continuous enrollment's historical exclusions never narrow this run.
+          continuous:false,dependencyVersion:'pathfinder.dependencies.v8',bulkSubmission:bulkSubmission!==undefined}).catch(rethrowScopeError);
         const calculationSha256=batchHash(batch,input.timeoutMilliseconds??60000);
         // A write policy is exact request authority, never a mathematical input.
         // Historical requests without it retain their original hash and meaning.
@@ -269,8 +272,9 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         const existing = (await client.query<Row>(`SELECT id FROM pf_jobs WHERE project_id=$1 AND requested_by=$2 AND login_id=$3 AND request_hash=$4
           AND kind='calculate' AND state IN ('queued','running','complete') ORDER BY created_at DESC LIMIT 1`,[projectId,who.userId,who.loginId,requestHash])).rows[0];
         if (existing && !input.force) return {jobId:existing.id,duplicate:true,registryRevision:matched.registryRevision};
+        checkBulkDeadline();
         if(Date.now()>deadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);
-        const jobId=await insertCalculationBatch(client,projectId,who,batch,input.timeoutMilliseconds??60000,requestHash,{deadline},
+        const jobId=await insertCalculationBatch(client,projectId,who,batch,input.timeoutMilliseconds??60000,requestHash,{deadline,signal:preparation?.signal},
           {kind:'manual',generation:null,bulkSubmission,preparation});
         if(input.automaticPairPolicy&&batch.items.some(item=>item.dependencies))await appendAutomaticPairMandatesInTransaction(client,{projectId,jobId,principal:who,
           policy:input.automaticPairPolicy,requestSha256:requestHash,

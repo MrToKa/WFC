@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 export const BULK_CALCULATION_SUBMISSION_LIMITS = Object.freeze({
   admissionMilliseconds: 120_000,
+  // Background historical proof reads release locks between bounded batches.
+  // They must not consume the subsequent atomic admission's time budget.
+  preparationMilliseconds: 30 * 60_000,
   responseMilliseconds: 150_000,
   dependencyBytesPerCable: 256 * 1024,
 });

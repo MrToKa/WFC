@@ -211,6 +211,19 @@ describe('automatic proposal endpoint candidates from frozen immutable evidence'
     await expect(readAutomaticEndpointCandidates(f.client, { ...f.request, deadline: Date.now() - 1 })).rejects.toMatchObject({ code: 'RECALCULATION_COLLECTION_DEADLINE' });
     expect(f.query).not.toHaveBeenCalled();
   });
+  it('uses the bulk caller deadline instead of silently imposing the interactive thirty-second cap', async () => {
+    const f=fixture(),started=Date.now(),clock=vi.spyOn(Date,'now').mockReturnValue(started);
+    const query=f.query.getMockImplementation()!;
+    f.query.mockImplementation(async (...args)=>{
+      const result=await query(...args); clock.mockReturnValue(started+31000); return result;
+    });
+    try {
+      const values=await readAutomaticEndpointCandidates(f.client,{...f.request,deadline:started+120000});
+      expect(values.size).toBeGreaterThan(0);
+      clock.mockReturnValue(started);
+      await expect(readAutomaticEndpointCandidates(f.client,f.request)).rejects.toMatchObject({code:'RECALCULATION_COLLECTION_DEADLINE'});
+    } finally {clock.mockRestore();}
+  });
 });
 
 describe('standalone named Path endpoint uses the same immutable eligibility reader',()=>{

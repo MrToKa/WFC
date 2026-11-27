@@ -6,7 +6,10 @@ import type { JobPrincipal } from './jobContracts.js';
 import { RETAINED_PROPOSAL_BYTES, RETAINED_WRITE_RECEIPT_BYTES } from './retainedProposalLimits.js';
 
 type Row = Record<string, unknown>;
-export type AcceptedRows = Map<string, Row | null>;
+// Process-local only: a database/request JSON field can never forge a checked proof.
+export const checkedAcceptedBaseline = Symbol('checked accepted baseline');
+export type CheckedAcceptedRow = Row & { [checkedAcceptedBaseline]?: unknown };
+export type AcceptedRows = Map<string, CheckedAcceptedRow | null>;
 const latest = `WITH latest AS MATERIALIZED (
         SELECT head.id FROM unnest($2::uuid[]) AS wanted(cable_id)
         CROSS JOIN LATERAL (
@@ -98,7 +101,11 @@ export async function prefetchAcceptedRows(
   chunk: number,
   deadline: number,
   report: (done: number, total: number) => Promise<void>,
+  prepare?: (client: PoolClient, rows: Row[]) => Promise<CheckedAcceptedRow[]>,
+  signal?: AbortSignal,
 ): Promise<AcceptedRows> {
+  if (!Number.isSafeInteger(chunk) || chunk < 1 || !Number.isFinite(deadline))
+    throw new PathFinderError('BULK_PREPARATION_BOUNDS_INVALID', 500);
   const cache: AcceptedRows = new Map();
   const read = <T>(operation: (client: PoolClient) => Promise<T>) =>
     principalTransaction(
@@ -106,10 +113,14 @@ export async function prefetchAcceptedRows(
       project,
       who,
       async (client) => {
+        signal?.throwIfAborted();
         if (Date.now() >= deadline)
           throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE', 503);
         await client.query("SET LOCAL statement_timeout='15000ms'");
-        return operation(client);
+        const value = await operation(client);
+        signal?.throwIfAborted();
+        if (Date.now() >= deadline) throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE', 503);
+        return value;
       },
       { snapshot: true, persistedLogin: true },
     );
@@ -129,14 +140,19 @@ export async function prefetchAcceptedRows(
     // Each group releases its project and authority locks before the next.
     // Fall back to live reads when the worker's retained JSON budget is full.
     let bytes = 0;
+    const cacheBytes = prepare ? REVISION_RESULTS_LIMITS.admissionBytes : 16 * 1024 ** 2;
     const batch = Math.min(chunk, MAX_ACCEPTED_BASELINE_BATCH);
     for (let at = 0; at < ids.length; at += batch) {
       const group = ids.slice(at, at + batch);
-      const rows = await read((client) => readAcceptedRows(client, project, group));
+      signal?.throwIfAborted();
+      const rows = await read(async (client) => {
+        const values = await readAcceptedRows(client, project, group);
+        return prepare ? prepare(client, values) : values;
+      });
       for (const id of group) cache.set(id, null);
       for (const row of rows) {
-        bytes += Buffer.byteLength(JSON.stringify(row));
-        if (bytes > 16 * 1024 ** 2) {
+        bytes += Buffer.byteLength(JSON.stringify(row)) + Buffer.byteLength(JSON.stringify((row as CheckedAcceptedRow)[checkedAcceptedBaseline] ?? null));
+        if (bytes > cacheBytes) {
           for (const id of group) cache.delete(id);
           return cache;
         }

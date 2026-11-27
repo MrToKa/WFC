@@ -49,7 +49,7 @@ function createRuntime() {
   const sameEndpointReuse=createVerifiedSameEndpointReuse({request:buildCableEngineRequest});
   const registry = createPathFinderRepository(pool),jobs = createPathFinderJobs(pool,registry),apply = createPathFinderApply(pool),worker = createPathFinderWorker(pool,jobs,undefined,undefined,sameEndpointReuse);
   const recalculations=createRecalculationRepository(pool,jobs);
-  const bulkPreparations=createBulkPreparationQueue(pool,jobs.create,()=>new Pool({connectionString:config.databaseUrl,max:1,connectionTimeoutMillis:5000}));
+  const bulkPreparations=createBulkPreparationQueue(pool,jobs.create,()=>new Pool({connectionString:config.databaseUrl,max:1,connectionTimeoutMillis:5000,statement_timeout:15000,query_timeout:20000}));
   const producer=createRecalculationProducer(recalculations,{beforeTick:createCalculationEngineObserver(pool,()=>worker.failureCode)});
   const grantProducer=createGrantRecalculationProducer(pool,jobs);
   const locationImpacts=createLocationImpactRepository(pool,{admitInTransaction:locationImpactAdmission});

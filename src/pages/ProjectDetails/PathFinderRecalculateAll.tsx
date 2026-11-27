@@ -404,7 +404,7 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
   return <><section aria-label="Recalculate all cables">
     <Button appearance="primary" disabled={startDisabled} onClick={() => void start()}>Recalculate all the cables</Button>
     <Caption1 block>Recalculates the complete cable list in the background. You can continue working with the open cable.</Caption1>
-    <Caption1 block>Current Routing and Design length update automatically for unprotected cables. Protected routes remain unchanged; automatic results are retained separately. Cables with missing locations or unsupported purposes are skipped; MV is excluded.</Caption1>
+    <Caption1 block>Each run recalculates every eligible cable, including previously saved routes. Routing and Design length update together automatically for unprotected cables. Protected routes remain unchanged; automatic results are retained separately. Cables with missing locations or unsupported purposes are skipped; MV is excluded.</Caption1>
     {blocker ? <Caption1 block>{blocker}</Caption1> : null}
     {!displayFiltered ? progress : null}
   </section><FilteredRecalculation.Provider value={{ disabled: startDisabled, start, progress: displayFiltered ? progress : null, issue, closeIssue }}>

@@ -1,13 +1,14 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { bulkPreparationSql, createBulkPreparationQueue } from './bulkPreparation.js';
 import { principalTransaction } from './auth.js';
 import { PathFinderError } from './errors.js';
 import { defaultOptions } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { AUTOMATIC_PAIR_POLICY } from '../../shared/pathfinderAutomaticPair.js';
+import { MAX_ACCEPTED_BASELINE_BATCH } from './acceptedBaselineRows.js';
 
 describe.skipIf(!process.env.PF_BULK_TEST_DATABASE_URL)(
   'durable bulk admission in PostgreSQL',
@@ -58,6 +59,7 @@ describe.skipIf(!process.env.PF_BULK_TEST_DATABASE_URL)(
       pool = new Pool({ connectionString, options: '-c search_path=' + schema });
       await pool.query(`CREATE TABLE projects(id uuid PRIMARY KEY); CREATE TABLE users(id uuid PRIMARY KEY,is_admin boolean);
       CREATE TABLE viewer_login_bindings(login_id uuid PRIMARY KEY,user_id uuid,expires_at timestamptz,revoked_at timestamptz);
+      CREATE TABLE cables(id uuid PRIMARY KEY,project_id uuid,routing text);
       CREATE TABLE pf_jobs(id uuid PRIMARY KEY, project_id uuid,requested_by uuid,bulk_submission_sha256 text,bulk_submission_registry_revision bigint);`);
       await pool.query(bulkPreparationSql);
       await pool.query('INSERT INTO projects VALUES($1)', [project]);
@@ -160,7 +162,7 @@ describe.skipIf(!process.env.PF_BULK_TEST_DATABASE_URL)(
         ]);
         await queue.runOne();
       }
-      expect(sizes).toEqual([200, 100, 50]);
+      expect(sizes).toEqual([0,1,2].map(at=>Math.floor(MAX_ACCEPTED_BASELINE_BATCH / 2 ** at)));
       expect(await queue.pending(project, who, input.submissionId)).toMatchObject({
         status: 'failed',
         failure: 'ACCEPTED_BASELINES_TIMEOUT',
@@ -186,6 +188,54 @@ describe.skipIf(!process.env.PF_BULK_TEST_DATABASE_URL)(
         (await pool.query('SELECT 1 FROM viewer_login_bindings WHERE login_id=$1', [actor.loginId]))
           .rowCount,
       ).toBe(0);
+    });
+    it('renews a slow proof batch, prevents another worker claiming it, and observes Stop without a progress report', async () => {
+      const input=request();
+      let started!:()=>void;
+      const entered=new Promise<void>(resolve=>{started=resolve;});
+      let observed:AbortSignal|undefined;
+      const create=vi.fn(async (_pid,_actor,_body,prep)=>{
+        observed=prep.signal; started();
+        await new Promise<void>((_resolve,reject)=>prep.signal.addEventListener('abort',()=>reject(prep.signal.reason),{once:true}));
+      });
+      const queue=createBulkPreparationQueue(pool,create);
+      await queue.enqueue(project,who,input);
+      const running=queue.runOne();await entered;
+      // Force a lease almost due; the independent heartbeat must renew it.
+      await pool.query("UPDATE pf_bulk_preparations SET available_at=now()+interval '2 seconds' WHERE id=$1",[input.submissionId]);
+      await new Promise(resolve=>setTimeout(resolve,1200));
+      expect((await pool.query('SELECT available_at>now()+interval \'2 minutes\' AS renewed FROM pf_bulk_preparations WHERE id=$1',[input.submissionId])).rows[0].renewed).toBe(true);
+      await queue.runOne();expect(create).toHaveBeenCalledTimes(1);
+      await queue.pending(project,who,input.submissionId,true);
+      await running;
+      expect(observed?.aborted).toBe(true);
+      expect((await queue.pending(project,who,input.submissionId))?.status).toBe('cancelled');
+      expect((await pool.query('SELECT id FROM pf_jobs WHERE id=$1',[input.submissionId])).rowCount).toBe(0);
+    });
+    it('bounds recovery attempts even when previous workers crashed before handling their error', async () => {
+      const input=request(),create=vi.fn(),queue=createBulkPreparationQueue(pool,create);
+      await queue.enqueue(project,who,input);
+      await pool.query("UPDATE pf_bulk_preparations SET state='preparing',attempt=3,available_at=now()-interval '1 second' WHERE id=$1",[input.submissionId]);
+      await queue.runOne();
+      expect(create).not.toHaveBeenCalled();
+      expect(await queue.pending(project,who,input.submissionId)).toMatchObject({status:'failed',failure:'BULK_PREPARATION_ATTEMPTS_EXHAUSTED'});
+    });
+    it('allows a cable assignment to commit while a background proof snapshot remains open', async () => {
+      const cable=randomUUID();await pool.query('INSERT INTO cables VALUES($1,$2,$3)',[cable,project,'/OLD']);
+      let release!:()=>void,started!:()=>void;
+      const hold=new Promise<void>(resolve=>{release=resolve;});
+      const entered=new Promise<void>(resolve=>{started=resolve;});
+      const reading=principalTransaction(pool,project,who,async c=>{
+        await c.query('SELECT routing FROM cables WHERE id=$1',[cable]);started();await hold;
+      },{snapshot:true,persistedLogin:true});
+      await entered;
+      try {
+        await principalTransaction(pool,project,who,async c=>{
+          await c.query("SET LOCAL lock_timeout='500ms'");
+          await c.query('UPDATE cables SET routing=$2 WHERE id=$1',[cable,'/ASSIGNED']);
+        });
+        expect((await pool.query('SELECT routing FROM cables WHERE id=$1',[cable])).rows[0].routing).toBe('/ASSIGNED');
+      } finally {release();await reading;}
     });
   },
 );

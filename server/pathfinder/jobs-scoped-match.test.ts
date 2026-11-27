@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 import type { PathFinderRepository } from './repository.js';
 
-const seams=vi.hoisted(()=>({collect:vi.fn(),persist:vi.fn(),transaction:vi.fn(),automatic:vi.fn(),requalify:vi.fn(),recover:vi.fn()}));
+const seams=vi.hoisted(()=>({collect:vi.fn(),persist:vi.fn(),prefetch:vi.fn(),transaction:vi.fn(),automatic:vi.fn(),requalify:vi.fn(),recover:vi.fn()}));
 vi.mock('./dependencyBatch.js',()=>({collectDependencyBatchInTransaction:seams.collect}));
-vi.mock('./revisionResultRepository.js',()=>({persistRevisionAdmission:seams.persist,verifyRevisionResultForProposal:vi.fn()}));
+vi.mock('./revisionResultRepository.js',()=>({persistRevisionAdmission:seams.persist,prefetchAcceptedBaselines:seams.prefetch,verifyRevisionResultForProposal:vi.fn()}));
 vi.mock('./auth.js',async original=>({...await original<typeof import('./auth.js')>(),principalTransaction:seams.transaction}));
 vi.mock('./automaticPairMandates.js',()=>({appendAutomaticPairMandatesInTransaction:seams.automatic}));
 vi.mock('./endpointBindingRequalification.js',()=>({requalifyAutomaticEndpointBindingsInTransaction:seams.requalify}));
@@ -49,6 +49,31 @@ function fixture() {
 beforeEach(()=>{vi.clearAllMocks();seams.collect.mockReset();seams.persist.mockReset();seams.transaction.mockReset();seams.persist.mockResolvedValue(undefined);});
 
 describe('manual calculation uses the same exact cable scope for matching and admission',()=>{
+  it('creates a fresh forced job on each explicit run even when dependencies and existing automatic output are unchanged',async()=>{
+    const f=fixture();f.state.duplicate=true;
+    const body={expectedRegistryRevision:'7',options,automaticPairPolicy,force:true};
+    const first=await f.jobs.create(projectId,who,createJobSchema.parse({...body,submissionId:id(41)}));
+    const second=await f.jobs.create(projectId,who,createJobSchema.parse({...body,submissionId:id(42)}));
+    expect(first).toMatchObject({jobId:id(41),duplicate:false});expect(second).toMatchObject({jobId:id(42),duplicate:false});
+    expect(seams.collect).toHaveBeenCalledTimes(2);
+    for(const call of seams.collect.mock.calls)expect(call[1]).toMatchObject({bulkSubmission:true,continuous:false,cableIds:undefined});
+    expect(seams.automatic).toHaveBeenCalledTimes(2);
+  });
+  it('gives atomic admission a fresh bounded budget after background proof preparation exceeds two minutes',async()=>{
+    const f=fixture(),started=Date.now(),clock=vi.spyOn(Date,'now').mockReturnValue(started);
+    const controller=new AbortController(),report=vi.fn().mockResolvedValue(undefined),finish=vi.fn().mockResolvedValue(undefined);
+    const cache=new Map();
+    seams.prefetch.mockImplementationOnce(async()=>{clock.mockReturnValue(started+180000);return cache;});
+    const prep={chunk:20,signal:controller.signal,report,finish};
+    const input=createJobSchema.parse({expectedRegistryRevision:'7',options,automaticPairPolicy,force:true,submissionId:id(41)});
+    try {
+      expect(await f.jobs.create(projectId,who,input,prep)).toMatchObject({jobId:id(41),duplicate:false});
+      expect(seams.prefetch.mock.calls[0][5]).toBe(started+BULK_CALCULATION_SUBMISSION_LIMITS.preparationMilliseconds);
+      expect(seams.collect.mock.calls[0][1]).toMatchObject({deadline:started+180000+BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds,signal:controller.signal});
+      expect(seams.persist.mock.calls[0][2]).toMatchObject({cache});
+      expect(finish).toHaveBeenCalledExactlyOnceWith(f.client);
+    } finally {clock.mockRestore();}
+  });
   it('recovers verified shared endpoints before freezing a forced whole-project run',async()=>{
     const f=fixture();
     const collect=seams.collect.getMockImplementation()!;

@@ -105,6 +105,20 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('bulk dependency collection, mocked SQL protocol with real freeze/head/alias logic', () => {
+  it('explicit bulk recalculation freezes fresh dependencies for every cable regardless of saved-route history',async()=>{
+    const db=fixture(5);
+    const [empty,automatic,imported,manual,execution]=db.state.cables;
+    for(const cable of [automatic,imported,manual,execution]){cable.routing='/OLD';cable.design_length='25.00';}
+    db.state.continuousScope.set(automatic.id,{receipt_kind:'pathfinder.automatic-pair.v1',saved_design_length:'25',calculated_design_length:'25'});
+    db.state.continuousScope.set(manual.id,{manual_protected:true});
+    db.state.continuousScope.set(execution.id,{execution_locked:true});
+    const batch=await collectDependencyBatchInTransaction(db.client,{projectId,options:barrierOptions(),dependencyVersion:'pathfinder.dependencies.v8',bulkSubmission:true,continuous:false});
+    expect(batch.items.map(item=>item.id)).toEqual([empty,automatic,imported,manual,execution].map(cable=>cable.id));
+    expect(batch.items.every(item=>item.status==='ready'&&item.dependencies!==null)).toBe(true);
+    expect(db.query.mock.calls.some(([sql])=>sql.includes('continuous-cable-scope'))).toBe(false);
+    // Calculation scope is independent from permission to overwrite a saved route.
+    expect(db.state.cables.slice(1).every(cable=>cable.routing==='/OLD'&&cable.design_length==='25.00')).toBe(true);
+  });
   it('runs continuous work only for unresolved-route or proven Path Finder cables with usable endpoints', async () => {
     const db = fixture(9);
     const [unrouted, previouslyCalculated, reviewed, protectedManual, execution, provisional, mismatchedLength, unresolved, mv] = db.state.cables;

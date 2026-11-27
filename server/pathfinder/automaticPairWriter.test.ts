@@ -417,6 +417,16 @@ describe('automatic pair exact sealed write with transactional synthetic SQL', (
     expect(await f.run()).toMatchObject({status:changed?'review-required':'written'});
     expect(f.state.writes).toBe(changed?0:1);
   });
+  it('replaces the previously automatic route and design length together for a fresh Recalculate all result',async()=>{
+    const f=fixture();
+    expect(f.baseline).toMatchObject({routing:'/OLD',design_length:'10'});
+    expect(f.mandate.ownership.kind).toBe('automatic');
+    f.mandate.source={kind:'explicit-job',bulkSubmission:true};
+    f.mandate.contentSha256=automaticPairHash(automaticPairMandateHashInput(f.mandate));
+    expect(await f.run()).toMatchObject({status:'written'});
+    expect(f.state.cable).toMatchObject({routing:'/A',design_length:'7',install_length:'99',cable_write_revision:'8'});
+    expect(f.state.writes).toBe(1);expect(f.state.receipts).toHaveLength(1);expect(f.state.history).toHaveLength(1);
+  });
   it.each(['history', 'receipt', 'wrong route', 'unrelated write', 'CAS'] as const)('rolls back the pair after %s failure', async kind => {
     const f = fixture(); if (kind === 'history') f.state.historyFailed = true; if (kind === 'receipt') f.state.receiptFailed = true;
     if (kind === 'wrong route') f.state.mutate = after => { after.routing = '/WRONG'; }; if (kind === 'unrelated write') f.state.mutate = after => { after.install_length = '0'; };

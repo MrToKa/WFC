@@ -5,6 +5,7 @@ import { endpointVisibilitySchema, preparationAggregateSchema, preparationMatchi
 import { geometryObjectRevisionSchema, geometryTraceManifestSchema, GEOMETRY_TRACE_LIMITS } from '../../shared/pathfinderGeometryTrace.js';
 import { endpointCurrentScopeSchema, type EndpointCurrentScope, type EndpointObjectRef } from '../../shared/pathfinderEndpointBindings.js';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
+import { BULK_CALCULATION_SUBMISSION_LIMITS } from '../../shared/pathfinderCalculationSubmission.js';
 import { humanScalarPropertyValues, modelEquipmentMatchKeys } from '../../viewer-runtime/equipment-names.mjs';
 import { createHash } from 'node:crypto';
 import { PathFinderError } from './errors.js';
@@ -27,7 +28,8 @@ const result = (status: AutomaticEndpointCandidateResult['status'], candidateObj
 type CandidateReadInput = { projectId:string; current:EndpointCurrentScope; deadline?:number; signal?:AbortSignal };
 type CandidateControls = { check:()=>void; account:(value:unknown)=>void };
 function candidateControls(input:CandidateReadInput) {
-  const deadline=Math.min(input.deadline??Infinity,Date.now()+RECALCULATION_LIMITS.collectionMilliseconds);let bytes=0;
+  const deadline=Math.min(input.deadline??Date.now()+RECALCULATION_LIMITS.collectionMilliseconds,
+    Date.now()+BULK_CALCULATION_SUBMISSION_LIMITS.admissionMilliseconds);let bytes=0;
   const accountBytes = (amount: number) => {
     bytes += amount;
     if (bytes > RECALCULATION_LIMITS.neededLocationBytes) fail('ENDPOINT_NEEDED_LOCATION_BYTES', 413);

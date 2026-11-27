@@ -1,4 +1,4 @@
-import { readAcceptedRows, isStatementTimeout, MAX_ACCEPTED_BASELINE_BATCH, type AcceptedRows } from './acceptedBaselineRows.js';
+import { readAcceptedRows, prefetchAcceptedRows, checkedAcceptedBaseline, isStatementTimeout, MAX_ACCEPTED_BASELINE_BATCH, type CheckedAcceptedRow, type AcceptedRows } from './acceptedBaselineRows.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
@@ -82,7 +82,7 @@ function protectedManualBaseline(row: Row, dependencies: DependencySnapshot, out
   return exactObstacleRemarksTransition(before, after, output) && equal(Object.keys(before).sort(), Object.keys(after).sort())
     && Object.keys(before).every(key => changed.has(key) || equal(before[key], after[key]));
 }
-type BaselineProgress = { cache?: AcceptedRows; chunk: number; report: (done: number, total: number) => Promise<void> };
+type BaselineProgress = { cache?: AcceptedRows; chunk: number; signal?: AbortSignal; report: (done: number, total: number) => Promise<void> };
 async function acceptedBaselines(client: PoolClient, projectId: string, ids: string[], progress?: BaselineProgress): Promise<Map<string, RevisionBaseline['lastAcceptedApply']>> {
   const result = new Map<string, RevisionBaseline['lastAcceptedApply']>();
   const chunk = Math.min(progress?.chunk ?? REVISION_RESULTS_LIMITS.chunk, MAX_ACCEPTED_BASELINE_BATCH);
@@ -91,7 +91,15 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
     const initialFillReceipt = createInitialFillReceiptProofReader(client);
     const values = await readAcceptedRows(client, projectId, ids.slice(at, at + chunk), progress?.cache);
     for (const row of values) {
+      progress?.signal?.throwIfAborted();
       const cableId = policyUuidSchema.parse(row.cable_id); if (result.has(cableId) || !ids.includes(cableId)) return fail('REVISION_ACCEPTED_BASELINE_SCOPE', 500);
+      // readAcceptedRows rechecked latest receipt and all joined MVCC versions
+      // under admission locks. Only reuse our own checked immutable history.
+      if (Object.hasOwn(row, checkedAcceptedBaseline)) {
+        const checked = (row as CheckedAcceptedRow)[checkedAcceptedBaseline] as RevisionBaseline['lastAcceptedApply'];
+        if (checked) result.set(cableId, checked);
+        continue;
+      }
       if (row.initial_fill_kind || row.protected_apply_kind || row.automatic_pair_kind) {
         // A new write kind is recognized only through its complete immutable
         // mandate/command/result chain. Never fall back to an older receipt.
@@ -134,6 +142,19 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
     if (progress) await progress.report(Math.min(at + chunk, ids.length), ids.length);
   }
   return result;
+}
+/** Check historical chains outside the cable/project write transaction. Retain
+ * only compact display baselines, never the multi-MiB proposal/receipt bodies.
+ * These facts grant no current routing or automatic-write authority. */
+export async function prefetchAcceptedBaselines(pool: Pool, project: string, who: JobPrincipal,
+  selected: string[] | undefined, chunk: number, deadline: number,
+  report: (done: number, total: number) => Promise<void>, signal?: AbortSignal): Promise<AcceptedRows> {
+  return prefetchAcceptedRows(pool, project, who, selected, chunk, deadline, report, async (client, rows) => {
+    const cache: AcceptedRows = new Map(rows.map(row => [String(row.cable_id), row]));
+    const baselines = await acceptedBaselines(client, project, [...cache.keys()], {cache, chunk, signal, report: async () => { signal?.throwIfAborted(); }});
+    return rows.map(row => ({cable_id: row.cable_id, row_version: row.row_version,
+      [checkedAcceptedBaseline]: baselines.get(String(row.cable_id)) ?? null}));
+  }, signal);
 }
 /** Historical display evidence only; this never renews a prior write mandate. */
 export async function readAcceptedCableApply(client: PoolClient, projectId: string, cableId: string): Promise<RevisionBaseline['lastAcceptedApply']> {
